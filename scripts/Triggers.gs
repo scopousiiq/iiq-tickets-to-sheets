@@ -105,8 +105,8 @@ function triggerBulkLoadContinue() {
     return; // Focus on tickets first
   }
 
-  // Check if SLA data needs loading (all historical years must be complete)
-  const slaComplete = config.historicalYears.every(year => config[`sla${year}Complete`]);
+  // Check if SLA data needs loading (all SLA historical years must be complete)
+  const slaComplete = config.slaHistoricalYears.every(year => config[`sla${year}Complete`]);
   if (!slaComplete) {
     const sheet = ss.getSheetByName('TicketSlaData');
     if (sheet) {

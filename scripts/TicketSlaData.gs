@@ -78,7 +78,7 @@ function getSlaDataStatus() {
   const statusLines = [];
 
   // Status for each historical year
-  config.historicalYears.forEach(year => {
+  config.slaHistoricalYears.forEach(year => {
     const complete = config[`sla${year}Complete`];
     const lastPage = config[`sla${year}LastPage`];
 
@@ -94,15 +94,15 @@ function getSlaDataStatus() {
   });
 
   // Status for current year
-  if (config.currentYear) {
-    const lastFetch = config[`sla${config.currentYear}LastFetch`];
+  if (config.slaCurrentYear) {
+    const lastFetch = config[`sla${config.slaCurrentYear}LastFetch`];
     let status;
     if (!lastFetch) {
       status = 'Not started';
     } else {
       status = `Incremental (last: ${lastFetch.substring(0, 10)})`;
     }
-    statusLines.push(`• ${config.currentYear} (current): ${status}`);
+    statusLines.push(`• ${config.slaCurrentYear} (current): ${status}`);
   }
 
   return {
@@ -117,8 +117,8 @@ function getSlaDataStatus() {
 function refreshSlaDataFull() {
   const ui = SpreadsheetApp.getUi();
   const config = getConfig();
-  const years = [...config.historicalYears];
-  if (config.currentYear) years.push(config.currentYear);
+  const years = [...config.slaHistoricalYears];
+  if (config.slaCurrentYear) years.push(config.slaCurrentYear);
 
   const response = ui.alert(
     'Full SLA Data Reload',
@@ -150,9 +150,9 @@ function refreshSlaDataFull() {
   }
 
   // Reset all progress
-  config.historicalYears.forEach(year => resetSlaYearProgress(year));
-  if (config.currentYear) {
-    resetSlaCurrentYearProgress(config.currentYear);
+  config.slaHistoricalYears.forEach(year => resetSlaYearProgress(year));
+  if (config.slaCurrentYear) {
+    resetSlaCurrentYearProgress(config.slaCurrentYear);
   }
 
   logOperation('SLA Data', 'RESET', 'Full reload initiated');
@@ -167,12 +167,12 @@ function refreshSlaDataCurrentYear() {
   const ui = SpreadsheetApp.getUi();
   const config = getConfig();
 
-  if (!config.currentYear) {
+  if (!config.slaCurrentYear) {
     ui.alert('Error', 'No current year configured. Add a SLA_{YEAR}_LAST_FETCH row to Config.', ui.ButtonSet.OK);
     return;
   }
 
-  const currentYear = config.currentYear;
+  const currentYear = config.slaCurrentYear;
 
   const response = ui.alert(
     `Refresh Current Year SLA Data (${currentYear})`,
@@ -229,7 +229,7 @@ function runSlaDataLoader(sheet) {
     // Find next work to do
     // 1. Check historical years in order
     let processed = false;
-    for (const year of config.historicalYears) {
+    for (const year of config.slaHistoricalYears) {
       if (!config[`sla${year}Complete`]) {
         const result = processSlaHistoricalYearBatch(sheet, year, config);
         batchCount++;
@@ -240,7 +240,7 @@ function runSlaDataLoader(sheet) {
     }
 
     // 2. If all historical complete, do current year
-    if (!processed && config.currentYear) {
+    if (!processed && config.slaCurrentYear) {
       const result = processSlaCurrentYearBatch(sheet, config);
       batchCount++;
       slaCount += result.count;
@@ -249,7 +249,7 @@ function runSlaDataLoader(sheet) {
         complete = true;
         break;
       }
-    } else if (!processed && !config.currentYear) {
+    } else if (!processed && !config.slaCurrentYear) {
       // No current year configured, and all historical complete
       complete = true;
       break;
@@ -323,7 +323,7 @@ function processSlaHistoricalYearBatch(sheet, year, config) {
  */
 function processSlaCurrentYearBatch(sheet, config) {
   const batchSize = config.slaBatchSize;
-  const currentYear = config.currentYear;
+  const currentYear = config.slaCurrentYear;
   const lastFetch = config[`sla${currentYear}LastFetch`];
 
   // Determine start date

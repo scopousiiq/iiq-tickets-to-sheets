@@ -74,22 +74,42 @@ Create a new Google Sheet with the following tabs (sheets):
 | 22 | SLA_2025_COMPLETE | FALSE |
 | 23 | SLA_2026_LAST_FETCH | (auto-populated ISO timestamp) |
 
-> **Year Configuration:** Years are auto-discovered from Config rows - no code changes needed.
+> **Year Configuration:** Years are auto-discovered from Config rows - no code changes needed. **Ticket and SLA years are configured independently**, so you can load different date ranges for each.
+>
+> **Ticket Data Years:**
 > - **Historical years** (pagination-based): Detected from `TICKET_{YEAR}_LAST_PAGE` rows
 > - **Current year** (date windowing): Detected from `TICKET_{YEAR}_LAST_FETCH` row
 >
-> **To add a year (e.g., 2023):** Add these rows to Config:
+> **SLA Data Years (Independent):**
+> - **Historical years** (pagination-based): Detected from `SLA_{YEAR}_LAST_PAGE` rows
+> - **Current year** (date windowing): Detected from `SLA_{YEAR}_LAST_FETCH` row
+>
+> **Example - Load tickets for 2024-2026 but only SLA for 2026:**
+> ```
+> TICKET_2024_LAST_PAGE   | -1
+> TICKET_2024_COMPLETE    | FALSE
+> TICKET_2025_LAST_PAGE   | -1
+> TICKET_2025_COMPLETE    | FALSE
+> TICKET_2026_LAST_FETCH  |
+> SLA_2026_LAST_FETCH     |
+> ```
+>
+> **To add a ticket year (e.g., 2023):**
 > ```
 > TICKET_2023_TOTAL_PAGES | (auto-populated)
 > TICKET_2023_LAST_PAGE   | -1
 > TICKET_2023_COMPLETE    | FALSE
-> SLA_2023_LAST_PAGE      | -1
-> SLA_2023_COMPLETE       | FALSE
 > ```
 >
-> **To remove a year (e.g., 2024):** Delete the `TICKET_2024_*` and `SLA_2024_*` rows from Config, then optionally delete data rows from TicketData/TicketSlaData sheets.
+> **To add an SLA year (e.g., 2025):**
+> ```
+> SLA_2025_LAST_PAGE      | -1
+> SLA_2025_COMPLETE       | FALSE
+> ```
 >
-> **To change current year:** Replace `TICKET_2026_LAST_FETCH` with `TICKET_2027_LAST_FETCH` (and same for SLA).
+> **To remove a year:** Delete the corresponding `TICKET_{YEAR}_*` or `SLA_{YEAR}_*` rows from Config, then optionally delete data rows from TicketData/TicketSlaData sheets.
+>
+> **To change current year:** Replace `TICKET_2026_LAST_FETCH` with `TICKET_2027_LAST_FETCH` (and/or same for SLA).
 >
 > **SLA Data Settings:** The `/tickets/slas` endpoint is capped at 100 records per page and does NOT return paging metadata. The loader iterates until fewer than 100 records are returned (indicating the last page).
 >
