@@ -3,11 +3,13 @@
 **Purpose:** Extract IIQ ticket and SLA data into Google Sheets for Power BI consumption and analytics
 **Use Cases:** Monthly Volume Tracking, Backlog Aging Analysis, SLA Compliance, Team Workload Metrics
 
+**Template Spreadsheet:** [Make a copy of the Google Sheets template](https://docs.google.com/spreadsheets/d/1azxyYEefeAJ-oSmTKb199yzdULaaPvi_pjUydiC-fuA/edit?usp=sharing)
+
 ---
 
 ## Overview
 
-This guide provides ready-to-use Google Sheets templates and Apps Script code to extract ticket data from IncidentIQ's API. The extracted data can be connected to Power BI for visualization.
+This guide provides a ready-to-use Google Sheets template and Apps Script code to extract ticket data from IncidentIQ's API. The extracted data can be connected to Power BI for visualization.
 
 ### Architecture
 
