@@ -85,7 +85,7 @@ while (Date.now() - startTime < MAX_RUNTIME_MS) {
 |----------|----------|---------|
 | `triggerTicketDataUpdate` | Daily 5:00 AM | Incremental ticket sync |
 | `triggerSlaDataUpdate` | Daily 5:30 AM | Incremental SLA sync |
-| `triggerDailySnapshot` | Daily 11:00 PM | Capture backlog metrics for trending |
+| `triggerDailySnapshot` | Daily 7:00 PM | Capture backlog metrics for trending |
 
 For bulk loading: Use `triggerBulkLoadContinue` every 10 minutes until historical data is complete.
 

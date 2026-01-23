@@ -706,7 +706,7 @@ After initial data load is complete, set up daily triggers to keep data current:
 |----------|--------------|------|------|
 | `triggerTicketDataUpdate` | Time-driven | Day timer | 5:00 AM - 6:00 AM |
 | `triggerSlaDataUpdate` | Time-driven | Day timer | 5:30 AM - 6:30 AM |
-| `triggerDailySnapshot` | Time-driven | Day timer | 11:00 PM - 12:00 AM |
+| `triggerDailySnapshot` | Time-driven | Day timer | 7:00 PM - 8:00 PM |
 
 > **Note:** Analytics sheets are formula-based and auto-update when data changes. The daily snapshot captures backlog metrics for PerformanceTrends that cannot be calculated retroactively. All triggers log activity to the Logs sheet.
 

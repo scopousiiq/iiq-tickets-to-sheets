@@ -7,7 +7,7 @@
  * Recommended Trigger Schedule (after initial data load is complete):
  * 1. triggerTicketDataUpdate  - Daily 5:00 AM
  * 2. triggerSlaDataUpdate     - Daily 5:30 AM
- * 3. triggerDailySnapshot     - Daily 11:00 PM (captures backlog metrics for trending)
+ * 3. triggerDailySnapshot     - Daily 7:00 PM (captures backlog metrics for trending)
  *
  * Note: Analytics sheets (MonthlyVolume, BacklogAging, etc.) are now formula-based
  * and auto-calculate from TicketData/TicketSlaData. No refresh trigger needed.
@@ -71,7 +71,7 @@ function triggerSlaDataUpdate() {
  * Use this if you want a single trigger to do everything
  *
  * Note: Analytics sheets are formula-based and auto-calculate.
- * Run triggerDailySnapshot separately at 11 PM for backlog trending.
+ * Run triggerDailySnapshot separately at 7 PM for backlog trending.
  */
 function triggerDailyUpdate() {
   logOperation('Trigger', 'START', 'Daily update triggered');

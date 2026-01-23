@@ -4,7 +4,7 @@
  * These metrics cannot be calculated retroactively, so daily capture is essential.
  * Used by PerformanceTrends sheet to show end-of-month backlog and aging.
  *
- * Recommended Trigger: Daily at 11:00 PM (after business hours)
+ * Recommended Trigger: Daily at 7:00 PM (after business hours)
  */
 
 /**
@@ -112,7 +112,7 @@ function appendDailySnapshot() {
 
 /**
  * Trigger-safe function for automated daily snapshots
- * Use this with a time-driven trigger (daily at 11 PM recommended)
+ * Use this with a time-driven trigger (daily at 7 PM recommended)
  */
 function triggerDailySnapshot() {
   logOperation('Trigger', 'START', 'Daily snapshot triggered');
