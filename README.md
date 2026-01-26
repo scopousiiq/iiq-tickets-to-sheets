@@ -26,7 +26,7 @@ In the `Config` sheet, enter your IncidentIQ credentials:
 
 | Setting | Value | Where to Find It |
 |---------|-------|------------------|
-| `API_BASE_URL` | `https://yourdistrict.incidentiq.com/api` | Your IIQ URL + `/api` |
+| `API_BASE_URL` | `https://yourdistrict.incidentiq.com` | Your IIQ URL (the `/api` is added automatically) |
 | `BEARER_TOKEN` | Your API token | IIQ Admin > Integrations > API |
 | `SITE_ID` | Your site UUID (optional) | Only needed for multi-site districts |
 

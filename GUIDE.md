@@ -51,7 +51,7 @@ Create a new Google Sheet with the following tabs (sheets):
 
 | Setting | Value | Description |
 |---------|-------|-------------|
-| `API_BASE_URL` | `https://your-district.incidentiq.com/api` | Your IIQ URL with `/api` at the end |
+| `API_BASE_URL` | `https://your-district.incidentiq.com` | Your IIQ URL (the `/api` is added automatically) |
 | `BEARER_TOKEN` | (your JWT token) | Get this from IIQ Admin > Integrations > API |
 | `SITE_ID` | (your site UUID) | Only needed for multi-site districts |
 
@@ -668,7 +668,7 @@ Formula-based analytics sheets (no scripts needed):
 ### Step 3: Configure API Access
 
 1. In the `Config` sheet, enter:
-   - `API_BASE_URL`: Your IIQ instance URL (e.g., `https://yourdistrict.incidentiq.com/api`)
+   - `API_BASE_URL`: Your IIQ instance URL (e.g., `https://yourdistrict.incidentiq.com`)
    - `BEARER_TOKEN`: Your API authentication token
    - `SITE_ID`: Your site UUID (if required)
    - `PAGE_SIZE`: `100` (recommended)

@@ -117,7 +117,7 @@ function setupInstructionsSheet(ss) {
     ['═══════════════════════════════════════════════════════════════════════════════'],
     [''],
     ['1. CONFIGURE API CREDENTIALS (Config sheet)'],
-    ['   • API_BASE_URL: Your IIQ instance (e.g., https://district.incidentiq.com/api)'],
+    ['   • API_BASE_URL: Your IIQ instance (e.g., https://district.incidentiq.com)'],
     ['   • BEARER_TOKEN: JWT token from IIQ (Admin > Integrations > API)'],
     ['   • SITE_ID: Optional - only needed for multi-site instances'],
     [''],
@@ -345,7 +345,7 @@ function setupConfigSheet(ss) {
     ['Key', 'Value'],
     ['', ''],
     ['# API Configuration (Required)', ''],
-    ['API_BASE_URL', 'https://YOUR-DISTRICT.incidentiq.com/api'],
+    ['API_BASE_URL', 'https://YOUR-DISTRICT.incidentiq.com'],
     ['BEARER_TOKEN', ''],
     ['SITE_ID', ''],
     ['', ''],
@@ -1154,35 +1154,41 @@ function addSetupMenu() {
  */
 function verifyConfiguration() {
   const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
   const issues = [];
 
-  try {
-    const config = getConfig();
+  // Get all sheet names at once (faster than checking each individually)
+  const sheetNames = ss.getSheets().map(s => s.getName());
 
-    if (!config.baseUrl || config.baseUrl.includes('YOUR-DISTRICT')) {
-      issues.push('API_BASE_URL not configured');
-    }
-
-    if (!config.bearerToken) {
-      issues.push('BEARER_TOKEN not configured');
-    }
-
-    if (config.historicalYears.length === 0 && !config.currentYear) {
-      issues.push('No TICKET_{YEAR}_LAST_PAGE or TICKET_{YEAR}_LAST_FETCH rows found');
-    }
-
-  } catch (e) {
-    issues.push('Config sheet error: ' + e.message);
-  }
-
-  // Check required sheets
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Check required sheets first (fast - uses cached sheet names)
   const requiredSheets = ['Config', 'TicketData', 'Teams', 'Logs'];
   requiredSheets.forEach(name => {
-    if (!ss.getSheetByName(name)) {
+    if (!sheetNames.includes(name)) {
       issues.push(`Missing sheet: ${name}`);
     }
   });
+
+  // Only check config values if Config sheet exists
+  if (sheetNames.includes('Config')) {
+    try {
+      const config = getConfig();
+
+      if (!config.baseUrl || config.baseUrl.includes('YOUR-DISTRICT')) {
+        issues.push('API_BASE_URL not configured');
+      }
+
+      if (!config.bearerToken) {
+        issues.push('BEARER_TOKEN not configured');
+      }
+
+      if (config.historicalYears.length === 0 && !config.currentYear) {
+        issues.push('No TICKET_{YEAR}_LAST_PAGE or TICKET_{YEAR}_LAST_FETCH rows found');
+      }
+
+    } catch (e) {
+      issues.push('Config sheet error: ' + e.message);
+    }
+  }
 
   if (issues.length === 0) {
     ui.alert('Configuration Valid', 'All required settings are configured.\n\nYou can now run "Continue Loading" to start loading data.', ui.ButtonSet.OK);

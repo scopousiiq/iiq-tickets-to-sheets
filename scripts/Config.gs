@@ -47,9 +47,18 @@ function getConfig() {
   // Auto-discover years from config keys for tickets
   const ticketYears = discoverYearsFromConfig(rawConfig, 'TICKET');
 
+  // Normalize base URL: strip trailing slash, ensure /api suffix
+  let baseUrl = rawConfig['API_BASE_URL'] || '';
+  if (baseUrl) {
+    baseUrl = baseUrl.replace(/\/+$/, ''); // Remove trailing slashes
+    if (!baseUrl.endsWith('/api')) {
+      baseUrl = baseUrl + '/api';
+    }
+  }
+
   // Build the config object with base settings
   const config = {
-    baseUrl: rawConfig['API_BASE_URL'] || '',
+    baseUrl: baseUrl,
     bearerToken: rawConfig['BEARER_TOKEN'] || '',
     siteId: rawConfig['SITE_ID'] || '',
     pageSize: getIntValue(rawConfig['PAGE_SIZE'], 100),

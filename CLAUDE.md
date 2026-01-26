@@ -188,7 +188,7 @@ This is the "keep things moving" trigger. It serves two purposes:
 ## Config Sheet Keys
 
 Required:
-- `API_BASE_URL`: IIQ instance URL (e.g., `https://district.incidentiq.com/api`)
+- `API_BASE_URL`: IIQ instance URL (e.g., `https://district.incidentiq.com`) — `/api` is added automatically
 - `BEARER_TOKEN`: JWT authentication token
 - `SITE_ID`: Site UUID (if required)
 
