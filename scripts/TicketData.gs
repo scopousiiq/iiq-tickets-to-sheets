@@ -6,11 +6,17 @@
  * - Date windowing for current year incremental updates
  * - Auto-run until timeout with resume capability
  * - Single TicketData sheet for Power BI consumption
+ * - Consolidated SLA metrics (fetched per-batch during ticket loading)
  *
  * Year Configuration (via Config sheet):
  * - Historical years: Add TICKET_{YEAR}_LAST_PAGE, TICKET_{YEAR}_COMPLETE rows
  * - Current year: Add TICKET_{YEAR}_LAST_FETCH row
  * - Years are auto-discovered - no code changes needed
+ *
+ * SLA Data:
+ * - SLA metrics are fetched for each batch of tickets (single API call per batch)
+ * - Columns 29-35: ResponseThreshold, ResponseActual, ResponseBreach,
+ *   ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning
  */
 
 // Safe runtime limit (5.5 minutes to allow for cleanup before 6 min Apps Script limit)
@@ -84,7 +90,7 @@ function refreshTicketDataFull() {
   // Clear all data (keep header row)
   const lastRow = sheet.getLastRow();
   if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, 28).clear();
+    sheet.getRange(2, 1, lastRow - 1, 35).clear();
   }
 
   // Reset all year progress
@@ -262,6 +268,11 @@ function runTicketDataLoader(sheet) {
   logOperation('Ticket Data', complete ? 'COMPLETE' : 'PAUSED',
     `${batchCount} batches, ${ticketCount} tickets, ${(runtime/1000).toFixed(1)}s`);
 
+  // Update last refresh timestamp so analytics sheets show current data
+  if (ticketCount > 0) {
+    updateLastRefresh();
+  }
+
   return { batchCount, ticketCount, complete, runtime };
 }
 
@@ -302,11 +313,16 @@ function processHistoricalYearBatch(sheet, year, config) {
     return { count: 0 };
   }
 
-  // Write tickets to sheet
+  // Fetch SLA data for this batch of tickets
+  const ticketIds = response.Items.map(t => t.TicketId).filter(id => id);
+  const slaMap = fetchSlaForTicketIds(ticketIds);
+  logOperation('Ticket Data', 'SLA_FETCH', `Fetched SLA for ${slaMap.size} of ${ticketIds.length} tickets`);
+
+  // Write tickets to sheet (with merged SLA data)
   const now = new Date();
-  const rows = response.Items.map(ticket => extractTicketRow(ticket, now, year));
+  const rows = response.Items.map(ticket => extractTicketRow(ticket, now, year, slaMap));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 28).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, 35).setValues(rows);
 
   // Update progress
   updateConfigValue(`TICKET_${year}_LAST_PAGE`, nextPage);
@@ -379,11 +395,16 @@ function processCurrentYearBatch(sheet, config) {
   // Sort to ensure order
   tickets.sort((a, b) => new Date(a.CreatedDate) - new Date(b.CreatedDate));
 
-  // Write to sheet
+  // Fetch SLA data for this batch of tickets
+  const ticketIds = tickets.map(t => t.TicketId).filter(id => id);
+  const slaMap = fetchSlaForTicketIds(ticketIds);
+  logOperation('Ticket Data', 'SLA_FETCH', `Fetched SLA for ${slaMap.size} of ${ticketIds.length} tickets`);
+
+  // Write to sheet (with merged SLA data)
   const now = new Date();
-  const rows = tickets.map(ticket => extractTicketRow(ticket, now, currentYear));
+  const rows = tickets.map(ticket => extractTicketRow(ticket, now, currentYear, slaMap));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 28).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, 35).setValues(rows);
 
   // Update last fetch timestamp
   const lastTicket = tickets[tickets.length - 1];
@@ -399,9 +420,14 @@ function processCurrentYearBatch(sheet, config) {
 
 /**
  * Extract a row of data from a ticket object
- * Returns 28 columns for comprehensive analytics
+ * Returns 35 columns for comprehensive analytics (including SLA metrics)
+ *
+ * @param {Object} ticket - Ticket object from API
+ * @param {Date} now - Current timestamp for age calculation
+ * @param {number} year - Year for the ticket
+ * @param {Map} slaMap - Optional map of TicketId -> SLA metrics
  */
-function extractTicketRow(ticket, now, year) {
+function extractTicketRow(ticket, now, year, slaMap) {
   const createdDate = ticket.CreatedDate ? new Date(ticket.CreatedDate) : null;
   const closedDate = ticket.ClosedDate ? new Date(ticket.ClosedDate) : null;
 
@@ -424,8 +450,14 @@ function extractTicketRow(ticket, now, year) {
   // Extract Issue details
   const issue = ticket.Issue || {};
 
-  // Extract SLA details
-  const sla = ticket.Sla || {};
+  // Extract SLA details from ticket (basic info)
+  const ticketSla = ticket.Sla || {};
+
+  // Get detailed SLA metrics from slaMap (if available)
+  const slaMetrics = slaMap ? slaMap.get(ticket.TicketId) : null;
+
+  // Use SlaName from detailed SLA data if available, fallback to ticket's Sla object
+  const slaName = slaMetrics ? slaMetrics.slaName : (ticketSla.Name || ticketSla.SlaName || '');
 
   return [
     // A-D: Core identifiers
@@ -456,9 +488,9 @@ function extractTicketRow(ticket, now, year) {
     ticket.Priority || '',
     ticket.IsPastDue ? 'Yes' : 'No',
     ticket.DueDate || '',
-    // U-V: SLA
-    sla.SlaId || '',
-    sla.Name || sla.SlaName || '',
+    // U-V: SLA (basic)
+    ticketSla.SlaId || '',
+    slaName,
     // W-Z: Issue Category and Type
     issue.IssueCategoryId || '',
     issue.IssueCategoryName || '',
@@ -466,8 +498,104 @@ function extractTicketRow(ticket, now, year) {
     issue.Name || '', // Issue type name is in Name field
     // AA-AB: Requester (For)
     ticket.For ? (ticket.For.UserId || '') : '',
-    ticket.For ? (ticket.For.Name || '') : ''
+    ticket.For ? (ticket.For.Name || '') : '',
+    // AC-AI: SLA Metrics (from detailed SLA API)
+    slaMetrics ? slaMetrics.responseThreshold : '',
+    slaMetrics ? slaMetrics.responseActual : '',
+    slaMetrics ? slaMetrics.responseBreach : '',
+    slaMetrics ? slaMetrics.resolutionThreshold : '',
+    slaMetrics ? slaMetrics.resolutionActual : '',
+    slaMetrics ? slaMetrics.resolutionBreach : '',
+    slaMetrics ? slaMetrics.isRunning : ''
   ];
+}
+
+/**
+ * Fetch SLA data for a batch of ticket IDs
+ * Makes a single API call with all ticket IDs
+ *
+ * @param {Array} ticketIds - Array of TicketId values
+ * @returns {Map} - Map of TicketId -> SLA metrics object
+ */
+function fetchSlaForTicketIds(ticketIds) {
+  const slaMap = new Map();
+
+  if (!ticketIds || ticketIds.length === 0) {
+    return slaMap;
+  }
+
+  const config = getConfig();
+
+  // Build endpoint - fetch all tickets in one call
+  const endpoint = `/v1.0/tickets/slas?$p=0&$s=${ticketIds.length}`;
+
+  // Build filter with TicketIds - each ticket ID is a separate filter entry
+  // Multiple filters with same Facet act as OR condition
+  const payload = {
+    Filters: ticketIds.map(id => ({
+      Facet: 'Ticket',
+      Id: id
+    }))
+  };
+
+  try {
+    const response = makeApiRequest(endpoint, 'POST', payload);
+
+    if (!response || !response.Items) {
+      return slaMap;
+    }
+
+    // Process each SLA item
+    for (const item of response.Items) {
+      const ticketId = item.TicketId;
+      if (!ticketId) continue;
+
+      // Skip tickets with no SLA assigned
+      if (!item.Sla || !item.SlaTimes || item.SlaTimes.length === 0) {
+        continue;
+      }
+
+      const sla = item.Sla || {};
+      const slaTimes = item.SlaTimes || [];
+      const metrics = sla.Metrics || [];
+
+      // Find response metric and resolution metric by Name field
+      const responseMetric = metrics.find(m => m.Name === 'Response Time') || {};
+      const resolutionMetric = metrics.find(m => m.Name === 'Resolution Time') || {};
+
+      // Find actual times from SlaTimes by Name field
+      const responseTime = slaTimes.find(t => t.Name === 'Response Time') || {};
+      const resolutionTime = slaTimes.find(t => t.Name === 'Resolution Time') || {};
+
+      const responseThreshold = responseMetric.ValueInMinutes || null;
+      const responseActual = responseTime.LogMinutes || null;
+      const resolutionThreshold = resolutionMetric.ValueInMinutes || null;
+      const resolutionActual = resolutionTime.LogMinutes || null;
+
+      // Calculate breach status
+      const responseBreach = (responseActual !== null && responseThreshold !== null && responseActual > responseThreshold);
+      const resolutionBreach = (resolutionActual !== null && resolutionThreshold !== null && resolutionActual > resolutionThreshold);
+
+      // Check if SLA is still running
+      const isRunning = slaTimes.some(t => t.IsRunning === true);
+
+      slaMap.set(ticketId, {
+        slaName: sla.SlaName || sla.Name || '',
+        responseThreshold: responseThreshold,
+        responseActual: responseActual,
+        responseBreach: responseBreach,
+        resolutionThreshold: resolutionThreshold,
+        resolutionActual: resolutionActual,
+        resolutionBreach: resolutionBreach,
+        isRunning: isRunning
+      });
+    }
+  } catch (error) {
+    logOperation('Ticket Data', 'SLA_ERROR', `Failed to fetch SLA data: ${error.message}`);
+    // Return empty map - tickets will still be written without SLA data
+  }
+
+  return slaMap;
 }
 
 /**
@@ -548,4 +676,426 @@ function deleteRowsByYear(sheet, year) {
 
     logOperation('Ticket Data', 'DELETE', `Deleted ${rowsToDelete.length} rows for year ${year}`);
   }
+}
+
+// =============================================================================
+// DEPRECATED: Open Ticket Refresh Functions
+// =============================================================================
+// These functions are no longer used. The new approach is:
+// - triggerTicketDataReset: Deletes all ticket data at midnight
+// - triggerTicketDataContinue: Reloads all tickets every 10 minutes
+// This is simpler and handles all ticket changes (status, owner, deleted, etc.)
+// =============================================================================
+
+/**
+ * @deprecated Use triggerTicketDataReset + triggerTicketDataContinue instead
+ * Menu: Start a fresh open ticket refresh (resets progress)
+ */
+function refreshOpenTicketsStart() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('TicketData');
+
+  if (!sheet) {
+    ui.alert('Error', 'TicketData sheet not found.', ui.ButtonSet.OK);
+    return;
+  }
+
+  const config = getConfig();
+  const staleDays = config.staleDays || 7;
+
+  const response = ui.alert(
+    'Start Open Ticket Refresh',
+    `This will reset progress and start a fresh refresh:\n\n` +
+    `1. Fetch all open tickets from API\n` +
+    `2. Fetch tickets closed in last ${staleDays} days\n` +
+    `3. Update existing rows or append new ones\n\n` +
+    `Progress is saved after each batch.\n` +
+    `Use "Continue" if this times out.\n\n` +
+    'Start fresh?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) return;
+
+  // Reset progress to start fresh
+  resetOpenRefreshProgress();
+  updateConfigValue('OPEN_REFRESH_DATE', Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+
+  logOperation('Ticket Data', 'START', 'Open/closed ticket refresh started fresh');
+
+  const result = runOpenTicketRefresh(sheet);
+
+  ui.alert(
+    result.complete ? 'Complete' : 'Paused',
+    `Updated ${result.updatedCount} existing rows.\n` +
+    `Appended ${result.appendedCount} new tickets.\n` +
+    `Processed ${result.ticketCount} tickets in ${result.batchCount} batches.\n` +
+    `${result.complete ? 'Refresh complete!' : 'Use "Continue" to resume.'}\n\n` +
+    `Runtime: ${(result.runtime / 1000).toFixed(1)} seconds`,
+    ui.ButtonSet.OK
+  );
+}
+
+/**
+ * Menu: Continue an in-progress open ticket refresh
+ */
+function refreshOpenTicketsContinue() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('TicketData');
+
+  if (!sheet) {
+    ui.alert('Error', 'TicketData sheet not found.', ui.ButtonSet.OK);
+    return;
+  }
+
+  const status = getOpenRefreshStatusText();
+
+  const response = ui.alert(
+    'Continue Open Ticket Refresh',
+    `Current Status:\n${status}\n\n` +
+    `This will continue from where it left off.\n\n` +
+    'Continue?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) return;
+
+  logOperation('Ticket Data', 'CONTINUE', 'Open/closed ticket refresh continued');
+
+  const result = runOpenTicketRefresh(sheet);
+
+  ui.alert(
+    result.complete ? 'Complete' : 'Paused',
+    `Updated ${result.updatedCount} existing rows.\n` +
+    `Appended ${result.appendedCount} new tickets.\n` +
+    `Processed ${result.ticketCount} tickets in ${result.batchCount} batches.\n` +
+    `${result.complete ? 'Refresh complete!' : 'Run again to continue.'}\n\n` +
+    `Runtime: ${(result.runtime / 1000).toFixed(1)} seconds`,
+    ui.ButtonSet.OK
+  );
+}
+
+/**
+ * Menu: Show open refresh status
+ */
+function showOpenRefreshStatus() {
+  const ui = SpreadsheetApp.getUi();
+  const status = getOpenRefreshStatusText();
+
+  ui.alert('Open Ticket Refresh Status', status, ui.ButtonSet.OK);
+}
+
+/**
+ * Get human-readable status for open ticket refresh
+ */
+function getOpenRefreshStatusText() {
+  const config = getConfig();
+  const progress = getOpenRefreshProgress();
+
+  const lines = [];
+
+  // Date
+  if (config.openRefreshDate) {
+    lines.push(`Refresh date: ${config.openRefreshDate}`);
+  } else {
+    lines.push('No refresh in progress');
+  }
+
+  // Open tickets phase
+  if (progress.openComplete) {
+    lines.push(`Open tickets: Complete`);
+  } else if (progress.openPage >= 0) {
+    lines.push(`Open tickets: Page ${progress.openPage + 1} (in progress)`);
+  } else {
+    lines.push(`Open tickets: Not started`);
+  }
+
+  // Closed tickets phase
+  if (progress.closedComplete) {
+    lines.push(`Recently closed: Complete`);
+  } else if (progress.closedPage >= 0) {
+    lines.push(`Recently closed: Page ${progress.closedPage + 1} (in progress)`);
+  } else {
+    lines.push(`Recently closed: Not started`);
+  }
+
+  // Overall status
+  if (progress.openComplete && progress.closedComplete) {
+    lines.push(`\nStatus: COMPLETE`);
+  } else {
+    lines.push(`\nStatus: IN PROGRESS`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Legacy function - redirects to Start Fresh
+ * @deprecated Use refreshOpenTicketsStart or refreshOpenTicketsContinue
+ */
+function refreshOpenTickets() {
+  refreshOpenTicketsStart();
+}
+
+/**
+ * Core logic for refreshing open and recently closed tickets
+ * Uses in-place updates instead of delete+append for efficiency
+ *
+ * Progress is saved to Config sheet after each batch:
+ * - OPEN_REFRESH_DATE: Date of current refresh (resets if new day)
+ * - OPEN_REFRESH_OPEN_PAGE: Current page for open tickets (-1 = not started)
+ * - OPEN_REFRESH_OPEN_COMPLETE: TRUE when open phase done
+ * - OPEN_REFRESH_CLOSED_PAGE: Current page for closed tickets (-1 = not started)
+ * - OPEN_REFRESH_CLOSED_COMPLETE: TRUE when closed phase done
+ */
+function runOpenTicketRefresh(sheet) {
+  const startTime = Date.now();
+  const config = getConfig();
+  const staleDays = config.staleDays || 7;
+
+  // Check/reset progress for new day
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const savedDate = config.openRefreshDate || '';
+
+  if (savedDate !== today) {
+    // New day - reset progress
+    logOperation('Ticket Data', 'REFRESH_RESET', `New day (${today}), resetting progress`);
+    resetOpenRefreshProgress();
+    updateConfigValue('OPEN_REFRESH_DATE', today);
+  }
+
+  // Re-read config after potential reset
+  const progress = getOpenRefreshProgress();
+
+  // Check if already complete
+  if (progress.openComplete && progress.closedComplete) {
+    logOperation('Ticket Data', 'REFRESH_SKIP', 'Open ticket refresh already complete for today');
+    return { batchCount: 0, ticketCount: 0, updatedCount: 0, appendedCount: 0, complete: true, runtime: 0 };
+  }
+
+  logOperation('Ticket Data', 'REFRESH_START',
+    `Resuming refresh: openPage=${progress.openPage}, openComplete=${progress.openComplete}, ` +
+    `closedPage=${progress.closedPage}, closedComplete=${progress.closedComplete}`);
+
+  // Step 1: Build TicketId -> row number map
+  logOperation('Ticket Data', 'REFRESH_MAP', 'Building TicketId lookup map...');
+  const ticketIdToRow = buildTicketIdMap(sheet);
+  logOperation('Ticket Data', 'REFRESH_MAP', `Map built with ${ticketIdToRow.size} tickets`);
+
+  // Step 2: Fetch and process tickets
+  let batchCount = 0;
+  let ticketCount = 0;
+  let updatedCount = 0;
+  let appendedCount = 0;
+  const batchSize = config.ticketBatchSize;
+  const now = new Date();
+
+  // Phase 1: Fetch open tickets (resume from saved page)
+  let openComplete = progress.openComplete;
+  let openPage = progress.openPage + 1; // Start from next page
+  let openTotal = 0;
+  let openProcessed = 0;
+
+  while (Date.now() - startTime < MAX_RUNTIME_MS && !openComplete) {
+    logOperation('Ticket Data', 'REFRESH_OPEN', `Fetching open tickets, page ${openPage}`);
+
+    const response = searchTickets([
+      { Facet: 'ticketstate', Value: 'open' }
+    ], openPage, batchSize, { field: 'TicketCreatedDate', direction: 'asc' });
+
+    batchCount++;
+
+    if (openPage === 0 || openTotal === 0) {
+      openTotal = response.Paging ? (response.Paging.TotalRows || response.Paging.Total || 0) : 0;
+      logOperation('Ticket Data', 'REFRESH_OPEN', `API reports ${openTotal} open tickets`);
+    }
+
+    if (!response.Items || response.Items.length === 0) {
+      openComplete = true;
+      updateConfigValue('OPEN_REFRESH_OPEN_COMPLETE', 'TRUE');
+      break;
+    }
+
+    // Process this batch
+    const result = processTicketBatch(sheet, response.Items, ticketIdToRow, now);
+    updatedCount += result.updated;
+    appendedCount += result.appended;
+    ticketCount += response.Items.length;
+    openProcessed += response.Items.length;
+
+    // Save progress after each batch
+    updateConfigValue('OPEN_REFRESH_OPEN_PAGE', openPage);
+
+    logOperation('Ticket Data', 'REFRESH_OPEN',
+      `Page ${openPage}: ${response.Items.length} tickets (${result.updated} updated, ${result.appended} new)`);
+
+    // Check if phase complete
+    const totalExpectedPages = Math.ceil(openTotal / batchSize);
+    if (openPage >= totalExpectedPages - 1 || response.Items.length < batchSize) {
+      openComplete = true;
+      updateConfigValue('OPEN_REFRESH_OPEN_COMPLETE', 'TRUE');
+    } else {
+      openPage++;
+      Utilities.sleep(config.throttleMs);
+    }
+  }
+
+  // Phase 2: Fetch recently closed tickets (resume from saved page)
+  let closedComplete = progress.closedComplete;
+  let closedPage = progress.closedPage + 1; // Start from next page
+  let closedTotal = 0;
+  let closedProcessed = 0;
+
+  if (openComplete && !closedComplete && Date.now() - startTime < MAX_RUNTIME_MS) {
+    // Build date filter for recently closed
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - staleDays);
+    const dateFilter = `date>=${formatDateForApi(cutoffDate)}`;
+
+    while (Date.now() - startTime < MAX_RUNTIME_MS && !closedComplete) {
+      logOperation('Ticket Data', 'REFRESH_CLOSED', `Fetching recently closed tickets, page ${closedPage}`);
+
+      const response = searchTickets([
+        { Facet: 'ticketstate', Value: 'closed' },
+        { Facet: 'closeddate', Value: dateFilter }
+      ], closedPage, batchSize, { field: 'TicketClosedDate', direction: 'desc' });
+
+      batchCount++;
+
+      if (closedPage === 0 || closedTotal === 0) {
+        closedTotal = response.Paging ? (response.Paging.TotalRows || response.Paging.Total || 0) : 0;
+        logOperation('Ticket Data', 'REFRESH_CLOSED', `API reports ${closedTotal} recently closed tickets`);
+      }
+
+      if (!response.Items || response.Items.length === 0) {
+        closedComplete = true;
+        updateConfigValue('OPEN_REFRESH_CLOSED_COMPLETE', 'TRUE');
+        break;
+      }
+
+      // Process this batch
+      const result = processTicketBatch(sheet, response.Items, ticketIdToRow, now);
+      updatedCount += result.updated;
+      appendedCount += result.appended;
+      closedProcessed += response.Items.length;
+      ticketCount += response.Items.length;
+
+      // Save progress after each batch
+      updateConfigValue('OPEN_REFRESH_CLOSED_PAGE', closedPage);
+
+      logOperation('Ticket Data', 'REFRESH_CLOSED',
+        `Page ${closedPage}: ${response.Items.length} tickets (${result.updated} updated, ${result.appended} new)`);
+
+      // Check if phase complete
+      const totalExpectedPages = Math.ceil(closedTotal / batchSize);
+      if (closedPage >= totalExpectedPages - 1 || response.Items.length < batchSize) {
+        closedComplete = true;
+        updateConfigValue('OPEN_REFRESH_CLOSED_COMPLETE', 'TRUE');
+      } else {
+        closedPage++;
+        Utilities.sleep(config.throttleMs);
+      }
+    }
+  }
+
+  const complete = openComplete && closedComplete;
+  const runtime = Date.now() - startTime;
+
+  logOperation('Ticket Data', complete ? 'REFRESH_COMPLETE' : 'REFRESH_PAUSED',
+    `${updatedCount} updated, ${appendedCount} appended, ${ticketCount} total in ${batchCount} batches, ${(runtime/1000).toFixed(1)}s`);
+
+  // Update last refresh timestamp so analytics sheets show current data
+  if (ticketCount > 0) {
+    updateLastRefresh();
+  }
+
+  return { batchCount, ticketCount, updatedCount, appendedCount, complete, runtime };
+}
+
+/**
+ * Get current open refresh progress from Config
+ */
+function getOpenRefreshProgress() {
+  const config = getConfig();
+  return {
+    openPage: config.openRefreshOpenPage !== undefined ? config.openRefreshOpenPage : -1,
+    openComplete: config.openRefreshOpenComplete === true,
+    closedPage: config.openRefreshClosedPage !== undefined ? config.openRefreshClosedPage : -1,
+    closedComplete: config.openRefreshClosedComplete === true
+  };
+}
+
+/**
+ * Reset open refresh progress (for new day or manual reset)
+ */
+function resetOpenRefreshProgress() {
+  updateConfigValue('OPEN_REFRESH_OPEN_PAGE', -1);
+  updateConfigValue('OPEN_REFRESH_OPEN_COMPLETE', 'FALSE');
+  updateConfigValue('OPEN_REFRESH_CLOSED_PAGE', -1);
+  updateConfigValue('OPEN_REFRESH_CLOSED_COMPLETE', 'FALSE');
+}
+
+/**
+ * Build a map of TicketId -> row number for fast lookups
+ */
+function buildTicketIdMap(sheet) {
+  const ticketIds = sheet.getRange('A2:A' + sheet.getLastRow()).getValues();
+  const map = new Map();
+
+  for (let i = 0; i < ticketIds.length; i++) {
+    const ticketId = ticketIds[i][0];
+    if (ticketId) {
+      map.set(ticketId, i + 2); // Row number (1-indexed, +1 for header, +1 for 0-index)
+    }
+  }
+
+  return map;
+}
+
+/**
+ * Process a batch of tickets - update existing rows or append new ones
+ * Fetches SLA data for the batch and merges it into ticket rows
+ */
+function processTicketBatch(sheet, tickets, ticketIdToRow, now) {
+  let updated = 0;
+  let appended = 0;
+  const rowsToAppend = [];
+
+  // Fetch SLA data for this batch
+  const ticketIds = tickets.map(t => t.TicketId).filter(id => id);
+  const slaMap = fetchSlaForTicketIds(ticketIds);
+
+  for (const ticket of tickets) {
+    const ticketId = ticket.TicketId;
+    const createdDate = ticket.CreatedDate ? new Date(ticket.CreatedDate) : null;
+    const year = createdDate ? createdDate.getFullYear() : new Date().getFullYear();
+    const rowData = extractTicketRow(ticket, now, year, slaMap);
+
+    const existingRow = ticketIdToRow.get(ticketId);
+
+    if (existingRow) {
+      // Update existing row
+      sheet.getRange(existingRow, 1, 1, 35).setValues([rowData]);
+      updated++;
+    } else {
+      // Queue for append
+      rowsToAppend.push(rowData);
+      appended++;
+    }
+  }
+
+  // Batch append new rows
+  if (rowsToAppend.length > 0) {
+    const lastRow = sheet.getLastRow();
+    sheet.getRange(lastRow + 1, 1, rowsToAppend.length, 35).setValues(rowsToAppend);
+
+    // Update the map with new rows (for subsequent batches)
+    for (let i = 0; i < rowsToAppend.length; i++) {
+      ticketIdToRow.set(rowsToAppend[i][0], lastRow + 1 + i);
+    }
+  }
+
+  return { updated, appended };
 }

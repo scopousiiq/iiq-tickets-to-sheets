@@ -1,69 +1,102 @@
 # IIQ Tickets to Sheets
 
-Extract IncidentIQ ticket and SLA data into Google Sheets for analytics and Power BI dashboards. Built for K-12 school districts.
+Extract IncidentIQ ticket and SLA data into Google Sheets for analytics and Power BI dashboards. Built for K-12 school district IT departments.
 
 ## Quick Start
 
-### 1. Copy the Template
+### 1. Create Your Spreadsheet
+
+**Option A: Copy the Template (Fastest)**
 
 [**Make a copy of the Google Sheets template**](https://docs.google.com/spreadsheets/d/1azxyYEefeAJ-oSmTKb199yzdULaaPvi_pjUydiC-fuA/edit?usp=sharing)
+
+This template includes all sheets and formulas pre-configured. You just need to add your API credentials.
+
+**Option B: Build from Scratch**
+
+1. Create a new Google Spreadsheet
+2. Go to **Extensions > Apps Script**
+3. Copy all `.gs` files from the `scripts/` folder in this repository
+4. Save and reload the spreadsheet
+5. Click **IIQ Data > Setup > Setup Spreadsheet** to create all sheets automatically
 
 ### 2. Configure API Access
 
 In the `Config` sheet, enter your IncidentIQ credentials:
 
-| Setting | Value |
-|---------|-------|
-| `API_BASE_URL` | `https://yourdistrict.incidentiq.com/api` |
-| `BEARER_TOKEN` | Your API token |
-| `SITE_ID` | Your site UUID (if required) |
+| Setting | Value | Where to Find It |
+|---------|-------|------------------|
+| `API_BASE_URL` | `https://yourdistrict.incidentiq.com/api` | Your IIQ URL + `/api` |
+| `BEARER_TOKEN` | Your API token | IIQ Admin > Integrations > API |
+| `SITE_ID` | Your site UUID (optional) | Only needed for multi-site districts |
 
 ### 3. Load Your Data
 
-1. Reload the spreadsheet to activate the **IIQ Data** menu
-2. Click **IIQ Data > Refresh Teams** and authorize when prompted
-3. Click **IIQ Data > Ticket Data > Continue Loading** to start importing tickets
-4. Click **IIQ Data > SLA Data > Continue Loading** to import SLA data
+1. Reload the spreadsheet to see the **IIQ Data** menu
+2. Click **IIQ Data > Setup > Verify Configuration** to check your settings
+3. Click **IIQ Data > Refresh Teams** — authorize when prompted
+4. Click **IIQ Data > Ticket Data > Continue Loading (Initial)** to start importing
 
-> **Note:** Large datasets may require multiple runs. The loader saves progress and resumes automatically.
+> **Tip for large districts:** Instead of manually running "Continue Loading" repeatedly, set up a temporary trigger:
+> 1. Go to **Extensions > Apps Script > Triggers** (clock icon)
+> 2. Add `triggerDataContinue` to run every 10 minutes
+> 3. Check **IIQ Data > Ticket Data > Show Status** periodically until all years show "Complete"
+> 4. **Delete this trigger once loading is done** — it's only for initial load
+>
+> SLA data is included automatically — no separate step needed.
 
-### 4. Set Up Automated Refresh (Optional)
+### 4. Set Up Automated Refresh (Recommended)
 
-In Apps Script (**Extensions > Apps Script > Triggers**), add these daily triggers:
+Once your initial load is complete, set up triggers to keep data fresh:
 
-| Function | Time | Purpose |
-|----------|------|---------|
-| `triggerTicketDataUpdate` | 5:00 AM | Sync new tickets |
-| `triggerSlaDataUpdate` | 5:30 AM | Sync SLA data |
-| `triggerDailySnapshot` | 7:00 PM | Capture backlog metrics |
+1. Go to **Extensions > Apps Script**
+2. Click the clock icon (Triggers) in the left sidebar
+3. Add these triggers:
+
+| Function | Schedule | What It Does |
+|----------|----------|--------------|
+| `triggerOpenTicketRefresh` | Every 2 hours | Updates open tickets and SLA timers |
+| `triggerNewTickets` | Every 30 minutes | Catches newly created tickets |
+| `triggerDailySnapshot` | Daily at 7:00 PM | Saves backlog metrics for trending |
+| `triggerWeeklyFullRefresh` | Weekly, Sunday 2 AM | Full reload to catch deleted tickets |
+
+**How fresh is the data?**
+- Open ticket status and SLA timers: Updated every 2 hours
+- New tickets: Appear within 30 minutes
+- Deleted or corrected tickets: Caught on weekly refresh
 
 ## What You Get
 
-| Sheet | Description |
-|-------|-------------|
-| `TicketData` | Raw ticket data (28 columns) for analysis |
-| `TicketSlaData` | SLA timing metrics (response/resolution times) |
-| `Teams` | Team directory with Functional Area mapping |
-| `MonthlyVolume` | Created/Closed/Open tickets by month |
-| `BacklogAging` | Open tickets by age bucket (0-15, 16-30, 31-60, 61-90, 90+ days) |
-| `TeamWorkload` | Per-team metrics with sorting |
-| `SLACompliance` | Breach rates and average response/resolution times |
-| `DailySnapshot` | Historical backlog metrics for trending |
+| Sheet | What It Shows |
+|-------|---------------|
+| `TicketData` | All ticket data with SLA metrics (35 columns) — your raw data source |
+| `Teams` | Team directory — add your Functional Area labels here |
+| `MonthlyVolume` | Tickets created vs. closed by month, with closure rate |
+| `BacklogAging` | Open tickets grouped by age (0-15 days, 16-30, 31-60, 61-90, 90+) |
+| `TeamWorkload` | Open tickets, created/closed this month, and aging by team |
+| `LocationBreakdown` | Ticket counts by school or building |
+| `FunctionalAreaSummary` | Rollup of TeamWorkload by your Functional Area labels |
+| `SLACompliance` | Monthly SLA breach rates and average response/resolution times |
+| `PerformanceTrends` | "Are we getting better?" — key metrics over time |
+| `AtRiskQueue` | Open tickets approaching SLA breach (action needed!) |
+| `StaleTickets` | Open tickets with no updates recently (may be stuck) |
+| `DailySnapshot` | Historical backlog counts for trend analysis |
 
-## Troubleshooting
+## Common Issues
 
-| Issue | Solution |
-|-------|----------|
-| "API configuration missing" | Fill in `API_BASE_URL` and `BEARER_TOKEN` in Config sheet |
-| HTTP 401 | Refresh your Bearer token |
-| HTTP 429 / Rate limited | Increase `THROTTLE_MS` in Config (try 2000+) |
-| Script timeout | Normal for large datasets - run "Continue Loading" again |
+| Problem | Solution |
+|---------|----------|
+| "API configuration missing" | Fill in `API_BASE_URL` and `BEARER_TOKEN` in the Config sheet |
+| HTTP 401 error | Your Bearer token expired — get a new one from IIQ |
+| HTTP 429 / Rate limited | IIQ is throttling you — increase `THROTTLE_MS` in Config to 2000 or higher |
+| Script timeout | Normal for large districts — just run "Continue Loading" again |
+| Missing SLA data for some tickets | Expected — not all tickets have SLA policies assigned in IIQ |
 
 ## Documentation
 
-- [**Implementation Guide**](GUIDE.md) - Detailed sheet setup, formulas, and architecture
-- [**CLAUDE.md**](CLAUDE.md) - Developer reference for AI-assisted development
+- [**Implementation Guide**](GUIDE.md) — Detailed setup, formulas, and how everything works
+- [**CLAUDE.md**](CLAUDE.md) — Technical reference for developers
 
 ## License
 
-MIT
+MIT — Free to use and modify for your district.

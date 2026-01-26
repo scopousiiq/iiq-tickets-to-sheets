@@ -1,11 +1,21 @@
 /**
  * IIQ Data Menu
  *
- * Provides menu access to data loader functions.
+ * Provides menu access to data loader and analytics functions.
  *
- * Note: Analytics sheets (MonthlyVolume, BacklogAging, TeamWorkload, etc.)
- * are formula-based and auto-calculate from TicketData/TicketSlaData.
- * No refresh functions needed for analytics.
+ * Data Loading:
+ * - Ticket Data includes consolidated SLA metrics (35 columns)
+ * - SLA data is fetched per-batch during ticket loading
+ *
+ * Refresh Strategy:
+ * - Initial Load: Use "Continue Loading" repeatedly until complete
+ * - Ongoing: "Open Ticket Refresh" every 2 hours (updates open + recently closed)
+ * - New Tickets: Automatically fetched with open refresh
+ * - Weekly: "Full Reload" catches deletions and corrections
+ *
+ * Analytics:
+ * - SLA Compliance: Script-based, reads from consolidated TicketData
+ * - Other analytics sheets are formula-based and auto-calculate
  */
 
 /**
@@ -14,19 +24,20 @@
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('IIQ Data')
+    .addSubMenu(ui.createMenu('Setup')
+      .addItem('Setup Spreadsheet', 'setupSpreadsheet')
+      .addItem('Verify Configuration', 'verifyConfiguration'))
+    .addSeparator()
     .addItem('Refresh Teams', 'refreshTeams')
-    .addSeparator()
     .addSubMenu(ui.createMenu('Ticket Data')
-      .addItem('Continue Loading', 'refreshTicketDataContinue')
+      .addItem('Continue Loading (Initial)', 'refreshTicketDataContinue')
+      .addItem('Open Ticket Refresh', 'refreshOpenTicketsStart')
+      .addSeparator()
       .addItem('Full Reload', 'refreshTicketDataFull')
-      .addItem('Refresh Current Year', 'refreshTicketDataCurrentYear')
       .addItem('Show Status', 'showTicketDataStatus'))
-    .addSubMenu(ui.createMenu('SLA Data')
-      .addItem('Continue Loading', 'refreshSlaDataContinue')
-      .addItem('Full Reload', 'refreshSlaDataFull')
-      .addItem('Refresh Current Year', 'refreshSlaDataCurrentYear')
-      .addItem('Show Status', 'showSlaDataStatus'))
     .addSeparator()
+    .addSubMenu(ui.createMenu('Analytics')
+      .addItem('Refresh SLA Compliance', 'refreshSlaCompliance'))
     .addSubMenu(ui.createMenu('Daily Snapshot')
       .addItem('Capture Now', 'appendDailySnapshot')
       .addItem('Populate Historical Estimates', 'populateHistoricalSnapshots'))

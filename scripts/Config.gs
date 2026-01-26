@@ -8,11 +8,9 @@
  * - To add a year: add TICKET_{YEAR}_LAST_PAGE, TICKET_{YEAR}_COMPLETE rows
  * - To remove a year: delete those rows (and optionally clear data)
  *
- * Year Discovery (SLA) - Independent from Tickets:
- * - Historical years are auto-detected from SLA_{YEAR}_LAST_PAGE rows
- * - Current year is auto-detected from SLA_{YEAR}_LAST_FETCH row
- * - SLA years can be configured differently from ticket years
- * - Example: Load tickets for 2024-2026 but only SLA data for 2026
+ * SLA Data:
+ * - SLA metrics are consolidated into TicketData (columns 29-35)
+ * - SLA is fetched per-batch during ticket loading, no separate SLA loading phase
  */
 
 function getConfig() {
@@ -46,9 +44,8 @@ function getConfig() {
     return false;
   }
 
-  // Auto-discover years from config keys (independent for tickets and SLA)
+  // Auto-discover years from config keys for tickets
   const ticketYears = discoverYearsFromConfig(rawConfig, 'TICKET');
-  const slaYears = discoverYearsFromConfig(rawConfig, 'SLA');
 
   // Build the config object with base settings
   const config = {
@@ -60,13 +57,9 @@ function getConfig() {
     staleDays: getIntValue(rawConfig['STALE_DAYS'], 7),
     slaRiskPercent: getIntValue(rawConfig['SLA_RISK_PERCENT'], 75),
     ticketBatchSize: getIntValue(rawConfig['TICKET_BATCH_SIZE'], 2000),
-    slaBatchSize: getIntValue(rawConfig['SLA_BATCH_SIZE'], 100),
     // Discovered years for tickets
     historicalYears: ticketYears.historical,
-    currentYear: ticketYears.current,
-    // Discovered years for SLA (independent)
-    slaHistoricalYears: slaYears.historical,
-    slaCurrentYear: slaYears.current
+    currentYear: ticketYears.current
   };
 
   // Dynamically add ticket tracking properties for each historical year
@@ -81,27 +74,30 @@ function getConfig() {
     config[`ticket${ticketYears.current}LastFetch`] = getStringValue(rawConfig[`TICKET_${ticketYears.current}_LAST_FETCH`]);
   }
 
-  // Dynamically add SLA tracking properties for each historical year
-  slaYears.historical.forEach(year => {
-    config[`sla${year}LastPage`] = getIntValue(rawConfig[`SLA_${year}_LAST_PAGE`], -1);
-    config[`sla${year}Complete`] = getBoolValue(rawConfig[`SLA_${year}_COMPLETE`]);
-  });
-
-  // Add current year SLA tracking (date windowing)
-  if (slaYears.current) {
-    config[`sla${slaYears.current}LastFetch`] = getStringValue(rawConfig[`SLA_${slaYears.current}_LAST_FETCH`]);
-  }
+  // Open refresh progress tracking
+  config.openRefreshDate = getStringValue(rawConfig['OPEN_REFRESH_DATE']);
+  config.openRefreshOpenPage = getIntValue(rawConfig['OPEN_REFRESH_OPEN_PAGE'], -1);
+  config.openRefreshOpenComplete = getBoolValue(rawConfig['OPEN_REFRESH_OPEN_COMPLETE']);
+  config.openRefreshClosedPage = getIntValue(rawConfig['OPEN_REFRESH_CLOSED_PAGE'], -1);
+  config.openRefreshClosedComplete = getBoolValue(rawConfig['OPEN_REFRESH_CLOSED_COMPLETE']);
 
   return config;
 }
 
 /**
- * Discover configured years by scanning config keys
+ * @deprecated SLA loading now uses open/closed priority instead of years
+ */
+function discoverSlaYearsFromConfig(rawConfig) {
+  return [];
+}
+
+/**
+ * Discover configured years by scanning config keys (for tickets)
  * - {PREFIX}_{YEAR}_LAST_PAGE → historical year (pagination-based)
  * - {PREFIX}_{YEAR}_LAST_FETCH → current year (date windowing)
  *
  * @param {Object} rawConfig - Raw config key-value pairs
- * @param {string} prefix - Key prefix ('TICKET' or 'SLA')
+ * @param {string} prefix - Key prefix ('TICKET')
  * @returns {Object} - { historical: [2023, 2024, ...], current: 2026 }
  */
 function discoverYearsFromConfig(rawConfig, prefix) {

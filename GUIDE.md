@@ -1,8 +1,8 @@
 # Implementation Guide
 
-This guide provides detailed documentation on the sheet structure, formulas, and implementation details for the IIQ Tickets to Sheets project.
+This guide explains how the IIQ Tickets to Sheets system works — the sheet structure, formulas, and technical details. It's written for IT staff who want to understand or customize the system.
 
-For quick setup, see the [README](README.md).
+**Just want to get started?** See the [README](README.md) for quick setup instructions.
 
 ### Architecture
 
@@ -40,59 +40,52 @@ Create a new Google Sheet with the following tabs (sheets):
 | `AtRiskQueue` | Tickets approaching SLA thresholds |
 | `StaleTickets` | Tickets with no update in X days |
 | `DailySnapshot` | Daily backlog metrics for trending |
-| `TicketData` | Raw ticket dump for analysis |
-| `TicketSlaData` | SLA timing data for compliance analysis |
+| `TicketData` | Raw ticket dump with SLA metrics (35 columns) |
 | `Logs` | API call logs and errors |
 
 ### Step 2: Configure the Sheets
 
 #### Sheet: `Config`
 
-| Row | A (Setting) | B (Value) |
-|-----|-------------|-----------|
-| 1 | **Setting** | **Value** |
-| 2 | API_BASE_URL | https://your-district.incidentiq.com/api |
-| 3 | BEARER_TOKEN | (your JWT token) |
-| 4 | SITE_ID | (your site UUID) |
-| 5 | PAGE_SIZE | 100 |
-| 6 | THROTTLE_MS | 1000 |
-| 7 | STALE_DAYS | 7 |
-| 8 | SLA_RISK_PERCENT | 75 |
-| 9 | TICKET_BATCH_SIZE | 2000 |
-| 10 | TICKET_2024_TOTAL_PAGES | (auto-populated) |
-| 11 | TICKET_2024_LAST_PAGE | -1 |
-| 12 | TICKET_2024_COMPLETE | FALSE |
-| 13 | TICKET_2025_TOTAL_PAGES | (auto-populated) |
-| 14 | TICKET_2025_LAST_PAGE | -1 |
-| 15 | TICKET_2025_COMPLETE | FALSE |
-| 16 | TICKET_2026_LAST_FETCH | (auto-populated ISO timestamp) |
-| 17 | LAST_REFRESH | (auto-populated) |
-| 18 | SLA_BATCH_SIZE | 100 |
-| 19 | SLA_2024_LAST_PAGE | -1 |
-| 20 | SLA_2024_COMPLETE | FALSE |
-| 21 | SLA_2025_LAST_PAGE | -1 |
-| 22 | SLA_2025_COMPLETE | FALSE |
-| 23 | SLA_2026_LAST_FETCH | (auto-populated ISO timestamp) |
+**Required Settings (you must fill these in):**
 
-> **Year Configuration:** Years are auto-discovered from Config rows - no code changes needed. **Ticket and SLA years are configured independently**, so you can load different date ranges for each.
->
-> **Ticket Data Years:**
+| Setting | Value | Description |
+|---------|-------|-------------|
+| `API_BASE_URL` | `https://your-district.incidentiq.com/api` | Your IIQ URL with `/api` at the end |
+| `BEARER_TOKEN` | (your JWT token) | Get this from IIQ Admin > Integrations > API |
+| `SITE_ID` | (your site UUID) | Only needed for multi-site districts |
+
+**Optional Settings (defaults work for most districts):**
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `PAGE_SIZE` | 100 | Records per API call |
+| `THROTTLE_MS` | 1000 | Milliseconds between API calls (increase if rate limited) |
+| `STALE_DAYS` | 7 | Days without update before a ticket shows in StaleTickets |
+| `SLA_RISK_PERCENT` | 75 | % of SLA used before ticket shows in AtRiskQueue |
+| `TICKET_BATCH_SIZE` | 2000 | Tickets per batch during bulk load |
+
+**Progress Tracking (auto-managed, don't edit):**
+
+| Setting | Purpose |
+|---------|---------|
+| `TICKET_2024_LAST_PAGE` | Tracks loading progress for 2024 tickets |
+| `TICKET_2024_COMPLETE` | TRUE when 2024 is fully loaded |
+| `TICKET_2025_LAST_PAGE` | Tracks loading progress for 2025 tickets |
+| `TICKET_2025_COMPLETE` | TRUE when 2025 is fully loaded |
+| `TICKET_2026_LAST_FETCH` | Timestamp for incremental 2026 loading |
+| `LAST_REFRESH` | When data was last refreshed (shown on analytics sheets) |
+| `OPEN_REFRESH_*` | Progress tracking for open ticket refresh |
+
+> **Year Configuration:** Years are auto-discovered from these rows — no code changes needed.
 > - **Historical years** (pagination-based): Detected from `TICKET_{YEAR}_LAST_PAGE` rows
 > - **Current year** (date windowing): Detected from `TICKET_{YEAR}_LAST_FETCH` row
 >
-> **SLA Data Years (Independent):**
-> - **Historical years** (pagination-based): Detected from `SLA_{YEAR}_LAST_PAGE` rows
-> - **Current year** (date windowing): Detected from `SLA_{YEAR}_LAST_FETCH` row
->
-> **Example - Load tickets for 2024-2026 but only SLA for 2026:**
-> ```
-> TICKET_2024_LAST_PAGE   | -1
-> TICKET_2024_COMPLETE    | FALSE
-> TICKET_2025_LAST_PAGE   | -1
-> TICKET_2025_COMPLETE    | FALSE
-> TICKET_2026_LAST_FETCH  |
-> SLA_2026_LAST_FETCH     |
-> ```
+> **Consolidated SLA Data:**
+> - SLA metrics are fetched per-batch during ticket loading (single API call per batch)
+> - No separate SLA loading phase - SLA data is always in sync with ticket data
+> - TicketData columns 29-35 contain: ResponseThreshold, ResponseActual, ResponseBreach, ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning
+> - Tickets without SLA policies will have blank values in these columns
 >
 > **To add a ticket year (e.g., 2023):**
 > ```
@@ -101,17 +94,9 @@ Create a new Google Sheet with the following tabs (sheets):
 > TICKET_2023_COMPLETE    | FALSE
 > ```
 >
-> **To add an SLA year (e.g., 2025):**
-> ```
-> SLA_2025_LAST_PAGE      | -1
-> SLA_2025_COMPLETE       | FALSE
-> ```
+> **To remove a ticket year:** Delete the corresponding `TICKET_{YEAR}_*` rows from Config, then optionally delete data rows from TicketData sheet.
 >
-> **To remove a year:** Delete the corresponding `TICKET_{YEAR}_*` or `SLA_{YEAR}_*` rows from Config, then optionally delete data rows from TicketData/TicketSlaData sheets.
->
-> **To change current year:** Replace `TICKET_2026_LAST_FETCH` with `TICKET_2027_LAST_FETCH` (and/or same for SLA).
->
-> **SLA Data Settings:** The `/tickets/slas` endpoint is capped at 100 records per page and does NOT return paging metadata. The loader iterates until fewer than 100 records are returned (indicating the last page).
+> **To change current ticket year:** Replace `TICKET_2026_LAST_FETCH` with `TICKET_2027_LAST_FETCH`.
 >
 > **Important:** Format column B as **Plain text** (Format → Number → Plain text) to prevent Sheets from auto-formatting page counts as dates.
 
@@ -199,7 +184,11 @@ Create a new Google Sheet with the following tabs (sheets):
 | A | B | C | D |
 |---|---|---|---|
 | **Team ID** | **Team Name** | **Functional Area** | **Is Active** |
-| (auto-populated) | (auto-populated) | (manual entry) | (auto-populated) |
+| (auto-populated) | (auto-populated) | (you fill this in) | (auto-populated) |
+
+> **What is Functional Area?** This is your own label for grouping teams. For example, you might label Help Desk Tier 1, Help Desk Tier 2, and Field Services as "IT Support Services" — then the FunctionalAreaSummary sheet will show combined metrics for all those teams.
+>
+> After running **IIQ Data > Refresh Teams**, fill in column C with your Functional Area labels. You can paste values directly — there's no dropdown restriction.
 
 #### Sheet: `TeamWorkload`
 
@@ -212,17 +201,15 @@ Create a new Google Sheet with the following tabs (sheets):
 
 **Setup Instructions:**
 
-1. **Row 1 (Headers):** Enter column headers A1:F1 manually, plus "Sort By" in H1 and "Order" in I1
+1. **Row 1 (Headers):** Enter column headers: Team Name, Functional Area, Open, Created (MTD), Closed (MTD), Aged 30+, Last Refreshed, Sort Col#, Desc?
 
-2. **Cell H1:** Label "Sort Col#", **Cell I1:** Label "Desc?"
+2. **Cell H2:** Enter the sort column number (default: `3` for Open)
+   - Options: `1` (Team), `2` (FA), `3` (Open), `4` (Created), `5` (Closed), `6` (Aged)
 
-4. **Cell H2:** Enter the sort column number (use Data Validation dropdown)
-   - Values: `3` (Open - default), `1` (Team), `2` (FA), `4` (Created), `5` (Closed), `6` (Aged)
+3. **Cell I2:** Enter sort order (default: `FALSE` for descending)
+   - `FALSE` = Descending (highest first), `TRUE` = Ascending (lowest first)
 
-5. **Cell I2:** Enter sort order (use Data Validation dropdown)
-   - Values: `FALSE` (Descending - default), `TRUE` (Ascending)
-
-6. **Cell A2:** Single formula that outputs the entire sortable table
+4. **Cell A2:** Paste this formula — it generates the entire table automatically:
    ```
    =LET(
      teams, UNIQUE(FILTER(TicketData!K2:K, TicketData!K2:K<>"", TicketData!K2:K<>"TeamName")),
@@ -239,7 +226,7 @@ Create a new Google Sheet with the following tabs (sheets):
    )
    ```
 
-5. **Cell G1:** Add "Last Refreshed" header, **Cell G2:** Show last refresh timestamp
+5. **Cell G2:** Show when data was last refreshed:
    ```
    =IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")
    ```
@@ -253,47 +240,35 @@ Create a new Google Sheet with the following tabs (sheets):
 | A | B | C | D | E | F | G |
 |---|---|---|---|---|---|---|
 | **Month** | **Year** | **Closed** | **Breaches** | **Breach Rate** | **Avg Response (hrs)** | **Avg Resolution (hrs)** |
-| January | 2026 | (formula) | (formula) | (formula) | (formula) | (formula) |
-| February | 2026 | (formula) | (formula) | (formula) | (formula) | (formula) |
+| January | 2026 | (script) | (script) | (script) | (script) | (script) |
+| February | 2026 | (script) | (script) | (script) | (script) | (script) |
 | ... | ... | | | | | |
 
-> **Note:** This sheet uses formulas joining TicketData and TicketSlaData - no script required.
+> **Note:** This sheet is **script-based** for reliability and performance when processing large datasets.
 
 **Setup Instructions:**
 
-1. **Row 1 (Headers):** Enter the column headers manually
-2. **Column A & B:** Manually enter the months and years you want to track
+1. Run **IIQ Data > Analytics > Refresh SLA Compliance** to populate the sheet
+2. The script automatically calculates all months from your data
 
-3. **Cell C2:** Count tickets closed in that month (drag down)
-   ```
-   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), COUNTIFS(TicketData!G:G, ">="&TEXT(DATE(B2,m,1), "YYYY-MM-DD"), TicketData!G:G, "<"&TEXT(DATE(B2,m+1,1), "YYYY-MM-DD")))
-   ```
+**How it works:**
+- Reads TicketData to find all closed tickets with their closure dates and SLA metrics
+- SLA data is in consolidated columns AC-AI (ResponseThreshold, ResponseActual, ResponseBreach, ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning)
+- Groups by month/year and calculates aggregate metrics
+- Writes results sorted by most recent month first
 
-4. **Cell D2:** Count SLA breaches for tickets closed in that month (drag down)
-   ```
-   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), startD, TEXT(DATE(B2,m,1), "YYYY-MM-DD"), endD, TEXT(DATE(B2,m+1,1), "YYYY-MM-DD"), closedIds, FILTER(TicketData!A:A, (TicketData!G:G>=startD)*(TicketData!G:G<endD)), SUMPRODUCT((COUNTIF(closedIds, TicketSlaData!A2:A)>0)*((TicketSlaData!G2:G="TRUE")+(TicketSlaData!J2:J="TRUE")>0)))
-   ```
+**Columns Explained:**
+- **Closed**: Count of tickets closed in that month
+- **Breaches**: Count where ResponseBreach=TRUE or ResolutionBreach=TRUE
+- **Breach Rate**: Breaches / Closed
+- **Avg Response (hrs)**: Average ResponseActual (converted from minutes)
+- **Avg Resolution (hrs)**: Average ResolutionActual (converted from minutes)
 
-5. **Cell E2:** Calculate breach rate (drag down, format as percentage)
-   ```
-   =IF(C2>0, D2/C2, 0)
-   ```
+**When to refresh:**
+- After loading new ticket data
+- Can be added to a trigger for automated refresh
 
-6. **Cell F2:** Average response time in hours for tickets closed in that month (drag down)
-   ```
-   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), startD, TEXT(DATE(B2,m,1), "YYYY-MM-DD"), endD, TEXT(DATE(B2,m+1,1), "YYYY-MM-DD"), closedIds, FILTER(TicketData!A:A, (TicketData!G:G>=startD)*(TicketData!G:G<endD)), times, FILTER(TicketSlaData!F:F, (COUNTIF(closedIds, TicketSlaData!A:A)>0)*(TicketSlaData!F:F>0)), IFERROR(AVERAGE(times)/60, "N/A"))
-   ```
-
-7. **Cell G2:** Average resolution time in hours for tickets closed in that month (drag down)
-   ```
-   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), startD, TEXT(DATE(B2,m,1), "YYYY-MM-DD"), endD, TEXT(DATE(B2,m+1,1), "YYYY-MM-DD"), closedIds, FILTER(TicketData!A:A, (TicketData!G:G>=startD)*(TicketData!G:G<endD)), times, FILTER(TicketSlaData!I:I, (COUNTIF(closedIds, TicketSlaData!A:A)>0)*(TicketSlaData!I:I>0)), IFERROR(AVERAGE(times)/60, "N/A"))
-   ```
-
-> **How it works:** These formulas join TicketSlaData to TicketData via TicketId (column A in both sheets) to filter SLA metrics by ticket ClosedDate.
->
-> **Performance Note:** The join formulas (D2, F2, G2) may be slow with large datasets (50k+ rows). If performance is an issue, consider using pivot tables or keeping this sheet script-based.
->
-> **Prerequisites:** Both TicketData and TicketSlaData must be loaded first.
+> **Prerequisites:** TicketData must be loaded with SLA metrics (columns AC-AI).
 
 #### Sheet: `PerformanceTrends`
 
@@ -303,7 +278,13 @@ Create a new Google Sheet with the following tabs (sheets):
 | January | 2026 | (formula) | (formula) | (formula) | (formula) | (from snapshot) | (from snapshot) |
 | February | 2026 | (formula) | (formula) | (formula) | (formula) | (from snapshot) | (from snapshot) |
 
-> **Purpose:** Answer "Are we getting better?" by tracking key performance metrics over time.
+> **Purpose:** This is your "executive dashboard" sheet — it answers the question every IT director gets asked: "Are we getting better?"
+>
+> **What the metrics mean:**
+> - **Closure Rate** over 100% = closing more tickets than you're receiving (shrinking backlog)
+> - **Avg Resolution** going down = solving problems faster
+> - **Breach Rate** going down = meeting SLA commitments more often
+> - **% Aged 30+** going down = not letting tickets sit and get stale
 
 **Setup Instructions:**
 
@@ -469,7 +450,7 @@ Create a new Google Sheet with the following tabs (sheets):
 | **Ticket Number** | **Subject** | **Team** | **SLA Type** | **Threshold (hrs)** | **Elapsed (hrs)** | **% of SLA** | **Time Remaining** |
 | (formula) | (formula) | (formula) | (formula) | (formula) | (formula) | (formula) | (formula) |
 
-> **Note:** This sheet uses formulas joining TicketSlaData and TicketData - no script required.
+> **Note:** This sheet uses formulas reading from consolidated TicketData (SLA metrics in columns AC-AI) - no script required.
 
 **Setup Instructions:**
 
@@ -479,17 +460,31 @@ This sheet requires two formula blocks - one for Response SLA at-risk tickets, o
 
 2. **Cell A2:** Response SLA at-risk tickets (single formula populates A-H)
    ```
-   =LET(riskPct, VLOOKUP("SLA_RISK_PERCENT",Config!A:B,2,FALSE)/100, atRisk, FILTER({TicketSlaData!A2:A, TicketSlaData!E2:E, TicketSlaData!F2:F}, (TicketSlaData!K2:K="TRUE")*(TicketSlaData!E2:E>0)*(TicketSlaData!F2:F/TicketSlaData!E2:E>=riskPct)*(TicketSlaData!F2:F/TicketSlaData!E2:E<1)*(TicketSlaData!G2:G<>"TRUE")), IFERROR(SORT({VLOOKUP(INDEX(atRisk,,1),TicketData!A:B,2,FALSE), VLOOKUP(INDEX(atRisk,,1),TicketData!A:C,3,FALSE), VLOOKUP(INDEX(atRisk,,1),TicketData!A:K,11,FALSE), IF(ROW(atRisk),"Response"), INDEX(atRisk,,2)/60, INDEX(atRisk,,3)/60, INDEX(atRisk,,3)/INDEX(atRisk,,2), (INDEX(atRisk,,2)-INDEX(atRisk,,3))/60}, 7, FALSE), "No at-risk Response tickets"))
+   =LET(riskPct, IFERROR(VLOOKUP("SLA_RISK_PERCENT",Config!A:B,2,FALSE)/100, 0.75),
+   data, FILTER({TicketData!B:B, TicketData!C:C, TicketData!K:K, TicketData!AC:AC, TicketData!AD:AD},
+   (TicketData!H:H="No")*(TicketData!AI:AI=TRUE)*(TicketData!AC:AC>0)*(TicketData!AD:AD>0)*
+   (TicketData!AD:AD/TicketData!AC:AC>=riskPct)*(TicketData!AD:AD/TicketData!AC:AC<1)*(TicketData!AE:AE<>TRUE)),
+   IFERROR(SORT({INDEX(data,,1), LEFT(INDEX(data,,2),60), INDEX(data,,3),
+   IF(ROWS(data)>0,"Response",""), INDEX(data,,4)/60, INDEX(data,,5)/60,
+   INDEX(data,,5)/INDEX(data,,4), (INDEX(data,,4)-INDEX(data,,5))/60}, 7, FALSE),
+   "No at-risk Response tickets"))
    ```
 
-3. **Resolution at-risk:** Add below the Response results (find next empty row after Response data)
+3. **Resolution at-risk:** Add below the Response results (row 20 or find next empty row)
    ```
-   =LET(riskPct, VLOOKUP("SLA_RISK_PERCENT",Config!A:B,2,FALSE)/100, atRisk, FILTER({TicketSlaData!A2:A, TicketSlaData!H2:H, TicketSlaData!I2:I}, (TicketSlaData!K2:K="TRUE")*(TicketSlaData!H2:H>0)*(TicketSlaData!I2:I/TicketSlaData!H2:H>=riskPct)*(TicketSlaData!I2:I/TicketSlaData!H2:H<1)*(TicketSlaData!J2:J<>"TRUE")), IFERROR(SORT({VLOOKUP(INDEX(atRisk,,1),TicketData!A:B,2,FALSE), VLOOKUP(INDEX(atRisk,,1),TicketData!A:C,3,FALSE), VLOOKUP(INDEX(atRisk,,1),TicketData!A:K,11,FALSE), IF(ROW(atRisk),"Resolution"), INDEX(atRisk,,2)/60, INDEX(atRisk,,3)/60, INDEX(atRisk,,3)/INDEX(atRisk,,2), (INDEX(atRisk,,2)-INDEX(atRisk,,3))/60}, 7, FALSE), "No at-risk Resolution tickets"))
+   =LET(riskPct, IFERROR(VLOOKUP("SLA_RISK_PERCENT",Config!A:B,2,FALSE)/100, 0.75),
+   data, FILTER({TicketData!B:B, TicketData!C:C, TicketData!K:K, TicketData!AF:AF, TicketData!AG:AG},
+   (TicketData!H:H="No")*(TicketData!AI:AI=TRUE)*(TicketData!AF:AF>0)*(TicketData!AG:AG>0)*
+   (TicketData!AG:AG/TicketData!AF:AF>=riskPct)*(TicketData!AG:AG/TicketData!AF:AF<1)*(TicketData!AH:AH<>TRUE)),
+   IFERROR(SORT({INDEX(data,,1), LEFT(INDEX(data,,2),60), INDEX(data,,3),
+   IF(ROWS(data)>0,"Resolution",""), INDEX(data,,4)/60, INDEX(data,,5)/60,
+   INDEX(data,,5)/INDEX(data,,4), (INDEX(data,,4)-INDEX(data,,5))/60}, 7, FALSE),
+   "No at-risk Resolution tickets"))
    ```
 
 > **How it works:**
-> - Filters TicketSlaData where IsRunning=TRUE, threshold > 0, and % used is between SLA_RISK_PERCENT and 100%
-> - Joins to TicketData via TicketId to get TicketNumber, Subject, TeamName
+> - Filters TicketData where IsClosed="No", IsRunning=TRUE (col AI), threshold > 0, and % used is between SLA_RISK_PERCENT and 100%
+> - SLA columns: AC=ResponseThreshold, AD=ResponseActual, AE=ResponseBreach, AF=ResolutionThreshold, AG=ResolutionActual, AH=ResolutionBreach, AI=IsRunning
 > - Threshold/Elapsed/Remaining are converted from minutes to hours
 > - Sorted by % of SLA descending (most urgent first)
 >
@@ -497,9 +492,7 @@ This sheet requires two formula blocks - one for Response SLA at-risk tickets, o
 > - Format column G as percentage
 > - Format column H as number with 1 decimal place (shows hours remaining)
 >
-> **Performance Note:** These join formulas may be slow with large datasets. If performance is an issue, consider filtering TicketSlaData first or using pivot tables.
->
-> **Prerequisites:** Both TicketData and TicketSlaData must be loaded. SLA_RISK_PERCENT must be set in Config (default 75).
+> **Prerequisites:** TicketData must be loaded with SLA metrics. SLA_RISK_PERCENT must be set in Config (default 75).
 
 #### Sheet: `StaleTickets`
 
@@ -558,12 +551,26 @@ This sheet requires two formula blocks - one for Response SLA at-risk tickets, o
 | Z | **IssueTypeName** | Issue type name (e.g., "Display", "Battery") |
 | AA | **ForId** | Requester user UUID |
 | AB | **ForName** | Requester user name |
+| AC | **ResponseThreshold** | Required first response time in minutes (from SLA policy) |
+| AD | **ResponseActual** | Actual first response time in minutes |
+| AE | **ResponseBreach** | TRUE if actual > threshold, FALSE otherwise |
+| AF | **ResolutionThreshold** | Required resolution time in minutes (from SLA policy) |
+| AG | **ResolutionActual** | Actual resolution time in minutes |
+| AH | **ResolutionBreach** | TRUE if actual > threshold, FALSE otherwise |
+| AI | **IsRunning** | TRUE if SLA timer is still active (ticket not yet resolved) |
 
-> **Note:** Raw ticket data dump for Power BI analysis. Data is loaded by year with automatic resume capability. 28 columns total.
+> **Note:** Raw ticket data dump with consolidated SLA metrics for Power BI analysis. Data is loaded by year with automatic resume capability. 35 columns total.
 >
 > **Loading Strategy:**
 > - **Historical years (2024, 2025)**: Standard pagination with page tracking. Once complete, these don't change.
-> - **Current year (2026)**: Date windowing for incremental updates. Use "Refresh Current Year" periodically to catch deletions.
+> - **Current year (2026)**: Date windowing for incremental updates. Use "Open Ticket Refresh" every 2 hours for open ticket SLA updates.
+>
+> **SLA Columns Explained (AC-AI):**
+> - **ResponseThreshold/ResolutionThreshold**: SLA policy limits in minutes
+> - **ResponseActual/ResolutionActual**: Actual elapsed time in minutes
+> - **ResponseBreach/ResolutionBreach**: TRUE if actual exceeded threshold
+> - **IsRunning**: TRUE if SLA timer is still active (ticket not resolved)
+> - Tickets without SLA policies will have blank values in these columns
 >
 > **Formula-Based Analytics:** With these columns, you can build all common IT metrics using sheet formulas:
 > - **Volume/Throughput**: COUNTIFS on CreatedDate, ClosedDate by month/year
@@ -571,37 +578,9 @@ This sheet requires two formula blocks - one for Response SLA at-risk tickets, o
 > - **Priority Distribution**: COUNTIFS on Priority or pivot table
 > - **Category/IssueType Breakdown**: COUNTIFS or pivot on IssueCategoryName, IssueTypeName
 > - **Team Workload**: COUNTIFS on TeamName where IsClosed="No"
-> - **SLA Assignment**: COUNTIFS on SlaName, IsPastDue
+> - **SLA Compliance**: Use columns AC-AI for response/resolution times and breach status
+> - **At-Risk Queue**: Filter on IsRunning=TRUE and % of SLA threshold
 > - **Location Analysis**: COUNTIFS on LocationName, LocationType
->
-> **Power BI Joins:** Join to TicketSlaData on TicketId for detailed SLA timing (response/resolution times, breach status).
-
-#### Sheet: `TicketSlaData`
-
-| A | B | C | D | E | F | G | H | I | J | K |
-|---|---|---|---|---|---|---|---|---|---|---|
-| **TicketId** | **Year** | **SlaId** | **SlaName** | **ResponseThreshold** | **ResponseActual** | **ResponseBreached** | **ResolutionThreshold** | **ResolutionActual** | **ResolutionBreached** | **IsRunning** |
-
-> **Note:** SLA timing data for joining with TicketData via TicketId. Uses the `/tickets/slas` endpoint which returns detailed SLA metrics.
->
-> **Loading Strategy:**
-> - Same year-based approach as TicketData (historical pagination + current year date windowing)
-> - API is capped at 100 records per page (slower than TicketData)
-> - Estimated ~1,700 API calls for full historical load (~170k tickets)
->
-> **Columns Explained:**
-> - **TicketId**: Foreign key to join with TicketData
-> - **Year**: Extracted from ticket creation for filtering (2024, 2025, 2026)
-> - **SlaId/SlaName**: The SLA policy applied to this ticket
-> - **ResponseThreshold**: Required first response time in minutes (from Sla.Metrics)
-> - **ResponseActual**: Actual first response time in minutes (from SlaTimes, MetricType=1)
-> - **ResponseBreached**: TRUE if actual > threshold, FALSE otherwise
-> - **ResolutionThreshold**: Required resolution time in minutes (from Sla.Metrics)
-> - **ResolutionActual**: Actual resolution time in minutes (from SlaTimes, MetricType=2)
-> - **ResolutionBreached**: TRUE if actual > threshold, FALSE otherwise
-> - **IsRunning**: TRUE if SLA is still active (ticket not yet resolved)
->
-> **Power BI Usage:** Join TicketSlaData to TicketData on TicketId for SLA compliance analysis by team, location, or time period.
 
 ---
 
@@ -615,20 +594,21 @@ This sheet requires two formula blocks - one for Response SLA at-risk tickets, o
 
 ### Source Code Files
 
-The Apps Script source code is available in the [`gAppScript/gSheetDashboardSample/`](../gAppScript/gSheetDashboardSample/) directory.
+The Apps Script source code is in the `scripts/` folder of this repository.
 
 | File | Description |
 |------|-------------|
-| [`Config.gs`](../gAppScript/gSheetDashboardSample/Config.gs) | Configuration reading from Config sheet, logging utilities |
-| [`ApiClient.gs`](../gAppScript/gSheetDashboardSample/ApiClient.gs) | HTTP requests with retry/exponential backoff for rate limiting |
-| [`Teams.gs`](../gAppScript/gSheetDashboardSample/Teams.gs) | Team data loading from API |
-| [`TicketData.gs`](../gAppScript/gSheetDashboardSample/TicketData.gs) | Bulk ticket data loader (28 columns, year-based pagination) |
-| [`TicketSlaData.gs`](../gAppScript/gSheetDashboardSample/TicketSlaData.gs) | SLA timing data loader (response/resolution metrics) |
-| [`DailySnapshot.gs`](../gAppScript/gSheetDashboardSample/DailySnapshot.gs) | Daily backlog metrics capture for trending |
-| [`Menu.gs`](../gAppScript/gSheetDashboardSample/Menu.gs) | IIQ Data menu for data loader functions |
-| [`Triggers.gs`](../gAppScript/gSheetDashboardSample/Triggers.gs) | Time-driven trigger functions for automated updates |
+| [`Config.gs`](scripts/Config.gs) | Configuration reading from Config sheet, logging utilities |
+| [`ApiClient.gs`](scripts/ApiClient.gs) | HTTP requests with retry/exponential backoff for rate limiting |
+| [`Teams.gs`](scripts/Teams.gs) | Team data loading from API |
+| [`TicketData.gs`](scripts/TicketData.gs) | Bulk ticket data loader with consolidated SLA (35 columns, year-based pagination) |
+| [`SlaCompliance.gs`](scripts/SlaCompliance.gs) | SLA compliance analytics (reads from consolidated TicketData) |
+| [`DailySnapshot.gs`](scripts/DailySnapshot.gs) | Daily backlog metrics capture for trending |
+| [`Menu.gs`](scripts/Menu.gs) | IIQ Data menu for data loader and analytics functions |
+| [`Triggers.gs`](scripts/Triggers.gs) | Time-driven trigger functions for automated updates |
+| [`Setup.gs`](scripts/Setup.gs) | Spreadsheet setup and sheet creation functions |
 
-> **Note:** Analytics sheets use formulas (see Part 1). Scripts handle data loading (TicketData, TicketSlaData, Teams), daily snapshots (DailySnapshot), and orchestration (Menu, Triggers).
+> **Note:** Analytics sheets use formulas (see Part 1). Scripts handle data loading (TicketData with SLA, Teams), daily snapshots (DailySnapshot), and orchestration (Menu, Triggers).
 
 ### File Dependencies
 
@@ -639,27 +619,31 @@ Script-based data loaders:
     │       └── Config.gs
     ├── Teams.gs
     │       └── ApiClient.gs
-    ├── TicketData.gs
-    │       └── ApiClient.gs
-    ├── TicketSlaData.gs
+    ├── TicketData.gs (includes consolidated SLA metrics)
     │       └── ApiClient.gs
     └── DailySnapshot.gs (reads from TicketData sheet)
             └── Config.gs
 
+Script-based analytics:
+    └── SlaCompliance.gs (reads from consolidated TicketData)
+            └── Config.gs
+
 Menu.gs (IIQ Data Menu)
-    └── References data loader functions
+    └── References data loader and analytics functions
 
 Triggers.gs (Automated Updates)
-    └── Data loader scripts above
+    └── Data loader and analytics scripts above
+
+Setup.gs (Spreadsheet Setup)
+    └── Creates all sheets with headers and formulas
 
 Formula-based analytics sheets (no scripts needed):
     ├── MonthlyVolume           → reads from TicketData
     ├── BacklogAging            → reads from TicketData and Config
     ├── TeamWorkload            → reads from TicketData and Teams
     ├── FunctionalAreaSummary   → reads from TeamWorkload and Config
-    ├── SLACompliance           → reads from TicketData and TicketSlaData
     ├── PerformanceTrends       → reads from TicketData, SLACompliance, DailySnapshot
-    ├── AtRiskQueue             → reads from TicketSlaData, TicketData, and Config
+    ├── AtRiskQueue             → reads from TicketData (SLA columns AC-AI) and Config
     ├── LocationBreakdown       → reads from TicketData and Config
     └── StaleTickets            → reads from TicketData and Config
 ```
@@ -671,14 +655,15 @@ Formula-based analytics sheets (no scripts needed):
 ### Step 1: Create and Configure the Spreadsheet
 
 1. Create a new Google Spreadsheet
-2. Create all sheets: `Config`, `MonthlyVolume`, `BacklogAging`, `Teams`, `TeamWorkload`, `SLACompliance`, `LocationBreakdown`, `FunctionalAreaSummary`, `AtRiskQueue`, `StaleTickets`, `TicketData`, `TicketSlaData`, `Logs`
+2. Create all sheets: `Config`, `MonthlyVolume`, `BacklogAging`, `Teams`, `TeamWorkload`, `SLACompliance`, `LocationBreakdown`, `FunctionalAreaSummary`, `AtRiskQueue`, `StaleTickets`, `PerformanceTrends`, `DailySnapshot`, `TicketData`, `Logs`
 3. Set up headers as shown in Part 1
+4. **Or run Setup.gs**: Go to **IIQ Data > Setup > Setup Spreadsheet** to auto-create all sheets
 
 ### Step 2: Add the Apps Script Code
 
 1. Go to **Extensions > Apps Script**
-2. Create the eight `.gs` files with the code from Part 2
-3. Save the project
+2. Create a new `.gs` file for each script in the `scripts/` folder (9 files total)
+3. Copy the code from each file and save the project
 
 ### Step 3: Configure API Access
 
@@ -700,30 +685,49 @@ Formula-based analytics sheets (no scripts needed):
 
 Before setting up automated triggers, complete the initial bulk load:
 
-1. Run **IIQ Data > Ticket Data > Continue Loading** repeatedly until all historical years show "Complete"
-2. Run **IIQ Data > SLA Data > Continue Loading** repeatedly until all historical years show "Complete"
-3. Analytics sheets will auto-populate via formulas once TicketData and TicketSlaData have data
+1. Click **IIQ Data > Ticket Data > Continue Loading (Initial)**
+2. Wait for it to finish (~5 minutes), then check **IIQ Data > Ticket Data > Show Status**
+3. If any year shows "Page X of Y" instead of "Complete", run Continue Loading again
+4. Repeat until all years show "Complete"
 
-**Alternative: Automated Bulk Load**
+> **Why multiple runs?** Google Apps Script has a 6-minute timeout. Large districts may have 50,000+ tickets spanning multiple years. The script saves progress after each batch, so you just keep running it until done. SLA data is included automatically.
+
+**Alternative: Let it run automatically**
+
+If you don't want to babysit the initial load:
+
 1. In Apps Script, go to **Triggers** (clock icon)
-2. Add a trigger for `triggerBulkLoadContinue` every 10 minutes
-3. Monitor the Logs sheet until historical data is complete
-4. Delete the bulk load trigger once complete
+2. Add a trigger for `triggerDataContinue` to run every 10 minutes
+3. Check the Logs sheet periodically — look for "COMPLETE" entries
+4. **Delete this trigger once all data is loaded** (it's only for initial load)
 
 ### Step 6: Set Up Scheduled Refresh
 
-After initial data load is complete, set up daily triggers to keep data current:
+After initial data load is complete, set up triggers to keep data current:
 
 1. In Apps Script, go to **Triggers** (clock icon)
 2. Add these triggers:
 
-| Function | Event Source | Type | Time |
-|----------|--------------|------|------|
-| `triggerTicketDataUpdate` | Time-driven | Day timer | 5:00 AM - 6:00 AM |
-| `triggerSlaDataUpdate` | Time-driven | Day timer | 5:30 AM - 6:30 AM |
-| `triggerDailySnapshot` | Time-driven | Day timer | 7:00 PM - 8:00 PM |
+| Function | Event Source | Type | Time | Purpose |
+|----------|--------------|------|------|---------|
+| `triggerOpenTicketRefresh` | Time-driven | Hours timer | Every 2 hours | Update open tickets + SLA timers |
+| `triggerNewTickets` | Time-driven | Minutes timer | Every 30 minutes | Fetch newly created tickets |
+| `triggerDailySnapshot` | Time-driven | Day timer | 7:00 PM - 8:00 PM | Capture backlog metrics |
+| `triggerWeeklyFullRefresh` | Time-driven | Week timer | Sunday 2:00 AM | Full reload (catch deletions) |
 
-> **Note:** Analytics sheets are formula-based and auto-update when data changes. The daily snapshot captures backlog metrics for PerformanceTrends that cannot be calculated retroactively. All triggers log activity to the Logs sheet.
+> **Data Freshness with this schedule:**
+> - **Open ticket SLA data**: max 2 hours stale
+> - **New tickets**: appear within 30 minutes
+> - **Status changes**: captured within 2 hours
+> - **Deletions/corrections**: captured weekly
+>
+> **Trigger Details:**
+> - `triggerOpenTicketRefresh`: Fetches all open tickets and recently closed (last 7 days), updates rows in-place
+> - `triggerNewTickets`: Fetches tickets created since last fetch timestamp, appends new rows
+> - `triggerDailySnapshot`: Captures current backlog metrics for PerformanceTrends (cannot be calculated retroactively)
+> - `triggerWeeklyFullRefresh`: Clears and reloads all ticket data to catch deletions and corrections
+>
+> **Note:** Analytics sheets are formula-based and auto-update when data changes. All triggers log activity to the Logs sheet.
 
 ---
 
@@ -817,7 +821,7 @@ After initial data load is complete, set up daily triggers to keep data current:
 >
 > **Power BI Tip:** Use this sheet to create a pivot table or chart grouped by Functional Area to see aggregate metrics across all teams in each area.
 
-### SLACompliance Sheet (Formula-Calculated)
+### SLACompliance Sheet (Script-Based)
 
 | Month | Year | Closed | Breaches | Breach Rate | Avg Response (hrs) | Avg Resolution (hrs) |
 |-------|------|--------|----------|-------------|-------------------|---------------------|
@@ -825,7 +829,7 @@ After initial data load is complete, set up daily triggers to keep data current:
 | February | 2026 | 445 | 28 | 6.3% | 2.1 | 16.2 |
 | March | 2026 | 498 | 41 | 8.2% | 2.8 | 22.1 |
 
-> **Formula-Based:** This sheet joins TicketData and TicketSlaData via TicketId to calculate SLA metrics for tickets closed in each month.
+> **Script-Based:** Run **IIQ Data > Analytics > Refresh SLA Compliance** to populate. The script reads from consolidated TicketData (SLA metrics in columns AC-AI), which is faster and more reliable than formula-based calculations for large datasets.
 >
 > **Metrics Explained:**
 > - **Breaches**: Count of tickets where response or resolution time exceeded SLA threshold
@@ -902,7 +906,7 @@ After initial data load is complete, set up daily triggers to keep data current:
 | TKT-47045 | Software installation | Help Desk Tier 1 | Response | 2.0 | 1.6 | 80% | 0.4 |
 | TKT-46982 | Account lockout | Help Desk Tier 1 | Response | 1.0 | 0.8 | 80% | 0.2 |
 
-> **Formula-Based:** This sheet joins TicketSlaData and TicketData to find tickets where SLA % is between the risk threshold and 100%. Time Remaining shows hours.
+> **Formula-Based:** This sheet filters TicketData (SLA columns AC-AI) to find tickets where SLA % is between the risk threshold and 100%. Time Remaining shows hours.
 >
 > **Operational Alert:** Tickets approaching SLA threshold (default 75%+) sorted by urgency. Use this queue for daily triage to prevent breaches.
 
@@ -921,7 +925,7 @@ After initial data load is complete, set up daily triggers to keep data current:
 
 ### TicketData Sheet (After Refresh)
 
-The expanded TicketData sheet now includes 28 columns (A-AB) for comprehensive analytics. Sample rows:
+The TicketData sheet includes 35 columns (A-AI) with consolidated SLA metrics. Sample rows:
 
 | Column | Row 1 | Row 2 | Row 3 |
 |--------|-------|-------|-------|
@@ -953,53 +957,73 @@ The expanded TicketData sheet now includes 28 columns (A-AB) for comprehensive a
 | Z: IssueTypeName | Printer | Laptop | Password |
 | AA: ForId | usr-111... | usr-222... | usr-333... |
 | AB: ForName | Sarah Wilson | Mike Brown | Emily Davis |
+| AC: ResponseThreshold | 240 | 480 | 60 |
+| AD: ResponseActual | 45 | 120 | 12 |
+| AE: ResponseBreach | FALSE | FALSE | FALSE |
+| AF: ResolutionThreshold | 2880 | 4320 | 480 |
+| AG: ResolutionActual | | | 15 |
+| AH: ResolutionBreach | | | FALSE |
+| AI: IsRunning | TRUE | TRUE | FALSE |
 
-> **Raw Data Export:** This sheet contains all 28 ticket fields needed for custom analysis, pivot tables, or Power BI integration.
+> **Raw Data Export:** This sheet contains all 35 ticket fields including consolidated SLA metrics for custom analysis, pivot tables, or Power BI integration.
+>
+> **SLA Columns (AC-AI):**
+> - Threshold values are in minutes (240 = 4 hours)
+> - Actual values are in minutes (blank if not yet measured)
+> - Breach columns are TRUE/FALSE (blank if not applicable)
+> - IsRunning is TRUE while SLA timer is active
 >
 > **Formula-Based Analytics:** With this data, build metrics using COUNTIFS, SUMIFS, and pivot tables without additional API calls:
 > - Volume: `=COUNTIFS(E:E, ">=2026-01-01", E:E, "<2026-02-01")` for monthly created
 > - Aging: `=COUNTIFS(H:H, "No", Q:Q, ">=31", Q:Q, "<=60")` for 31-60 day bucket
-> - SLA At-Risk: `=COUNTIFS(H:H, "No", S:S, "Yes")` for past-due open tickets
+> - SLA Breach Rate: `=COUNTIFS(AE:AE, TRUE)/COUNTIFS(AE:AE, "<>"&"")` for response breach rate
+> - At-Risk: Filter on AI:AI=TRUE and AD:AD/AC:AC >= 0.75 for tickets approaching response SLA
 > - By Category: `=COUNTIFS(X:X, "Hardware", H:H, "No")` for open hardware tickets
->
-> **Important:** After expanding the sheet, run "Full Reload" to populate the new columns for all historical data.
 
 ---
 
 ## Troubleshooting
 
-| Issue | Likely Cause | Solution |
-|-------|--------------|----------|
-| "API configuration missing" | Config sheet not set up | Fill in API_BASE_URL and BEARER_TOKEN |
-| "HTTP 401" | Invalid or expired token | Refresh your Bearer token |
-| "HTTP 403" | Insufficient permissions | Check API user permissions |
-| "HTTP 429" or "RATE_LIMITED" in logs | Rate limited | Increase THROTTLE_MS in Config (try 2000 or higher) |
-| "Bandwidth quota exceeded" | Too many requests | Increase THROTTLE_MS to 3000+, or wait and retry |
-| No data returned | Wrong filters or empty result | Check filter syntax and date ranges |
-| Slow performance | Too many tickets | Increase PAGE_SIZE, use date filters |
-| Script timeout (6 min limit) | Too much data | Use Continue Loading - it saves progress and resumes |
-| Analytics formulas slow | Large datasets | Consider using pivot tables or reduce data range |
+### Common Problems
 
-### Rate Limiting Tips
+| What You See | What's Wrong | How to Fix It |
+|--------------|--------------|---------------|
+| "API configuration missing" | Config sheet isn't set up | Fill in `API_BASE_URL` and `BEARER_TOKEN` in the Config sheet |
+| "HTTP 401" error | Your API token expired | Get a new Bearer token from IIQ Admin > Integrations > API |
+| "HTTP 403" error | API user doesn't have permission | Check that your API user has read access to tickets |
+| "HTTP 429" or "RATE_LIMITED" in Logs | IIQ is throttling your requests | Increase `THROTTLE_MS` in Config to 2000 or 3000 |
+| Script timeout after ~6 minutes | Normal — Google's limit | Just run "Continue Loading" again — progress is saved |
+| Some tickets have blank SLA columns | Those tickets don't have SLA policies | Expected behavior — not all tickets have SLA assigned in IIQ |
+| Formulas show #REF! errors | TicketData sheet is empty | Run the initial data load first |
+| TeamWorkload shows blank Functional Areas | Teams sheet column C is empty | Fill in Functional Area labels in the Teams sheet |
 
-1. **Start with higher throttle**: Set `THROTTLE_MS` to `2000` (2 seconds) initially
-2. **Check the Logs sheet**: Look for RATE_LIMITED or RETRY entries to diagnose issues
-3. **Reduce PAGE_SIZE**: Lower from 100 to 50 if bandwidth is constrained
-4. **Use incremental loading**: The data loaders save progress and can resume after timeout
+### Rate Limiting (HTTP 429)
+
+If you're getting rate limited by IncidentIQ:
+
+1. **Increase the delay between API calls**: Set `THROTTLE_MS` to `2000` (2 seconds) or `3000` (3 seconds) in the Config sheet
+2. **Check your Logs sheet**: Look for "RATE_LIMITED" or "RETRY" entries to see how often it's happening
+3. **Be patient during initial load**: Large districts may take several hours to fully load — that's normal
+4. **Reduce batch size if needed**: Lower `TICKET_BATCH_SIZE` from 2000 to 1000 if problems persist
 
 ---
 
 ## Next Steps
 
-After validating the data extraction:
+Once your data is flowing, here are some ideas for getting more value:
 
-1. **Build Power BI dashboards** - Connect to Google Sheets and create executive visualizations
-2. **Set up automated alerts** - Use Google Apps Script triggers to send email alerts when:
-   - At-Risk Queue exceeds threshold count
-   - Stale Tickets exceed threshold count
-   - SLA Breach Rate exceeds target percentage
-3. **Add historical trending** - Store daily snapshots of FA Summary for month-over-month comparison
-4. **Enhance drill-down** - Add ticket-level detail exports for each sheet
+1. **Connect Power BI** — Create visual dashboards for your leadership team. The Google Sheets connector works well, or export to Excel periodically.
+
+2. **Set up email alerts** — Add Apps Script triggers to email you when:
+   - AtRiskQueue has more than 10 tickets (SLA breaches coming)
+   - StaleTickets has more than 20 tickets (things are falling through cracks)
+   - A specific team's backlog exceeds a threshold
+
+3. **Share with your team** — Give your team leads read access to see their TeamWorkload metrics. Consider creating filtered views by team.
+
+4. **Track month-over-month** — The DailySnapshot trigger captures backlog metrics daily. After a few months, you'll have great data for showing improvement trends to administration.
+
+5. **Customize for your district** — The formulas are all visible and editable. Add columns, change age buckets, or create new analytics sheets for your specific needs.
 
 ---
 
@@ -1025,4 +1049,4 @@ After validating the data extraction:
 
 ---
 
-*For questions or contributions, please open an issue on this repository.*
+*Questions? Open an issue on this repository, or check the Logs sheet for error details.*

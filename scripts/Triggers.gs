@@ -4,22 +4,75 @@
  * These functions are designed for time-driven triggers.
  * They don't show UI dialogs (which fail in triggers) and log results instead.
  *
- * Recommended Trigger Schedule (after initial data load is complete):
- * 1. triggerTicketDataUpdate  - Daily 5:00 AM
- * 2. triggerSlaDataUpdate     - Daily 5:30 AM
- * 3. triggerDailySnapshot     - Daily 7:00 PM (captures backlog metrics for trending)
+ * =============================================================================
+ * RECOMMENDED TRIGGER SCHEDULE (Optimized for Freshness + Efficiency)
+ * =============================================================================
  *
- * Note: Analytics sheets (MonthlyVolume, BacklogAging, etc.) are now formula-based
- * and auto-calculate from TicketData/TicketSlaData. No refresh trigger needed.
+ * | Function                  | Schedule         | Purpose                           |
+ * |---------------------------|------------------|-----------------------------------|
+ * | triggerOpenTicketRefresh  | Every 2 hours    | Update open tickets + SLA timers  |
+ * | triggerNewTickets         | Every 30 min     | Fetch newly created tickets       |
+ * | triggerDailySnapshot      | Daily 7:00 PM    | Capture backlog metrics           |
+ * | triggerWeeklyFullRefresh  | Weekly Sun 2 AM  | Full reload (catch deletions)     |
+ *
+ * =============================================================================
+ * STRATEGY OVERVIEW
+ * =============================================================================
+ *
+ * INITIAL LOAD (one-time):
+ * - Run triggerDataContinue repeatedly until all years are loaded
+ * - This uses pagination for historical years, date windowing for current year
+ *
+ * ONGOING OPERATIONS (after initial load):
+ * 1. Open Ticket Refresh (every 2 hours)
+ *    - Fetches all open tickets from API
+ *    - Fetches tickets closed in last 7 days
+ *    - Updates existing rows IN PLACE (no delete/recreate)
+ *    - Appends any new tickets not already in sheet
+ *    - Keeps SLA timers fresh (critical for breach tracking)
+ *
+ * 2. New Tickets (every 30 min)
+ *    - Uses date windowing to fetch only new tickets since last check
+ *    - Very fast - typically processes 0-50 tickets
+ *    - Ensures new tickets appear quickly
+ *
+ * 3. Daily Snapshot (once per day)
+ *    - Captures point-in-time backlog metrics
+ *    - Used for trend analysis
+ *
+ * 4. Weekly Full Refresh (once per week)
+ *    - Clears recent years and reloads from scratch
+ *    - Catches: deleted tickets, data corrections, edge cases
+ *    - Preserves old historical data (2+ years old)
+ *
+ * =============================================================================
+ * DATA FRESHNESS
+ * =============================================================================
+ *
+ * With this schedule:
+ * - Open ticket SLA data: max 2 hours stale (vs 24 hours with nightly reset)
+ * - New tickets: appear within 30 minutes
+ * - Status changes: captured within 2 hours
+ * - Deletions/corrections: captured weekly
  *
  * Setup: In Apps Script, go to Triggers (clock icon) and add time-driven triggers.
  */
 
+// =============================================================================
+// PRIMARY TRIGGERS (Use these for ongoing operations)
+// =============================================================================
+
 /**
- * Trigger-safe function to update ticket data
- * Runs the loader without UI prompts, logs results
+ * Refresh open tickets and recently closed tickets
+ * Schedule: Every 2 hours
+ *
+ * This is the primary trigger for keeping data fresh:
+ * - Updates all open tickets (status, SLA timers, assignments)
+ * - Catches tickets that were recently closed
+ * - Uses in-place updates for efficiency
+ * - Appends new tickets not already in sheet
  */
-function triggerTicketDataUpdate() {
+function triggerOpenTicketRefresh() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('TicketData');
 
@@ -28,95 +81,342 @@ function triggerTicketDataUpdate() {
     return;
   }
 
-  logOperation('Trigger', 'START', 'Ticket data update triggered');
+  logOperation('Trigger', 'START', 'Open ticket refresh started');
 
   try {
-    const result = runTicketDataLoader(sheet);
-    logOperation('Trigger', 'TICKET_DATA',
-      `${result.batchCount} batches, ${result.ticketCount} tickets, ` +
+    const result = runOpenTicketRefresh(sheet);
+    logOperation('Trigger', 'OPEN_REFRESH',
+      `Updated ${result.updatedCount}, appended ${result.appendedCount}, ` +
+      `${result.ticketCount} total tickets, ${result.batchCount} batches, ` +
       `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
   } catch (error) {
-    logOperation('Trigger', 'ERROR', `Ticket data update failed: ${error.message}`);
+    logOperation('Trigger', 'ERROR', `Open ticket refresh failed: ${error.message}`);
   }
 }
 
 /**
- * Trigger-safe function to update SLA data
- * Runs the loader without UI prompts, logs results
+ * Fetch newly created tickets (incremental)
+ * Schedule: Every 30 minutes
+ *
+ * Uses date windowing to fetch only tickets created since last check.
+ * Very efficient - typically processes only a handful of tickets.
  */
-function triggerSlaDataUpdate() {
+function triggerNewTickets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('TicketSlaData');
+  const sheet = ss.getSheetByName('TicketData');
+  const config = getConfig();
 
   if (!sheet) {
-    logOperation('Trigger', 'ERROR', 'TicketSlaData sheet not found');
+    logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
     return;
   }
 
-  logOperation('Trigger', 'START', 'SLA data update triggered');
+  // Only run if initial load is complete
+  if (!isTicketLoadingComplete(config)) {
+    logOperation('Trigger', 'SKIP', 'New tickets check skipped - initial load not complete');
+    return;
+  }
+
+  if (!config.currentYear) {
+    logOperation('Trigger', 'SKIP', 'No current year configured for incremental updates');
+    return;
+  }
+
+  logOperation('Trigger', 'START', 'New tickets check started');
 
   try {
-    const result = runSlaDataLoader(sheet);
-    logOperation('Trigger', 'SLA_DATA',
-      `${result.batchCount} batches, ${result.slaCount} SLAs, ` +
-      `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
+    const result = runNewTicketsCheck(sheet, config);
+    if (result.count > 0) {
+      logOperation('Trigger', 'NEW_TICKETS',
+        `Found and added ${result.count} new tickets, runtime=${(result.runtime/1000).toFixed(1)}s`);
+    } else {
+      logOperation('Trigger', 'NEW_TICKETS', 'No new tickets found');
+    }
   } catch (error) {
-    logOperation('Trigger', 'ERROR', `SLA data update failed: ${error.message}`);
+    logOperation('Trigger', 'ERROR', `New tickets check failed: ${error.message}`);
   }
 }
 
 /**
- * Trigger-safe function to run a complete daily update
- * Runs ticket update, SLA update, then updates LAST_REFRESH timestamp
- * Use this if you want a single trigger to do everything
+ * Weekly full refresh - clears recent data and reloads
+ * Schedule: Weekly (Sunday 2:00 AM recommended)
  *
- * Note: Analytics sheets are formula-based and auto-calculate.
- * Run triggerDailySnapshot separately at 7 PM for backlog trending.
+ * This catches edge cases that incremental updates might miss:
+ * - Deleted tickets
+ * - Data corrections in IIQ
+ * - Any sync issues
+ *
+ * Preserves historical data (2+ years old) to minimize reload time.
  */
-function triggerDailyUpdate() {
-  logOperation('Trigger', 'START', 'Daily update triggered');
+function triggerWeeklyFullRefresh() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const config = getConfig();
+  const currentYear = new Date().getFullYear();
+  const ticketSheet = ss.getSheetByName('TicketData');
 
-  triggerTicketDataUpdate();
-  triggerSlaDataUpdate();
-  updateLastRefresh();
+  // Preserve data from 2 years ago and older
+  const historicalCutoff = currentYear - 2;
 
-  logOperation('Trigger', 'COMPLETE', 'Daily update finished');
+  logOperation('Trigger', 'START',
+    `Weekly full refresh triggered. Preserving data from ${historicalCutoff} and earlier.`);
+
+  try {
+    // Step 1: Filter and rewrite TicketData (preserve historical years)
+    if (ticketSheet) {
+      const ticketResult = filterAndRewriteTicketData(ticketSheet, historicalCutoff);
+      logOperation('Trigger', 'WEEKLY_RESET',
+        `Preserved ${ticketResult.keptCount} historical rows, cleared ${ticketResult.clearedCount} recent rows`);
+    }
+
+    // Step 2: Reset progress only for recent ticket years
+    config.historicalYears.forEach(year => {
+      if (year > historicalCutoff) {
+        resetYearProgress(year);
+        logOperation('Trigger', 'PROGRESS_RESET', `Reset ticket progress for ${year}`);
+      }
+    });
+    if (config.currentYear && config.currentYear > historicalCutoff) {
+      resetCurrentYearProgress(config.currentYear);
+      logOperation('Trigger', 'PROGRESS_RESET', `Reset ticket progress for ${config.currentYear} (current year)`);
+    }
+
+    // Step 3: Reset open refresh progress
+    resetOpenRefreshProgress();
+
+    logOperation('Trigger', 'WEEKLY_RESET',
+      `Reset complete. Will reload years > ${historicalCutoff}. Run triggerDataContinue to reload.`);
+
+    // Step 4: Start reloading immediately
+    const result = runTicketDataLoader(ticketSheet);
+    logOperation('Trigger', 'WEEKLY_RELOAD',
+      `Initial reload: ${result.batchCount} batches, ${result.ticketCount} tickets, ` +
+      `complete=${result.complete}`);
+
+  } catch (error) {
+    logOperation('Trigger', 'ERROR', `Weekly full refresh failed: ${error.message}`);
+  }
 }
 
+// =============================================================================
+// INITIAL LOAD TRIGGER (Use for first-time setup or after weekly reset)
+// =============================================================================
+
 /**
- * Trigger-safe function to continue bulk loading
- * Use this during initial data load to keep the loader running
- * Schedule every 10 minutes until historical data is complete
+ * Continue loading ticket data (initial load or post-reset)
+ * Schedule: Every 10 minutes (during initial load only)
+ *
+ * Use this trigger during:
+ * - Initial setup (loading all historical data)
+ * - After weekly full refresh (to complete the reload)
+ *
+ * Once initial load is complete, this trigger does nothing.
+ * You can disable it after initial load to save quota.
  */
-function triggerBulkLoadContinue() {
+function triggerDataContinue() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const config = getConfig();
 
-  // Check if ticket data needs loading (all historical years must be complete)
-  const ticketComplete = config.historicalYears.every(year => config[`ticket${year}Complete`]);
-  if (!ticketComplete) {
-    const sheet = ss.getSheetByName('TicketData');
-    if (sheet) {
-      logOperation('Trigger', 'BULK_LOAD', 'Continuing ticket data bulk load');
+  // Check if tickets need loading
+  const ticketsComplete = isTicketLoadingComplete(config);
+  if (!ticketsComplete) {
+    let sheet = ss.getSheetByName('TicketData');
+    if (!sheet) {
+      sheet = createTicketSheet(ss);
+    }
+
+    logOperation('Trigger', 'START', 'Continuing ticket data loading (with SLA)');
+
+    try {
       const result = runTicketDataLoader(sheet);
       logOperation('Trigger', 'TICKET_DATA',
-        `${result.batchCount} batches, ${result.ticketCount} tickets, complete=${result.complete}`);
-    }
-    return; // Focus on tickets first
-  }
-
-  // Check if SLA data needs loading (all SLA historical years must be complete)
-  const slaComplete = config.slaHistoricalYears.every(year => config[`sla${year}Complete`]);
-  if (!slaComplete) {
-    const sheet = ss.getSheetByName('TicketSlaData');
-    if (sheet) {
-      logOperation('Trigger', 'BULK_LOAD', 'Continuing SLA data bulk load');
-      const result = runSlaDataLoader(sheet);
-      logOperation('Trigger', 'SLA_DATA',
-        `${result.batchCount} batches, ${result.slaCount} SLAs, complete=${result.complete}`);
+        `${result.batchCount} batches, ${result.ticketCount} tickets, ` +
+        `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
+    } catch (error) {
+      logOperation('Trigger', 'ERROR', `Ticket data continue failed: ${error.message}`);
     }
     return;
   }
 
-  logOperation('Trigger', 'BULK_LOAD', 'Historical data load complete - disable this trigger');
+  // All complete - do nothing (no log to avoid noise)
+}
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Check if all ticket loading is complete
+ */
+function isTicketLoadingComplete(config) {
+  // Check historical years
+  const historicalComplete = config.historicalYears.every(year => config[`ticket${year}Complete`]);
+  if (!historicalComplete) return false;
+
+  // Check current year (has data if lastFetch is set)
+  if (config.currentYear) {
+    const lastFetch = config[`ticket${config.currentYear}LastFetch`];
+    if (!lastFetch) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Run incremental check for new tickets
+ * Uses date windowing from last fetch timestamp
+ */
+function runNewTicketsCheck(sheet, config) {
+  const startTime = Date.now();
+  const currentYear = config.currentYear;
+  const lastFetch = config[`ticket${currentYear}LastFetch`];
+  const batchSize = config.ticketBatchSize;
+
+  // Build date range from last fetch to now
+  let startDate;
+  if (lastFetch) {
+    const lastDate = new Date(lastFetch);
+    startDate = formatDateForApi(lastDate);
+  } else {
+    startDate = `01/01/${currentYear}`;
+  }
+
+  const endDate = formatDateForApi(new Date());
+  const dateRange = `daterange:${startDate}-${endDate}`;
+
+  // Fetch new tickets
+  const response = searchTickets([
+    { Facet: 'createddate', Value: dateRange }
+  ], 0, batchSize, { field: 'TicketCreatedDate', direction: 'asc' });
+
+  if (!response.Items || response.Items.length === 0) {
+    return { count: 0, runtime: Date.now() - startTime };
+  }
+
+  // Filter to only tickets created AFTER last fetch
+  let tickets = response.Items;
+  if (lastFetch) {
+    const lastFetchTime = new Date(lastFetch).getTime();
+    tickets = tickets.filter(t => new Date(t.CreatedDate).getTime() > lastFetchTime);
+  }
+
+  if (tickets.length === 0) {
+    // Update timestamp even if no new tickets
+    const lastTicket = response.Items[response.Items.length - 1];
+    updateConfigValue(`TICKET_${currentYear}_LAST_FETCH`, lastTicket.CreatedDate);
+    return { count: 0, runtime: Date.now() - startTime };
+  }
+
+  // Fetch SLA data for new tickets
+  const ticketIds = tickets.map(t => t.TicketId).filter(id => id);
+  const slaMap = fetchSlaForTicketIds(ticketIds);
+
+  // Write to sheet
+  const now = new Date();
+  tickets.sort((a, b) => new Date(a.CreatedDate) - new Date(b.CreatedDate));
+  const rows = tickets.map(ticket => extractTicketRow(ticket, now, currentYear, slaMap));
+  const lastRow = sheet.getLastRow();
+  sheet.getRange(lastRow + 1, 1, rows.length, 35).setValues(rows);
+
+  // Update last fetch timestamp
+  const lastTicket = tickets[tickets.length - 1];
+  updateConfigValue(`TICKET_${currentYear}_LAST_FETCH`, lastTicket.CreatedDate);
+
+  return { count: tickets.length, runtime: Date.now() - startTime };
+}
+
+/**
+ * Filter TicketData to keep only historical rows (year <= cutoff)
+ * Uses filter-and-rewrite for efficiency (much faster than row deletion)
+ */
+function filterAndRewriteTicketData(sheet, historicalCutoff) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return { keptCount: 0, clearedCount: 0 };
+  }
+
+  const data = sheet.getRange(2, 1, lastRow - 1, 35).getValues();
+  const rowsToKeep = [];
+  let clearedCount = 0;
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    const year = row[3]; // Column D
+
+    if (year && year <= historicalCutoff) {
+      rowsToKeep.push(row);
+    } else {
+      clearedCount++;
+    }
+  }
+
+  sheet.getRange(2, 1, lastRow - 1, 35).clear();
+
+  if (rowsToKeep.length > 0) {
+    sheet.getRange(2, 1, rowsToKeep.length, 35).setValues(rowsToKeep);
+  }
+
+  return { keptCount: rowsToKeep.length, clearedCount: clearedCount };
+}
+
+/**
+ * Create the TicketData sheet with headers (35 columns including SLA metrics)
+ */
+function createTicketSheet(ss) {
+  const sheet = ss.insertSheet('TicketData');
+  sheet.getRange(1, 1, 1, 35).setValues([[
+    'TicketId', 'TicketNumber', 'Subject', 'Year',
+    'CreatedDate', 'ModifiedDate', 'ClosedDate', 'IsClosed',
+    'Status', 'TeamId', 'TeamName', 'LocationId', 'LocationName', 'LocationType',
+    'OwnerId', 'OwnerName', 'AgeDays', 'Priority', 'IsPastDue', 'DueDate',
+    'SlaId', 'SlaName', 'IssueCategoryId', 'IssueCategoryName',
+    'IssueTypeId', 'IssueTypeName', 'RequesterId', 'RequesterName',
+    'ResponseThreshold', 'ResponseActual', 'ResponseBreach',
+    'ResolutionThreshold', 'ResolutionActual', 'ResolutionBreach', 'IsRunning'
+  ]]);
+  sheet.setFrozenRows(1);
+  return sheet;
+}
+
+// Note: triggerDailySnapshot is defined in DailySnapshot.gs
+
+// =============================================================================
+// DEPRECATED FUNCTIONS - Kept for backward compatibility
+// =============================================================================
+
+/**
+ * @deprecated Use triggerWeeklyFullRefresh instead
+ */
+function triggerDataReset() {
+  logOperation('Trigger', 'DEPRECATED', 'triggerDataReset called - consider using triggerWeeklyFullRefresh');
+  triggerWeeklyFullRefresh();
+}
+
+/**
+ * @deprecated Use triggerDataContinue instead
+ */
+function triggerTicketDataReset() {
+  logOperation('Trigger', 'DEPRECATED', 'triggerTicketDataReset called - use triggerDataContinue');
+  triggerDataContinue();
+}
+
+/**
+ * @deprecated Use triggerDataContinue instead
+ */
+function triggerTicketDataContinue() {
+  logOperation('Trigger', 'DEPRECATED', 'triggerTicketDataContinue called - use triggerDataContinue');
+  triggerDataContinue();
+}
+
+/**
+ * @deprecated SLA data is now consolidated into TicketData
+ */
+function triggerSlaDataReset() {
+  logOperation('Trigger', 'DEPRECATED', 'triggerSlaDataReset no longer needed - SLA data is now part of TicketData');
+}
+
+/**
+ * @deprecated SLA data is now consolidated into TicketData
+ */
+function triggerSlaDataContinue() {
+  logOperation('Trigger', 'DEPRECATED', 'triggerSlaDataContinue no longer needed - SLA data is now part of TicketData');
 }
