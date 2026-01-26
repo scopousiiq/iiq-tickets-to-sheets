@@ -146,11 +146,11 @@ const rows = tickets.map(t => extractTicketRow(t, now, year, slaMap));
 
 | Function | Schedule | Purpose |
 |----------|----------|---------|
-| `triggerOpenTicketRefresh` | Every 2 hours | Update open tickets + SLA timers, catch recently closed |
+| `triggerDataContinue` | Every 10 min | Continue any in-progress loading (initial OR open refresh) |
+| `triggerOpenTicketRefresh` | Every 2 hours | Start open ticket + SLA refresh |
 | `triggerNewTickets` | Every 30 min | Fetch newly created tickets (fast incremental check) |
 | `triggerDailySnapshot` | Daily 7:00 PM | Capture backlog metrics for trending |
 | `triggerWeeklyFullRefresh` | Weekly Sun 2 AM | Full reload to catch deletions/corrections |
-| `triggerDataContinue` | Every 10 min | Initial load only - disable after complete |
 
 **Data Freshness:**
 - Open ticket SLA data: max 2 hours stale
@@ -158,16 +158,18 @@ const rows = tickets.map(t => extractTicketRow(t, now, year, slaMap));
 - Status changes: captured within 2 hours
 - Deletions/corrections: captured weekly
 
-**Initial Load:**
-- Run `triggerDataContinue` repeatedly (every 10 min) until all historical years complete
-- Once initial load is done, disable this trigger to save quota
+**The `triggerDataContinue` Trigger:**
+This is the "keep things moving" trigger. It serves two purposes:
+1. **Initial load not complete**: Continues loading historical ticket data
+2. **Open refresh in progress**: Continues open ticket refresh if it timed out
+3. **Both complete**: Does nothing (safe to leave enabled permanently)
 
 **Ongoing Operations:**
 1. **Open Ticket Refresh** (every 2 hours): Primary refresh mechanism
    - Fetches all open tickets with fresh SLA metrics
    - Fetches tickets closed in last 7 days (STALE_DAYS config)
    - Updates existing rows IN PLACE (efficient, no delete/recreate)
-   - Progress is resumable if timeout occurs
+   - If timeout occurs, `triggerDataContinue` continues it
 
 2. **New Tickets** (every 30 min): Fast incremental check
    - Uses date windowing from last fetch timestamp

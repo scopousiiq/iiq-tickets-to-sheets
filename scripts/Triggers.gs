@@ -10,31 +10,42 @@
  *
  * | Function                  | Schedule         | Purpose                           |
  * |---------------------------|------------------|-----------------------------------|
- * | triggerOpenTicketRefresh  | Every 2 hours    | Update open tickets + SLA timers  |
+ * | triggerDataContinue       | Every 10 min     | Continue any in-progress loading  |
+ * | triggerOpenTicketRefresh  | Every 2 hours    | Start open ticket + SLA refresh   |
  * | triggerNewTickets         | Every 30 min     | Fetch newly created tickets       |
  * | triggerDailySnapshot      | Daily 7:00 PM    | Capture backlog metrics           |
  * | triggerWeeklyFullRefresh  | Weekly Sun 2 AM  | Full reload (catch deletions)     |
  *
  * =============================================================================
+ * THE "KEEP THINGS MOVING" TRIGGER (triggerDataContinue)
+ * =============================================================================
+ *
+ * This is the key trigger that ensures work gets completed:
+ *
+ * 1. If initial load is NOT complete → continues loading historical ticket data
+ * 2. If initial load IS complete AND open refresh is in progress → continues it
+ * 3. If both are complete → does nothing (no log noise)
+ *
+ * Safe to leave enabled permanently. It only does work when needed.
+ *
+ * =============================================================================
  * STRATEGY OVERVIEW
  * =============================================================================
  *
- * INITIAL LOAD (one-time):
- * - Run triggerDataContinue repeatedly until all years are loaded
- * - This uses pagination for historical years, date windowing for current year
+ * INITIAL LOAD:
+ * - triggerDataContinue handles this automatically
+ * - Loads historical years via pagination, current year via date windowing
  *
  * ONGOING OPERATIONS (after initial load):
- * 1. Open Ticket Refresh (every 2 hours)
+ * 1. Open Ticket Refresh (triggered every 2 hours)
  *    - Fetches all open tickets from API
  *    - Fetches tickets closed in last 7 days
  *    - Updates existing rows IN PLACE (no delete/recreate)
- *    - Appends any new tickets not already in sheet
- *    - Keeps SLA timers fresh (critical for breach tracking)
+ *    - If it times out, triggerDataContinue picks up where it left off
  *
  * 2. New Tickets (every 30 min)
  *    - Uses date windowing to fetch only new tickets since last check
  *    - Very fast - typically processes 0-50 tickets
- *    - Ensures new tickets appear quickly
  *
  * 3. Daily Snapshot (once per day)
  *    - Captures point-in-time backlog metrics
@@ -50,7 +61,7 @@
  * =============================================================================
  *
  * With this schedule:
- * - Open ticket SLA data: max 2 hours stale (vs 24 hours with nightly reset)
+ * - Open ticket SLA data: max 2 hours stale
  * - New tickets: appear within 30 minutes
  * - Status changes: captured within 2 hours
  * - Deletions/corrections: captured weekly
@@ -71,6 +82,9 @@
  * - Catches tickets that were recently closed
  * - Uses in-place updates for efficiency
  * - Appends new tickets not already in sheet
+ *
+ * NOTE: For large districts, this may not complete in one run.
+ * Use triggerOpenRefreshContinue (every 10 min) to ensure completion.
  */
 function triggerOpenTicketRefresh() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -92,6 +106,14 @@ function triggerOpenTicketRefresh() {
   } catch (error) {
     logOperation('Trigger', 'ERROR', `Open ticket refresh failed: ${error.message}`);
   }
+}
+
+/**
+ * @deprecated Use triggerDataContinue instead - it handles both initial load AND open refresh
+ */
+function triggerOpenRefreshContinue() {
+  logOperation('Trigger', 'DEPRECATED', 'triggerOpenRefreshContinue called - use triggerDataContinue instead');
+  triggerDataContinue();
 }
 
 /**
@@ -202,21 +224,29 @@ function triggerWeeklyFullRefresh() {
 // =============================================================================
 
 /**
- * Continue loading ticket data (initial load or post-reset)
- * Schedule: Every 10 minutes (during initial load only)
+ * Continue any in-progress data loading
+ * Schedule: Every 10 minutes
  *
- * Use this trigger during:
- * - Initial setup (loading all historical data)
- * - After weekly full refresh (to complete the reload)
+ * This is your "keep things moving" trigger. It handles two scenarios:
  *
- * Once initial load is complete, this trigger does nothing.
- * You can disable it after initial load to save quota.
+ * 1. INITIAL LOAD NOT COMPLETE:
+ *    - Continues loading historical ticket data
+ *    - Run until all years show "Complete"
+ *
+ * 2. INITIAL LOAD COMPLETE + OPEN REFRESH IN PROGRESS:
+ *    - Continues the open ticket refresh
+ *    - Useful for large districts where 2-hour refresh doesn't finish in one run
+ *
+ * 3. BOTH COMPLETE:
+ *    - Does nothing (no log to avoid noise)
+ *
+ * You can leave this trigger enabled permanently - it only runs when needed.
  */
 function triggerDataContinue() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const config = getConfig();
 
-  // Check if tickets need loading
+  // Priority 1: Check if initial ticket load needs continuing
   const ticketsComplete = isTicketLoadingComplete(config);
   if (!ticketsComplete) {
     let sheet = ss.getSheetByName('TicketData');
@@ -237,7 +267,37 @@ function triggerDataContinue() {
     return;
   }
 
-  // All complete - do nothing (no log to avoid noise)
+  // Priority 2: Check if open ticket refresh needs continuing
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const savedDate = config.openRefreshDate || '';
+
+  if (savedDate === today) {
+    const progress = getOpenRefreshProgress();
+
+    // If refresh started today but isn't complete, continue it
+    if (!progress.openComplete || !progress.closedComplete) {
+      const sheet = ss.getSheetByName('TicketData');
+      if (!sheet) {
+        logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
+        return;
+      }
+
+      logOperation('Trigger', 'CONTINUE', 'Continuing open ticket refresh');
+
+      try {
+        const result = runOpenTicketRefresh(sheet);
+        logOperation('Trigger', 'OPEN_REFRESH',
+          `Updated ${result.updatedCount}, appended ${result.appendedCount}, ` +
+          `${result.ticketCount} total tickets, ${result.batchCount} batches, ` +
+          `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
+      } catch (error) {
+        logOperation('Trigger', 'ERROR', `Open ticket refresh continue failed: ${error.message}`);
+      }
+      return;
+    }
+  }
+
+  // Both complete - do nothing (no log to avoid noise)
 }
 
 // =============================================================================

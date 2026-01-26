@@ -37,11 +37,11 @@ In the `Config` sheet, enter your IncidentIQ credentials:
 3. Click **IIQ Data > Refresh Teams** — authorize when prompted
 4. Click **IIQ Data > Ticket Data > Continue Loading (Initial)** to start importing
 
-> **Tip for large districts:** Instead of manually running "Continue Loading" repeatedly, set up a temporary trigger:
+> **Tip for large districts:** Instead of manually running "Continue Loading" repeatedly, set up a trigger:
 > 1. Go to **Extensions > Apps Script > Triggers** (clock icon)
 > 2. Add `triggerDataContinue` to run every 10 minutes
 > 3. Check **IIQ Data > Ticket Data > Show Status** periodically until all years show "Complete"
-> 4. **Delete this trigger once loading is done** — it's only for initial load
+> 4. You can leave this trigger enabled — it also helps complete open ticket refreshes
 >
 > SLA data is included automatically — no separate step needed.
 
@@ -55,10 +55,13 @@ Once your initial load is complete, set up triggers to keep data fresh:
 
 | Function | Schedule | What It Does |
 |----------|----------|--------------|
-| `triggerOpenTicketRefresh` | Every 2 hours | Updates open tickets and SLA timers |
+| `triggerDataContinue` | Every 10 minutes | Continues any in-progress loading (initial or open refresh) |
+| `triggerOpenTicketRefresh` | Every 2 hours | Starts open ticket + SLA refresh |
 | `triggerNewTickets` | Every 30 minutes | Catches newly created tickets |
 | `triggerDailySnapshot` | Daily at 7:00 PM | Saves backlog metrics for trending |
 | `triggerWeeklyFullRefresh` | Weekly, Sunday 2 AM | Full reload to catch deleted tickets |
+
+> **About `triggerDataContinue`:** This is your "keep things moving" trigger. It automatically continues initial data loading OR open ticket refresh — whichever needs work. Once both are complete, it does nothing. You can leave it enabled permanently.
 
 **How fresh is the data?**
 - Open ticket status and SLA timers: Updated every 2 hours

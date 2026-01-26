@@ -699,7 +699,7 @@ If you don't want to babysit the initial load:
 1. In Apps Script, go to **Triggers** (clock icon)
 2. Add a trigger for `triggerDataContinue` to run every 10 minutes
 3. Check the Logs sheet periodically — look for "COMPLETE" entries
-4. **Delete this trigger once all data is loaded** (it's only for initial load)
+4. **You can leave this trigger enabled** — it also helps complete open ticket refreshes for large districts
 
 ### Step 6: Set Up Scheduled Refresh
 
@@ -710,7 +710,8 @@ After initial data load is complete, set up triggers to keep data current:
 
 | Function | Event Source | Type | Time | Purpose |
 |----------|--------------|------|------|---------|
-| `triggerOpenTicketRefresh` | Time-driven | Hours timer | Every 2 hours | Update open tickets + SLA timers |
+| `triggerDataContinue` | Time-driven | Minutes timer | Every 10 minutes | Continue any in-progress loading |
+| `triggerOpenTicketRefresh` | Time-driven | Hours timer | Every 2 hours | Start open ticket + SLA refresh |
 | `triggerNewTickets` | Time-driven | Minutes timer | Every 30 minutes | Fetch newly created tickets |
 | `triggerDailySnapshot` | Time-driven | Day timer | 7:00 PM - 8:00 PM | Capture backlog metrics |
 | `triggerWeeklyFullRefresh` | Time-driven | Week timer | Sunday 2:00 AM | Full reload (catch deletions) |
@@ -722,7 +723,8 @@ After initial data load is complete, set up triggers to keep data current:
 > - **Deletions/corrections**: captured weekly
 >
 > **Trigger Details:**
-> - `triggerOpenTicketRefresh`: Fetches all open tickets and recently closed (last 7 days), updates rows in-place
+> - `triggerDataContinue`: Your "keep things moving" trigger — continues initial load if not done, OR continues open refresh if in progress. Does nothing when both are complete. Safe to leave enabled permanently.
+> - `triggerOpenTicketRefresh`: Starts a fresh open ticket refresh — fetches all open tickets and recently closed (last 7 days), updates rows in-place
 > - `triggerNewTickets`: Fetches tickets created since last fetch timestamp, appends new rows
 > - `triggerDailySnapshot`: Captures current backlog metrics for PerformanceTrends (cannot be calculated retroactively)
 > - `triggerWeeklyFullRefresh`: Clears and reloads all ticket data to catch deletions and corrections
