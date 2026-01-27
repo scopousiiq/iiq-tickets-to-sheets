@@ -1172,11 +1172,12 @@ Once your data is flowing, here are some ideas for getting more value:
 | Temporal Patterns (day/hour) | TemporalPatterns | Volume & Trends |
 | First Contact Resolution Rate | FirstContactResolution | SLA & Response |
 | Response Time Distribution | ResponseDistribution | SLA & Response |
+| Queue Time Analysis | QueueTimeAnalysis | SLA & Response |
 | Issue Category Volume | IssueCategoryVolume | Issue & Requester |
 | Priority Analysis | PriorityAnalysis | Issue & Requester |
 | Frequent Requesters | FrequentRequesters | Issue & Requester |
 
-> **19 Total Analytics Sheets:** 6 default + 13 optional. All can be deleted and recreated via **iiQ Data > Add Analytics Sheet** menu.
+> **20 Total Analytics Sheets:** 6 default + 14 optional. All can be deleted and recreated via **iiQ Data > Add Analytics Sheet** menu.
 
 ---
 

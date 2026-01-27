@@ -42,7 +42,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively) |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
 | `Triggers.gs` | Time-driven trigger functions (no UI dialogs) |
-| `OptionalMetrics.gs` | Additional analytics sheets added via menu (10 optional KPI sheets) |
+| `OptionalMetrics.gs` | Additional analytics sheets added via menu (14 optional KPI sheets) |
 
 **Key Dependencies:**
 - `ApiClient.gs` → `Config.gs`
@@ -128,6 +128,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | FirstContactResolution | "How many tickets resolved same-day?" | Same-day %, 4-hour resolution %, monthly trend |
 | ResponseDistribution | "How consistent is our response time?" | Percentiles, distribution buckets, consistency metrics |
 | ResponseTrends | "Are response times improving over time?" | Monthly avg/median/90th%, % meeting targets, consistency |
+| QueueTimeAnalysis | "How long do tickets wait before being picked up?" | Queue time by team, distribution buckets, waiting tickets |
 
 ### Team & Staff
 | Sheet | Question Answered | Key Metrics |

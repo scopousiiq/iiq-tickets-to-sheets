@@ -27,6 +27,7 @@
  * - ResponseDistribution: Response time consistency analysis
  * - ResponseTrends: Monthly response/resolution time trends
  * - TemporalPatterns: When do tickets come in? (day/hour analysis)
+ * - QueueTimeAnalysis: How long do tickets wait before being picked up?
  */
 
 // ============================================================================
@@ -283,6 +284,18 @@ function addResponseTrendsSheet() {
     SpreadsheetApp.getUi().alert('Created', 'ResponseTrends sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
   } else {
     SpreadsheetApp.getUi().alert('Already Exists', 'ResponseTrends sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
+
+/**
+ * Add Queue Time Analysis sheet
+ */
+function addQueueTimeAnalysisSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (setupQueueTimeAnalysisSheet(ss)) {
+    SpreadsheetApp.getUi().alert('Created', 'QueueTimeAnalysis sheet has been created.\n\nThis sheet analyzes the time tickets spend waiting before an agent starts working on them.', SpreadsheetApp.getUi().ButtonSet.OK);
+  } else {
+    SpreadsheetApp.getUi().alert('Already Exists', 'QueueTimeAnalysis sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }
 
@@ -1443,6 +1456,305 @@ function setupResponseTrendsSheet(ss) {
     '- Increasing % meeting targets\n' +
     '- Gap between avg and median narrowing\n\n' +
     'Green = <4 hrs, Red = >24 hrs'
+  );
+
+  return true;
+}
+
+/**
+ * Setup QueueTimeAnalysis sheet
+ * Question: "How long do tickets wait before being picked up?"
+ * Analyzes the time between CreatedDate and StartedDate
+ *
+ * Layout:
+ * - Columns A-D: Summary stats, Distribution, Monthly Trend, Waiting Tickets (stacked vertically)
+ * - Columns F-K: Queue Time by Team (unconstrained, can expand freely)
+ *
+ * @returns {boolean} true if created, false if already exists
+ */
+function setupQueueTimeAnalysisSheet(ss) {
+  if (ss.getSheetByName('QueueTimeAnalysis')) return false;
+
+  const sheet = ss.insertSheet('QueueTimeAnalysis');
+
+  // Column E is a spacer between left and right sections
+  const teamCol = 6; // Column F
+
+  // ============================================================
+  // LEFT SIDE - SECTION 1: Overall Summary Stats (Columns A-C)
+  // ============================================================
+  const summaryHeaders = ['Metric', 'Value', 'Description'];
+  sheet.getRange(1, 1, 1, 3).setValues([summaryHeaders]);
+
+  const summaryData = [
+    ['', '', ''],
+    ['--- Queue Time Summary ---', '', ''],
+    ['Total Tickets with Queue Time',
+     '=COUNTIFS(TicketData!F:F, "<>", TicketData!E:E, "<>")',
+     'Tickets where both CreatedDate and StartedDate exist'],
+    ['Tickets Never Started',
+     '=COUNTIFS(TicketData!F:F, "", TicketData!I:I, "No")',
+     'Open tickets with no StartedDate (still in queue)'],
+    ['Currently in Queue',
+     '=COUNTIFS(TicketData!F:F, "", TicketData!I:I, "No")',
+     'Open tickets waiting to be picked up'],
+    ['', '', ''],
+    ['--- Queue Time Stats (hours) ---', '', ''],
+    ['Average Queue Time',
+     '=IFERROR(AVERAGE(FILTER((DATEVALUE(LEFT(TicketData!F2:F,10))+TIMEVALUE(MID(TicketData!F2:F,12,8))-DATEVALUE(LEFT(TicketData!E2:E,10))-TIMEVALUE(MID(TicketData!E2:E,12,8)))*24, (TicketData!F2:F<>"")*(TicketData!E2:E<>"")*(LEN(TicketData!F2:F)>=10)*(LEN(TicketData!E2:E)>=10))), "N/A")',
+     'Mean time tickets wait before being picked up'],
+    ['Median Queue Time',
+     '=IFERROR(MEDIAN(FILTER((DATEVALUE(LEFT(TicketData!F2:F,10))+TIMEVALUE(MID(TicketData!F2:F,12,8))-DATEVALUE(LEFT(TicketData!E2:E,10))-TIMEVALUE(MID(TicketData!E2:E,12,8)))*24, (TicketData!F2:F<>"")*(TicketData!E2:E<>"")*(LEN(TicketData!F2:F)>=10)*(LEN(TicketData!E2:E)>=10))), "N/A")',
+     'Middle value - less affected by outliers'],
+    ['90th Percentile',
+     '=IFERROR(PERCENTILE(FILTER((DATEVALUE(LEFT(TicketData!F2:F,10))+TIMEVALUE(MID(TicketData!F2:F,12,8))-DATEVALUE(LEFT(TicketData!E2:E,10))-TIMEVALUE(MID(TicketData!E2:E,12,8)))*24, (TicketData!F2:F<>"")*(TicketData!E2:E<>"")*(LEN(TicketData!F2:F)>=10)*(LEN(TicketData!E2:E)>=10)), 0.9), "N/A")',
+     '90% of tickets picked up faster than this'],
+    ['Maximum Queue Time',
+     '=IFERROR(MAX(FILTER((DATEVALUE(LEFT(TicketData!F2:F,10))+TIMEVALUE(MID(TicketData!F2:F,12,8))-DATEVALUE(LEFT(TicketData!E2:E,10))-TIMEVALUE(MID(TicketData!E2:E,12,8)))*24, (TicketData!F2:F<>"")*(TicketData!E2:E<>"")*(LEN(TicketData!F2:F)>=10)*(LEN(TicketData!E2:E)>=10))), "N/A")',
+     'Longest wait time'],
+    ['Std Deviation',
+     '=IFERROR(STDEV(FILTER((DATEVALUE(LEFT(TicketData!F2:F,10))+TIMEVALUE(MID(TicketData!F2:F,12,8))-DATEVALUE(LEFT(TicketData!E2:E,10))-TIMEVALUE(MID(TicketData!E2:E,12,8)))*24, (TicketData!F2:F<>"")*(TicketData!E2:E<>"")*(LEN(TicketData!F2:F)>=10)*(LEN(TicketData!E2:E)>=10))), "N/A")',
+     'Consistency measure (lower = more consistent)'],
+  ];
+
+  sheet.getRange(2, 1, summaryData.length, 3).setValues(summaryData);
+
+  // ============================================================
+  // LEFT SIDE - SECTION 2: Queue Time Distribution Buckets
+  // ============================================================
+  const distRow = summaryData.length + 3;
+  sheet.getRange(distRow, 1).setValue('--- Queue Time Distribution ---');
+
+  const distHeaders = ['Time Bucket', 'Count', '% of Total', 'Cumulative %'];
+  sheet.getRange(distRow + 1, 1, 1, 4).setValues([distHeaders]);
+
+  // Use LET to pre-filter valid data BEFORE date calculations to avoid DATEVALUE errors
+  const qtimeLet = 'LET(qtime, FILTER((DATEVALUE(LEFT(TicketData!F2:F,10))+TIMEVALUE(MID(TicketData!F2:F,12,8))-DATEVALUE(LEFT(TicketData!E2:E,10))-TIMEVALUE(MID(TicketData!E2:E,12,8)))*24, (TicketData!F2:F<>"")*(TicketData!E2:E<>"")*(LEN(TicketData!F2:F)>=10)*(LEN(TicketData!E2:E)>=10)),';
+
+  const buckets = [
+    ['< 15 minutes', `=IFERROR(${qtimeLet} COUNTIF(qtime, "<0.25")), 0)`, '', ''],
+    ['15-60 minutes', `=IFERROR(${qtimeLet} SUMPRODUCT((qtime>=0.25)*(qtime<1))), 0)`, '', ''],
+    ['1-4 hours', `=IFERROR(${qtimeLet} SUMPRODUCT((qtime>=1)*(qtime<4))), 0)`, '', ''],
+    ['4-8 hours', `=IFERROR(${qtimeLet} SUMPRODUCT((qtime>=4)*(qtime<8))), 0)`, '', ''],
+    ['8-24 hours', `=IFERROR(${qtimeLet} SUMPRODUCT((qtime>=8)*(qtime<24))), 0)`, '', ''],
+    ['1-3 days', `=IFERROR(${qtimeLet} SUMPRODUCT((qtime>=24)*(qtime<72))), 0)`, '', ''],
+    ['> 3 days', `=IFERROR(${qtimeLet} COUNTIF(qtime, ">=72")), 0)`, '', ''],
+  ];
+
+  // Add percentage and cumulative formulas
+  for (let i = 0; i < buckets.length; i++) {
+    const rowNum = distRow + 2 + i;
+    const totalRef = `SUM($B$${distRow + 2}:$B$${distRow + 2 + buckets.length - 1})`;
+    buckets[i][2] = `=IF(${totalRef}>0, B${rowNum}/${totalRef}, 0)`;
+    buckets[i][3] = `=SUM($C$${distRow + 2}:C${rowNum})`;
+  }
+
+  sheet.getRange(distRow + 2, 1, buckets.length, 4).setValues(buckets);
+
+  // ============================================================
+  // LEFT SIDE - SECTION 3: Monthly Queue Time Trend
+  // ============================================================
+  const trendRow = distRow + buckets.length + 4;
+  sheet.getRange(trendRow, 1).setValue('--- Monthly Queue Time Trend ---');
+
+  const trendHeaders = ['Month', 'Year', 'Started', 'Avg (hrs)'];
+  sheet.getRange(trendRow + 1, 1, 1, 4).setValues([trendHeaders]);
+
+  // Get month range from actual data (uses StartedDate column F)
+  const monthRange = getMonthRangeFromData(ss, 'F');
+
+  const trendRows = [];
+  for (const period of monthRange) {
+    const y = period.year;
+    const m = period.monthNum;
+
+    const trendLet = `LET(validRows, (TicketData!F2:F<>"")*(TicketData!E2:E<>"")*(LEN(TicketData!F2:F)>=10)*(LEN(TicketData!E2:E)>=10), dateInMonth, (TicketData!F2:F>=TEXT(DATE(${y},${m},1),"YYYY-MM-DD"))*(TicketData!F2:F<TEXT(DATE(${y},${m}+1,1),"YYYY-MM-DD")), qtime, (DATEVALUE(LEFT(TicketData!F2:F,10))+TIMEVALUE(MID(TicketData!F2:F,12,8))-DATEVALUE(LEFT(TicketData!E2:E,10))-TIMEVALUE(MID(TicketData!E2:E,12,8)))*24,`;
+
+    trendRows.push([
+      period.monthName,
+      y,
+      // Count of tickets started this month
+      `=SUMPRODUCT((TicketData!F2:F>=TEXT(DATE(${y},${m},1),"YYYY-MM-DD"))*(TicketData!F2:F<TEXT(DATE(${y},${m}+1,1),"YYYY-MM-DD"))*(TicketData!F2:F<>"")*(LEN(TicketData!F2:F)>=10))`,
+      // Avg queue time
+      `=IFERROR(${trendLet} AVERAGE(FILTER(qtime, dateInMonth*validRows))), "N/A")`
+    ]);
+  }
+
+  if (trendRows.length > 0) {
+    sheet.getRange(trendRow + 2, 1, trendRows.length, 4).setValues(trendRows);
+  }
+
+  // ============================================================
+  // LEFT SIDE - SECTION 4: Waiting Tickets
+  // ============================================================
+  const waitingRow = trendRow + trendRows.length + 4;
+  sheet.getRange(waitingRow, 1).setValue('--- Tickets Still Waiting (Never Started) ---');
+
+  const waitingHeaders = ['Ticket #', 'Subject', 'Team', 'Days'];
+  sheet.getRange(waitingRow + 1, 1, 1, 4).setValues([waitingHeaders]);
+
+  // List of open tickets with no StartedDate, sorted by age (constrained to fit left side)
+  const waitingFormula =
+    '=IFERROR(ARRAY_CONSTRAIN(SORT(FILTER({TicketData!B2:B, LEFT(TicketData!C2:C,30), TicketData!L2:L, TicketData!R2:R}, ' +
+    '(TicketData!F2:F="")*(TicketData!I2:I="No")), 4, FALSE), 25, 4), "No tickets waiting")';
+
+  sheet.getRange(waitingRow + 2, 1).setValue(waitingFormula);
+
+  // ============================================================
+  // RIGHT SIDE - Queue Time by Team (Columns F-M, unconstrained)
+  // ============================================================
+  sheet.getRange(1, teamCol).setValue('--- Queue Time by Team ---');
+
+  const teamHeaders = ['Team', 'Avg Queue (hrs)', 'Median (hrs)', '90th % (hrs)', 'Tickets', '% < 1 hour', 'Sort Col#', 'Asc?'];
+  sheet.getRange(2, teamCol, 1, 8).setValues([teamHeaders]);
+
+  // Default sort settings (column 2 = Avg Queue, ascending = TRUE for fastest first)
+  const sortColCell = sheet.getRange(3, teamCol + 6); // Column L row 3
+  const sortOrderCell = sheet.getRange(3, teamCol + 7); // Column M row 3
+  sortColCell.setValue(2);
+  sortOrderCell.setValue('TRUE');
+
+  // Main team formula using LET - can expand freely downward
+  // Sort column and order reference cells L3 and M3
+  const teamFormula =
+    '=LET(' +
+    'validRows, (TicketData!F2:F<>"")*(TicketData!E2:E<>"")*(LEN(TicketData!F2:F)>=10)*(LEN(TicketData!E2:E)>=10),' +
+    'teams, UNIQUE(FILTER(TicketData!L2:L, TicketData!L2:L<>"", TicketData!L2:L<>"TeamName")),' +
+    'col_a, teams,' +
+    'col_b, BYROW(teams, LAMBDA(t, IFERROR(AVERAGE(FILTER((DATEVALUE(LEFT(TicketData!F2:F,10))+TIMEVALUE(MID(TicketData!F2:F,12,8))-DATEVALUE(LEFT(TicketData!E2:E,10))-TIMEVALUE(MID(TicketData!E2:E,12,8)))*24, (TicketData!L2:L=t)*validRows)), "N/A"))),' +
+    'col_c, BYROW(teams, LAMBDA(t, IFERROR(MEDIAN(FILTER((DATEVALUE(LEFT(TicketData!F2:F,10))+TIMEVALUE(MID(TicketData!F2:F,12,8))-DATEVALUE(LEFT(TicketData!E2:E,10))-TIMEVALUE(MID(TicketData!E2:E,12,8)))*24, (TicketData!L2:L=t)*validRows)), "N/A"))),' +
+    'col_d, BYROW(teams, LAMBDA(t, IFERROR(PERCENTILE(FILTER((DATEVALUE(LEFT(TicketData!F2:F,10))+TIMEVALUE(MID(TicketData!F2:F,12,8))-DATEVALUE(LEFT(TicketData!E2:E,10))-TIMEVALUE(MID(TicketData!E2:E,12,8)))*24, (TicketData!L2:L=t)*validRows), 0.9), "N/A"))),' +
+    'col_e, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L2:L, t, TicketData!F2:F, "<>", TicketData!E2:E, "<>"))),' +
+    'col_f, BYROW(teams, LAMBDA(t, IFERROR(LET(total, COUNTIFS(TicketData!L2:L, t, TicketData!F2:F, "<>", TicketData!E2:E, "<>"), fast, COUNTIF(FILTER((DATEVALUE(LEFT(TicketData!F2:F,10))+TIMEVALUE(MID(TicketData!F2:F,12,8))-DATEVALUE(LEFT(TicketData!E2:E,10))-TIMEVALUE(MID(TicketData!E2:E,12,8)))*24, (TicketData!L2:L=t)*validRows), "<1"), IF(total>0, fast/total, "N/A")), "N/A"))),' +
+    'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f),' +
+    'SORT(data, $L$3, $M$3))';
+
+  sheet.getRange(3, teamCol).setValue(teamFormula);
+
+  // Add data validation for sort column
+  const sortColRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['1', '2', '3', '4', '5', '6'], true)
+    .setHelpText('1=Team, 2=Avg, 3=Median, 4=90th%, 5=Tickets, 6=%<1hr')
+    .build();
+  sortColCell.setDataValidation(sortColRule);
+
+  // Add data validation for sort order
+  const sortOrderRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['TRUE', 'FALSE'], true)
+    .setHelpText('TRUE=Ascending (low to high), FALSE=Descending (high to low)')
+    .build();
+  sortOrderCell.setDataValidation(sortOrderRule);
+
+  // Add notes for sort controls
+  sortColCell.setNote('Sort column:\n1=Team\n2=Avg Queue\n3=Median\n4=90th %\n5=Tickets\n6=% < 1 hour');
+  sortOrderCell.setNote('TRUE=Ascending (fastest first)\nFALSE=Descending (slowest first)');
+
+  // ============================================================
+  // FORMATTING
+  // ============================================================
+
+  // Format left side main header
+  sheet.getRange(1, 1, 1, 3)
+    .setFontWeight('bold')
+    .setBackground('#0277bd')
+    .setFontColor('white');
+
+  // Format left side section headers
+  sheet.getRange('A3').setFontWeight('bold').setBackground('#e1f5fe');
+  sheet.getRange('A8').setFontWeight('bold').setBackground('#e1f5fe');
+  sheet.getRange(distRow, 1).setFontWeight('bold').setBackground('#e1f5fe');
+  sheet.getRange(trendRow, 1).setFontWeight('bold').setBackground('#e1f5fe');
+  sheet.getRange(waitingRow, 1).setFontWeight('bold').setBackground('#e1f5fe');
+
+  // Format distribution header
+  sheet.getRange(distRow + 1, 1, 1, 4)
+    .setFontWeight('bold')
+    .setBackground('#0277bd')
+    .setFontColor('white');
+
+  // Format trend header
+  sheet.getRange(trendRow + 1, 1, 1, 4)
+    .setFontWeight('bold')
+    .setBackground('#0277bd')
+    .setFontColor('white');
+
+  // Format waiting header
+  sheet.getRange(waitingRow + 1, 1, 1, 4)
+    .setFontWeight('bold')
+    .setBackground('#0277bd')
+    .setFontColor('white');
+
+  // Format right side (team) section header
+  sheet.getRange(1, teamCol, 1, 8)
+    .setFontWeight('bold')
+    .setBackground('#e1f5fe');
+
+  // Format team table header
+  sheet.getRange(2, teamCol, 1, 8)
+    .setFontWeight('bold')
+    .setBackground('#0277bd')
+    .setFontColor('white');
+
+  // Format numbers - left side
+  sheet.getRange('B9:B13').setNumberFormat('0.0');  // Summary stats
+  sheet.getRange(distRow + 2, 3, buckets.length, 2).setNumberFormat('0.0%');  // Distribution %
+  sheet.getRange(trendRow + 2, 4, trendRows.length, 1).setNumberFormat('0.0');  // Trend avg
+
+  // Format numbers - right side (team table) - format enough rows for any team count
+  sheet.getRange(3, teamCol + 1, 100, 3).setNumberFormat('0.0');  // Hours columns
+  sheet.getRange(3, teamCol + 5, 100, 1).setNumberFormat('0.0%');  // % < 1 hour
+
+  // Column widths - left side
+  sheet.setColumnWidth(1, 140);  // Metric/bucket name
+  sheet.setColumnWidth(2, 100);  // Value
+  sheet.setColumnWidth(3, 80);   // % or Description
+  sheet.setColumnWidth(4, 80);   // Cumulative %
+  sheet.setColumnWidth(5, 30);   // Spacer column E
+
+  // Column widths - right side (team)
+  sheet.setColumnWidth(teamCol, 150);      // Team name
+  sheet.setColumnWidth(teamCol + 1, 100);  // Avg
+  sheet.setColumnWidth(teamCol + 2, 90);   // Median
+  sheet.setColumnWidth(teamCol + 3, 90);   // 90th %
+  sheet.setColumnWidth(teamCol + 4, 70);   // Tickets
+  sheet.setColumnWidth(teamCol + 5, 85);   // % < 1 hour
+  sheet.setColumnWidth(teamCol + 6, 70);   // Sort Col#
+  sheet.setColumnWidth(teamCol + 7, 50);   // Asc?
+
+  sheet.setFrozenRows(2);
+  sheet.setFrozenColumns(4);
+
+  // Conditional formatting for team queue times - highlight fast (green) and slow (red)
+  const queueTimeRange = sheet.getRange(3, teamCol + 1, 100, 1);
+  const fastRule = SpreadsheetApp.newConditionalFormatRule()
+    .whenNumberLessThan(1)
+    .setBackground('#e8f5e9')
+    .setRanges([queueTimeRange])
+    .build();
+  const slowRule = SpreadsheetApp.newConditionalFormatRule()
+    .whenNumberGreaterThan(8)
+    .setBackground('#ffebee')
+    .setRanges([queueTimeRange])
+    .build();
+  sheet.setConditionalFormatRules([fastRule, slowRule]);
+
+  // Add note
+  sheet.getRange('A1').setNote(
+    'Queue Time Analysis\n\n' +
+    'Question: "How long do tickets wait before being picked up?"\n\n' +
+    'Queue Time = StartedDate - CreatedDate\n' +
+    'This measures the time between ticket submission and when\n' +
+    'an agent first starts working on it.\n\n' +
+    'Use this to:\n' +
+    '- Identify staffing gaps (long queues = understaffed)\n' +
+    '- Compare team responsiveness\n' +
+    '- Set expectations for initial response\n' +
+    '- Find tickets stuck in queue\n\n' +
+    'Targets:\n' +
+    '- < 1 hour: Excellent responsiveness\n' +
+    '- 1-4 hours: Good for most tickets\n' +
+    '- > 8 hours: May indicate capacity issues\n\n' +
+    'Green = <1 hr avg, Red = >8 hr avg'
   );
 
   return true;

@@ -15,7 +15,7 @@
  *
  * Analytics Sheets:
  * - 7 default sheets created by Setup Spreadsheet
- * - 12 additional sheets available via "Add Analytics Sheet" menu
+ * - 13 additional sheets available via "Add Analytics Sheet" menu
  * - All sheets can be deleted and recreated as needed
  * - Organized by category: Volume, Backlog, SLA, Team, Location, Issue
  * - Default sheets marked with ★ in menu
@@ -62,7 +62,8 @@ function onOpen() {
         .addItem('At-Risk Resolution ★', 'addAtRiskResolutionSheet')
         .addItem('First Contact Resolution', 'addFirstContactResolutionSheet')
         .addItem('Response Distribution', 'addResponseDistributionSheet')
-        .addItem('Response Trends', 'addResponseTrendsSheet'))
+        .addItem('Response Trends', 'addResponseTrendsSheet')
+        .addItem('Queue Time Analysis', 'addQueueTimeAnalysisSheet'))
       .addSubMenu(ui.createMenu('Team & Staff')
         .addItem('Team Workload ★', 'addTeamWorkloadSheet')
         .addItem('Technician Performance', 'addTechnicianPerformanceSheet')
