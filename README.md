@@ -49,9 +49,11 @@ In the `Config` sheet, enter your Incident IQ credentials:
 
 Once your initial load is complete, set up triggers to keep data fresh:
 
-1. Go to **Extensions > Apps Script**
-2. Click the clock icon (Triggers) in the left sidebar
-3. Add these triggers:
+**Easy Setup (Recommended):**
+Click **iiQ Data > Setup > Setup Automated Triggers** to create all triggers automatically.
+
+**Manual Setup:**
+Go to Extensions > Apps Script > Triggers (clock icon) and add these triggers:
 
 | Function | Schedule | What It Does |
 |----------|----------|--------------|

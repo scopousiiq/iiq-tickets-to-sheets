@@ -806,17 +806,19 @@ Before setting up automated triggers, complete the initial bulk load:
 
 If you don't want to babysit the initial load:
 
-1. In Apps Script, go to **Triggers** (clock icon)
-2. Add a trigger for `triggerDataContinue` to run every 10 minutes
-3. Check the Logs sheet periodically — look for "COMPLETE" entries
-4. **You can leave this trigger enabled** — it also helps complete open ticket refreshes for large districts
+1. Click **iiQ Data > Setup > Setup Automated Triggers** to create all triggers automatically
+2. Check the Logs sheet periodically — look for "COMPLETE" entries
+3. **You can leave these triggers enabled** — they also handle ongoing refreshes for large districts
 
 ### Step 6: Set Up Scheduled Refresh
 
 After initial data load is complete, set up triggers to keep data current:
 
-1. In Apps Script, go to **Triggers** (clock icon)
-2. Add these triggers:
+**Easy Setup (Recommended):**
+Click **iiQ Data > Setup > Setup Automated Triggers** — this creates all recommended triggers automatically.
+
+**Manual Setup:**
+In Apps Script, go to **Triggers** (clock icon) and add these triggers:
 
 | Function | Event Source | Type | Time | Purpose |
 |----------|--------------|------|------|---------|

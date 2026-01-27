@@ -503,3 +503,222 @@ function triggerSlaDataReset() {
 function triggerSlaDataContinue() {
   logOperation('Trigger', 'DEPRECATED', 'triggerSlaDataContinue no longer needed - SLA data is now part of TicketData');
 }
+
+// =============================================================================
+// TRIGGER MANAGEMENT (Setup/Remove automated triggers)
+// =============================================================================
+
+/**
+ * Set up all recommended triggers for automated data refresh
+ * Called from: iiQ Data > Setup > Setup Automated Triggers
+ */
+function setupAutomatedTriggers() {
+  const ui = SpreadsheetApp.getUi();
+
+  const response = ui.alert(
+    'Setup Automated Triggers',
+    'This will create the following time-driven triggers:\n\n' +
+    '• triggerDataContinue - Every 10 minutes\n' +
+    '  (Continues any in-progress loading)\n\n' +
+    '• triggerOpenTicketRefresh - Every 2 hours\n' +
+    '  (Refreshes open tickets and SLA data)\n\n' +
+    '• triggerNewTickets - Every 30 minutes\n' +
+    '  (Catches newly created tickets)\n\n' +
+    '• triggerDailySnapshot - Daily at 7:00 PM\n' +
+    '  (Captures backlog metrics for trending)\n\n' +
+    '• triggerWeeklyFullRefresh - Weekly Sunday 2:00 AM\n' +
+    '  (Full reload to catch deletions)\n\n' +
+    'Any existing triggers for these functions will be replaced.\n\n' +
+    'Continue?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) return;
+
+  try {
+    const created = [];
+    const errors = [];
+
+    // Define trigger configurations
+    const triggerConfigs = [
+      {
+        functionName: 'triggerDataContinue',
+        type: 'everyMinutes',
+        interval: 10,
+        description: 'Every 10 minutes'
+      },
+      {
+        functionName: 'triggerOpenTicketRefresh',
+        type: 'everyHours',
+        interval: 2,
+        description: 'Every 2 hours'
+      },
+      {
+        functionName: 'triggerNewTickets',
+        type: 'everyMinutes',
+        interval: 30,
+        description: 'Every 30 minutes'
+      },
+      {
+        functionName: 'triggerDailySnapshot',
+        type: 'daily',
+        hour: 19,
+        description: 'Daily at 7:00 PM'
+      },
+      {
+        functionName: 'triggerWeeklyFullRefresh',
+        type: 'weekly',
+        dayOfWeek: ScriptApp.WeekDay.SUNDAY,
+        hour: 2,
+        description: 'Weekly Sunday 2:00 AM'
+      }
+    ];
+
+    // Remove existing triggers for these functions
+    const existingTriggers = ScriptApp.getProjectTriggers();
+    const functionNames = triggerConfigs.map(c => c.functionName);
+
+    existingTriggers.forEach(trigger => {
+      if (functionNames.includes(trigger.getHandlerFunction())) {
+        ScriptApp.deleteTrigger(trigger);
+      }
+    });
+
+    // Create new triggers
+    triggerConfigs.forEach(config => {
+      try {
+        let trigger;
+
+        switch (config.type) {
+          case 'everyMinutes':
+            trigger = ScriptApp.newTrigger(config.functionName)
+              .timeBased()
+              .everyMinutes(config.interval)
+              .create();
+            break;
+
+          case 'everyHours':
+            trigger = ScriptApp.newTrigger(config.functionName)
+              .timeBased()
+              .everyHours(config.interval)
+              .create();
+            break;
+
+          case 'daily':
+            trigger = ScriptApp.newTrigger(config.functionName)
+              .timeBased()
+              .everyDays(1)
+              .atHour(config.hour)
+              .create();
+            break;
+
+          case 'weekly':
+            trigger = ScriptApp.newTrigger(config.functionName)
+              .timeBased()
+              .onWeekDay(config.dayOfWeek)
+              .atHour(config.hour)
+              .create();
+            break;
+        }
+
+        created.push(`${config.functionName} (${config.description})`);
+      } catch (e) {
+        errors.push(`${config.functionName}: ${e.message}`);
+      }
+    });
+
+    // Show results
+    let message = '';
+    if (created.length > 0) {
+      message += 'Created triggers:\n• ' + created.join('\n• ');
+    }
+    if (errors.length > 0) {
+      message += '\n\nErrors:\n• ' + errors.join('\n• ');
+    }
+
+    logOperation('Setup', 'TRIGGERS', `Created ${created.length} triggers, ${errors.length} errors`);
+
+    ui.alert('Triggers Created', message, ui.ButtonSet.OK);
+
+  } catch (error) {
+    logOperation('Setup', 'ERROR', `Failed to create triggers: ${error.message}`);
+    ui.alert('Error', 'Failed to create triggers: ' + error.message, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Remove all automated triggers for this project
+ * Called from: iiQ Data > Setup > Remove Automated Triggers
+ */
+function removeAutomatedTriggers() {
+  const ui = SpreadsheetApp.getUi();
+
+  const triggers = ScriptApp.getProjectTriggers();
+
+  if (triggers.length === 0) {
+    ui.alert('No Triggers', 'There are no triggers to remove.', ui.ButtonSet.OK);
+    return;
+  }
+
+  // Build list of current triggers
+  const triggerList = triggers.map(t =>
+    `• ${t.getHandlerFunction()}`
+  ).join('\n');
+
+  const response = ui.alert(
+    'Remove Automated Triggers',
+    `This will remove ALL ${triggers.length} triggers for this project:\n\n${triggerList}\n\nContinue?`,
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) return;
+
+  try {
+    triggers.forEach(trigger => {
+      ScriptApp.deleteTrigger(trigger);
+    });
+
+    logOperation('Setup', 'TRIGGERS', `Removed ${triggers.length} triggers`);
+    ui.alert('Triggers Removed', `Successfully removed ${triggers.length} triggers.`, ui.ButtonSet.OK);
+
+  } catch (error) {
+    logOperation('Setup', 'ERROR', `Failed to remove triggers: ${error.message}`);
+    ui.alert('Error', 'Failed to remove triggers: ' + error.message, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Show current trigger status
+ * Called from: iiQ Data > Setup > View Trigger Status
+ */
+function viewTriggerStatus() {
+  const ui = SpreadsheetApp.getUi();
+  const triggers = ScriptApp.getProjectTriggers();
+
+  if (triggers.length === 0) {
+    ui.alert('Trigger Status',
+      'No automated triggers are configured.\n\n' +
+      'Use "Setup Automated Triggers" to create the recommended triggers.',
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  // Build status report
+  const triggerInfo = triggers.map(t => {
+    const funcName = t.getHandlerFunction();
+    const type = t.getEventType();
+    let schedule = '';
+
+    // Try to describe the schedule
+    if (type === ScriptApp.EventType.CLOCK) {
+      const source = t.getTriggerSource();
+      schedule = 'Time-based';
+    }
+
+    return `• ${funcName}\n  Type: ${schedule}`;
+  }).join('\n\n');
+
+  ui.alert('Trigger Status',
+    `${triggers.length} trigger(s) configured:\n\n${triggerInfo}`,
+    ui.ButtonSet.OK);
+}

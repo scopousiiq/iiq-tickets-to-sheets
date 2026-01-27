@@ -190,6 +190,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 8. Run **iiQ Data > Setup > Verify Configuration** to check settings
 9. Run **iiQ Data > Refresh Teams** to load team directory
 10. Run **iiQ Data > Ticket Data > Continue Loading** to start loading data
+11. Run **iiQ Data > Setup > Setup Automated Triggers** to enable automated refresh
 
 ## Testing Changes
 
@@ -200,6 +201,10 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 5. Check the `Logs` sheet for operation results
 
 ## Trigger Setup (Optimized for Freshness + Efficiency)
+
+**Easy Setup:** Run **iiQ Data > Setup > Setup Automated Triggers** to create all triggers automatically.
+
+**Manual Setup:** Use Extensions > Apps Script > Triggers to add these:
 
 | Function | Schedule | Purpose |
 |----------|----------|---------|
