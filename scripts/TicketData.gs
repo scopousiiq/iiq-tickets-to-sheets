@@ -609,12 +609,14 @@ function formatDateForApi(date) {
 
 /**
  * Update a config value by key name
+ * If the key doesn't exist, inserts it in a logical position near related keys
  */
 function updateConfigValue(key, value) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('Config');
   const data = sheet.getDataRange().getValues();
 
+  // Check if key already exists
   for (let i = 0; i < data.length; i++) {
     if (data[i][0] === key) {
       sheet.getRange(i + 1, 2).setValue(value);
@@ -622,9 +624,153 @@ function updateConfigValue(key, value) {
     }
   }
 
-  // If not found, add it
-  const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, 1, 2).setValues([[key, value]]);
+  // Key not found - find the best insertion point
+  const insertRow = findConfigInsertPosition(key, data);
+
+  if (insertRow <= data.length) {
+    // Insert a new row at the position
+    sheet.insertRowAfter(insertRow);
+    sheet.getRange(insertRow + 1, 1, 1, 2).setValues([[key, value]]);
+  } else {
+    // Append to end
+    sheet.getRange(insertRow, 1, 1, 2).setValues([[key, value]]);
+  }
+}
+
+/**
+ * Find the best row position to insert a new config key
+ * Groups related keys together in logical order
+ *
+ * @param {string} key - The config key to insert
+ * @param {Array} data - Current config data (2D array)
+ * @returns {number} - Row number to insert after (1-indexed)
+ */
+function findConfigInsertPosition(key, data) {
+  // Parse the key to understand its type
+  const ticketYearMatch = key.match(/^TICKET_(\d{4})_(.+)$/);
+  const openRefreshMatch = key.match(/^OPEN_REFRESH_(.+)$/);
+
+  if (ticketYearMatch) {
+    const year = parseInt(ticketYearMatch[1]);
+    const suffix = ticketYearMatch[2];
+    return findTicketYearInsertPosition(year, suffix, data);
+  }
+
+  if (openRefreshMatch) {
+    return findOpenRefreshInsertPosition(key, data);
+  }
+
+  // For other keys, append to end
+  return data.length + 1;
+}
+
+/**
+ * Find insertion position for TICKET_{YEAR}_* keys
+ * Order within a year: TOTAL_PAGES, LAST_PAGE, COMPLETE, LAST_FETCH
+ */
+function findTicketYearInsertPosition(year, suffix, data) {
+  const suffixOrder = ['TOTAL_PAGES', 'LAST_PAGE', 'COMPLETE', 'LAST_FETCH'];
+  const targetOrder = suffixOrder.indexOf(suffix);
+
+  let lastTicketRow = 0;
+  let sameYearRows = [];
+  let otherYearRows = {};
+
+  // Scan for all TICKET_* rows
+  for (let i = 0; i < data.length; i++) {
+    const rowKey = data[i][0];
+    if (!rowKey) continue;
+
+    const match = String(rowKey).match(/^TICKET_(\d{4})_(.+)$/);
+    if (match) {
+      const rowYear = parseInt(match[1]);
+      const rowSuffix = match[2];
+      lastTicketRow = i + 1;
+
+      if (rowYear === year) {
+        sameYearRows.push({ row: i + 1, suffix: rowSuffix, order: suffixOrder.indexOf(rowSuffix) });
+      } else {
+        if (!otherYearRows[rowYear]) otherYearRows[rowYear] = [];
+        otherYearRows[rowYear].push(i + 1);
+      }
+    }
+  }
+
+  // If we have rows for the same year, insert in the right position
+  if (sameYearRows.length > 0) {
+    // Sort by suffix order
+    sameYearRows.sort((a, b) => a.order - b.order);
+
+    // Find where this suffix should go
+    for (let i = 0; i < sameYearRows.length; i++) {
+      if (sameYearRows[i].order > targetOrder) {
+        // Insert before this row
+        return sameYearRows[i].row - 1;
+      }
+    }
+    // Insert after the last row of this year
+    return sameYearRows[sameYearRows.length - 1].row;
+  }
+
+  // No rows for this year yet - find position based on year ordering
+  const allYears = Object.keys(otherYearRows).map(y => parseInt(y)).sort((a, b) => a - b);
+
+  if (allYears.length > 0) {
+    // Find where this year fits
+    for (let i = 0; i < allYears.length; i++) {
+      if (allYears[i] > year) {
+        // Insert before the first row of this later year
+        return otherYearRows[allYears[i]][0] - 1;
+      }
+    }
+    // This year is after all existing years - insert after last ticket row
+    return lastTicketRow;
+  }
+
+  // No TICKET_* rows exist yet - find a good starting position
+  // Look for the end of the settings section (after STALE_DAYS, SLA_RISK_PERCENT, etc.)
+  const settingsKeys = ['PAGE_SIZE', 'THROTTLE_MS', 'TICKET_BATCH_SIZE', 'STALE_DAYS', 'SLA_RISK_PERCENT'];
+  let lastSettingsRow = 0;
+
+  for (let i = 0; i < data.length; i++) {
+    if (settingsKeys.includes(data[i][0])) {
+      lastSettingsRow = i + 1;
+    }
+  }
+
+  return lastSettingsRow > 0 ? lastSettingsRow : data.length + 1;
+}
+
+/**
+ * Find insertion position for OPEN_REFRESH_* keys
+ * Groups all OPEN_REFRESH keys together
+ */
+function findOpenRefreshInsertPosition(key, data) {
+  let lastOpenRefreshRow = 0;
+  let firstOpenRefreshRow = 0;
+
+  for (let i = 0; i < data.length; i++) {
+    const rowKey = data[i][0];
+    if (rowKey && String(rowKey).startsWith('OPEN_REFRESH_')) {
+      if (firstOpenRefreshRow === 0) firstOpenRefreshRow = i + 1;
+      lastOpenRefreshRow = i + 1;
+    }
+  }
+
+  if (lastOpenRefreshRow > 0) {
+    // Add after the last OPEN_REFRESH row
+    return lastOpenRefreshRow;
+  }
+
+  // No OPEN_REFRESH rows yet - add after TICKET rows
+  let lastTicketRow = 0;
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][0] && String(data[i][0]).startsWith('TICKET_')) {
+      lastTicketRow = i + 1;
+    }
+  }
+
+  return lastTicketRow > 0 ? lastTicketRow : data.length + 1;
 }
 
 /**
