@@ -70,20 +70,39 @@ Once your initial load is complete, set up triggers to keep data fresh:
 
 ## What You Get
 
+### Data Sheets (always created)
+
 | Sheet | What It Shows |
 |-------|---------------|
 | `TicketData` | All ticket data with SLA metrics (35 columns) — your raw data source |
 | `Teams` | Team directory — add your Functional Area labels here |
+| `DailySnapshot` | Historical backlog counts for trend analysis |
+
+### Default Analytics (created by Setup)
+
+| Sheet | What It Shows |
+|-------|---------------|
 | `MonthlyVolume` | Tickets created vs. closed by month, with closure rate |
-| `BacklogAging` | Open tickets grouped by age (0-15 days, 16-30, 31-60, 61-90, 90+) |
+| `BacklogAging` | Open tickets grouped by age (0-15, 16-30, 31-60, 61-90, 90+ days) |
 | `TeamWorkload` | Open tickets, created/closed this month, and aging by team |
-| `LocationBreakdown` | Ticket counts by school or building |
-| `FunctionalAreaSummary` | Rollup of TeamWorkload by your Functional Area labels |
 | `SLACompliance` | Monthly SLA breach rates and average response/resolution times |
 | `PerformanceTrends` | "Are we getting better?" — key metrics over time |
 | `AtRiskQueue` | Open tickets approaching SLA breach (action needed!) |
-| `StaleTickets` | Open tickets with no updates recently (may be stuck) |
-| `DailySnapshot` | Historical backlog counts for trend analysis |
+
+### Additional Analytics (add via menu)
+
+Use **IIQ Data > Add Analytics Sheet** to add any of these 13 optional sheets:
+
+| Category | Available Sheets |
+|----------|------------------|
+| Volume & Trends | Seasonal Comparison (YoY), Temporal Patterns |
+| Backlog & Quality | Stale Tickets, Reopen Rate |
+| SLA & Response | First Contact Resolution, Response Distribution |
+| Team & Staff | Technician Performance, Functional Area Summary |
+| Location | Location Breakdown, Location Type Comparison |
+| Issue & Requester | Issue Category Volume, Priority Analysis, Frequent Requesters |
+
+> **Flexible & Customizable:** Districts can delete any analytics sheet and recreate it later via the menu. Default sheets (marked with ★ in the menu) can also be recreated if accidentally deleted.
 
 ## Common Issues
 

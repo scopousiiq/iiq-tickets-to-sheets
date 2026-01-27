@@ -1,20 +1,27 @@
 /**
  * Setup Script - Initial Spreadsheet Configuration
  *
- * Creates all required sheets, headers, and formulas for the IIQ Data system.
+ * Creates required data sheets and default analytics sheets.
  * Safe to run multiple times - only creates missing sheets/headers.
  *
- * Sheets Created:
+ * Data Sheets (always created):
  * - Instructions: Setup and usage guide
  * - Config: API settings and progress tracking
  * - TicketData: Main data (35 columns including SLA metrics)
  * - Teams: Team directory with Functional Area mapping
  * - DailySnapshot: Daily backlog metrics for trending
  * - Logs: Operation logs
- * - SLACompliance: Monthly SLA metrics (script-generated)
- * - MonthlyVolume: Ticket volume by month (formula-based)
- * - BacklogAging: Current backlog distribution (formula-based)
- * - TeamWorkload: Tickets by team (formula-based)
+ *
+ * Default Analytics Sheets (created by setup):
+ * - MonthlyVolume: Ticket volume by month
+ * - BacklogAging: Current backlog distribution
+ * - TeamWorkload: Tickets by team
+ * - SLACompliance: Monthly SLA metrics
+ * - PerformanceTrends: "Are we getting better?" trending
+ * - AtRiskQueue: Tickets approaching SLA breach
+ *
+ * Additional analytics sheets can be added via:
+ * IIQ Data > Add Analytics Sheet menu
  *
  * Usage: Run setupSpreadsheet() from the IIQ Data > Setup menu
  */
@@ -29,21 +36,22 @@ function setupSpreadsheet() {
   const response = ui.alert(
     'Setup IIQ Data Spreadsheet',
     'This will create/configure the following sheets:\n\n' +
+    'DATA SHEETS:\n' +
     '- Instructions (setup guide)\n' +
     '- Config (API settings)\n' +
     '- TicketData (35 columns)\n' +
     '- Teams (directory)\n' +
     '- DailySnapshot (trending)\n' +
-    '- Logs (operations)\n' +
-    '- SLACompliance (analytics)\n' +
-    '- MonthlyVolume (analytics)\n' +
-    '- BacklogAging (analytics)\n' +
-    '- TeamWorkload (analytics)\n' +
-    '- LocationBreakdown (analytics)\n' +
-    '- FunctionalAreaSummary (analytics)\n' +
-    '- PerformanceTrends (analytics)\n' +
-    '- AtRiskQueue (operational)\n' +
-    '- StaleTickets (operational)\n\n' +
+    '- Logs (operations)\n\n' +
+    'DEFAULT ANALYTICS:\n' +
+    '- MonthlyVolume\n' +
+    '- BacklogAging\n' +
+    '- TeamWorkload\n' +
+    '- SLACompliance\n' +
+    '- PerformanceTrends\n' +
+    '- AtRiskQueue\n\n' +
+    'Additional analytics sheets can be added later via:\n' +
+    'IIQ Data > Add Analytics Sheet\n\n' +
     'Existing sheets will not be overwritten.\n\n' +
     'Continue?',
     ui.ButtonSet.YES_NO
@@ -54,22 +62,22 @@ function setupSpreadsheet() {
   let created = [];
   let skipped = [];
 
-  // Create each sheet
+  // Create data sheets (required)
   if (setupInstructionsSheet(ss)) created.push('Instructions'); else skipped.push('Instructions');
   if (setupConfigSheet(ss)) created.push('Config'); else skipped.push('Config');
   if (setupTicketDataSheet(ss)) created.push('TicketData'); else skipped.push('TicketData');
   if (setupTeamsSheet(ss)) created.push('Teams'); else skipped.push('Teams');
   if (setupDailySnapshotSheet(ss)) created.push('DailySnapshot'); else skipped.push('DailySnapshot');
   if (setupLogsSheet(ss)) created.push('Logs'); else skipped.push('Logs');
-  if (setupSLAComplianceSheet(ss)) created.push('SLACompliance'); else skipped.push('SLACompliance');
+
+  // Create default analytics sheets
+  // Additional sheets can be added via IIQ Data > Add Analytics Sheet menu
   if (setupMonthlyVolumeSheet(ss)) created.push('MonthlyVolume'); else skipped.push('MonthlyVolume');
   if (setupBacklogAgingSheet(ss)) created.push('BacklogAging'); else skipped.push('BacklogAging');
   if (setupTeamWorkloadSheet(ss)) created.push('TeamWorkload'); else skipped.push('TeamWorkload');
-  if (setupLocationBreakdownSheet(ss)) created.push('LocationBreakdown'); else skipped.push('LocationBreakdown');
-  if (setupFunctionalAreaSummarySheet(ss)) created.push('FunctionalAreaSummary'); else skipped.push('FunctionalAreaSummary');
+  if (setupSLAComplianceSheet(ss)) created.push('SLACompliance'); else skipped.push('SLACompliance');
   if (setupPerformanceTrendsSheet(ss)) created.push('PerformanceTrends'); else skipped.push('PerformanceTrends');
   if (setupAtRiskQueueSheet(ss)) created.push('AtRiskQueue'); else skipped.push('AtRiskQueue');
-  if (setupStaleTicketsSheet(ss)) created.push('StaleTickets'); else skipped.push('StaleTickets');
 
   // Reorder sheets for better UX
   reorderSheets(ss);
@@ -527,7 +535,7 @@ function setupLogsSheet(ss) {
 }
 
 /**
- * Setup SLACompliance sheet (script-generated data)
+ * Setup SLACompliance sheet with formulas
  * @returns {boolean} true if created, false if already exists
  */
 function setupSLAComplianceSheet(ss) {
@@ -538,6 +546,39 @@ function setupSLAComplianceSheet(ss) {
   const headers = ['Month', 'Year', 'Closed', 'Breaches', 'Breach Rate', 'Avg Response (hrs)', 'Avg Resolution (hrs)'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
+  // Get month range from actual data (uses ClosedDate column G)
+  const monthRange = getMonthRangeFromData(ss, 'G');
+
+  const dataRows = [];
+  for (const period of monthRange) {
+    const rowNum = dataRows.length + 2;
+    const y = period.year;
+    const monthNum = period.monthNum;
+
+    // Build date filter for this month
+    const startDate = `TEXT(DATE(${y},${monthNum},1), "YYYY-MM-DD")`;
+    const endDate = `TEXT(DATE(${y},${monthNum}+1,1), "YYYY-MM-DD")`;
+
+    dataRows.push([
+      period.monthName,
+      y,
+      // Closed: Count tickets closed in this month
+      `=COUNTIFS(TicketData!H:H, "Yes", TicketData!G:G, ">="&${startDate}, TicketData!G:G, "<"&${endDate})`,
+      // Breaches: Count where ResponseBreach=TRUE OR ResolutionBreach=TRUE (closed tickets in this month)
+      `=LET(startDate, ${startDate}, endDate, ${endDate}, COUNTIFS(TicketData!H:H, "Yes", TicketData!G:G, ">="&startDate, TicketData!G:G, "<"&endDate, TicketData!AE:AE, TRUE) + COUNTIFS(TicketData!H:H, "Yes", TicketData!G:G, ">="&startDate, TicketData!G:G, "<"&endDate, TicketData!AH:AH, TRUE) - COUNTIFS(TicketData!H:H, "Yes", TicketData!G:G, ">="&startDate, TicketData!G:G, "<"&endDate, TicketData!AE:AE, TRUE, TicketData!AH:AH, TRUE))`,
+      // Breach Rate
+      `=IF(C${rowNum}>0, D${rowNum}/C${rowNum}, "N/A")`,
+      // Avg Response (hrs): Average of ResponseActual (col AD) for closed tickets, convert minutes to hours
+      `=IFERROR(AVERAGEIFS(TicketData!AD:AD, TicketData!H:H, "Yes", TicketData!G:G, ">="&${startDate}, TicketData!G:G, "<"&${endDate}, TicketData!AD:AD, ">0")/60, "N/A")`,
+      // Avg Resolution (hrs): Average of ResolutionActual (col AG) for closed tickets, convert minutes to hours
+      `=IFERROR(AVERAGEIFS(TicketData!AG:AG, TicketData!H:H, "Yes", TicketData!G:G, ">="&${startDate}, TicketData!G:G, "<"&${endDate}, TicketData!AG:AG, ">0")/60, "N/A")`
+    ]);
+  }
+
+  if (dataRows.length > 0) {
+    sheet.getRange(2, 1, dataRows.length, 7).setValues(dataRows);
+  }
+
   // Format header
   sheet.getRange(1, 1, 1, headers.length)
     .setFontWeight('bold')
@@ -545,10 +586,29 @@ function setupSLAComplianceSheet(ss) {
     .setFontColor('white');
 
   // Format columns
-  sheet.getRange('E:E').setNumberFormat('0.00%');  // Breach Rate
+  sheet.getRange('E:E').setNumberFormat('0.0%');   // Breach Rate
   sheet.getRange('F:G').setNumberFormat('0.0');    // Hours
 
+  // Column widths
+  sheet.setColumnWidth(1, 100);  // Month
+  sheet.setColumnWidth(6, 140);  // Avg Response
+  sheet.setColumnWidth(7, 150);  // Avg Resolution
+
   sheet.setFrozenRows(1);
+
+  // Add note explaining the formulas
+  sheet.getRange('A1').setNote(
+    'SLA Compliance Metrics\n\n' +
+    'Formula-based - auto-calculates from TicketData.\n' +
+    'Date range based on actual ticket data.\n\n' +
+    'Columns:\n' +
+    '- Closed: Tickets closed in the month\n' +
+    '- Breaches: Response OR Resolution SLA breached\n' +
+    '- Breach Rate: Breaches / Closed\n' +
+    '- Avg Response: First response time in hours\n' +
+    '- Avg Resolution: Resolution time in hours\n\n' +
+    'Recreate sheet to update date range if data grows.'
+  );
 
   return true;
 }
@@ -566,28 +626,31 @@ function setupMonthlyVolumeSheet(ss) {
   const headers = ['Month', 'Year', 'Created', 'Closed', 'Net Change', 'Closure Rate'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  // Generate month rows for last 3 years
-  const currentYear = new Date().getFullYear();
-  const months = ['January', 'February', 'March', 'April', 'May', 'June',
-                  'July', 'August', 'September', 'October', 'November', 'December'];
+  // Get month range from actual data (uses CreatedDate column E)
+  const monthRange = getMonthRangeFromData(ss, 'E');
 
   const dataRows = [];
-  for (let year = currentYear - 2; year <= currentYear; year++) {
-    for (let m = 0; m < 12; m++) {
-      const rowNum = dataRows.length + 2;
-      dataRows.push([
-        months[m],
-        year,
-        // Created formula using LET to extract month number
-        `=LET(m, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), COUNTIFS(TicketData!E:E, ">="&TEXT(DATE(B${rowNum},m,1), "YYYY-MM-DD"), TicketData!E:E, "<"&TEXT(DATE(B${rowNum},m+1,1), "YYYY-MM-DD")))`,
-        // Closed formula
-        `=LET(m, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), COUNTIFS(TicketData!G:G, ">="&TEXT(DATE(B${rowNum},m,1), "YYYY-MM-DD"), TicketData!G:G, "<"&TEXT(DATE(B${rowNum},m+1,1), "YYYY-MM-DD")))`,
-        // Net Change
-        `=C${rowNum}-D${rowNum}`,
-        // Closure Rate
-        `=IF(C${rowNum}>0, D${rowNum}/C${rowNum}, "N/A")`
-      ]);
-    }
+  for (const period of monthRange) {
+    const rowNum = dataRows.length + 2;
+    const y = period.year;
+    const monthNum = period.monthNum;
+
+    // Build date filter for this month
+    const startDate = `TEXT(DATE(${y},${monthNum},1), "YYYY-MM-DD")`;
+    const endDate = `TEXT(DATE(${y},${monthNum}+1,1), "YYYY-MM-DD")`;
+
+    dataRows.push([
+      period.monthName,
+      y,
+      // Created formula
+      `=COUNTIFS(TicketData!E:E, ">="&${startDate}, TicketData!E:E, "<"&${endDate})`,
+      // Closed formula
+      `=COUNTIFS(TicketData!G:G, ">="&${startDate}, TicketData!G:G, "<"&${endDate})`,
+      // Net Change
+      `=C${rowNum}-D${rowNum}`,
+      // Closure Rate
+      `=IF(C${rowNum}>0, D${rowNum}/C${rowNum}, "N/A")`
+    ]);
   }
 
   if (dataRows.length > 0) {
@@ -604,7 +667,7 @@ function setupMonthlyVolumeSheet(ss) {
   sheet.getRange('F:F').setNumberFormat('0.0%');
 
   // Conditional formatting for Net Change (red if positive/backlog growing, green if negative/backlog shrinking)
-  const netChangeRange = sheet.getRange('E2:E' + (dataRows.length + 1));
+  const netChangeRange = sheet.getRange(2, 5, dataRows.length, 1);
   const positiveRule = SpreadsheetApp.newConditionalFormatRule()
     .whenNumberGreaterThan(0)
     .setBackground('#fce8e6')
@@ -802,26 +865,30 @@ function setupLocationBreakdownSheet(ss) {
 
   const sheet = ss.insertSheet('LocationBreakdown');
 
-  // Headers
-  const headers = ['Location Name', 'Location Type', 'Open', 'Created (MTD)', 'Closed (MTD)', 'Last Refreshed'];
+  // Headers - includes sort controls
+  const headers = ['Location Name', 'Location Type', 'Open', 'Created (MTD)', 'Closed (MTD)', 'Last Refreshed', 'Sort Col#', 'Desc?'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  // Formula row - user will need to drag down after locations populate
-  const formulaRow = [
-    // A2: Get unique locations from TicketData
-    '=UNIQUE(FILTER(TicketData!M2:M, TicketData!M2:M<>"", TicketData!M2:M<>"LocationName"))',
-    // B2: Look up location type
-    '=IFERROR(INDEX(TicketData!N:N, MATCH(A2, TicketData!M:M, 0)), "")',
-    // C2: Count open tickets for location
-    '=COUNTIFS(TicketData!M:M, A2, TicketData!H:H, "No")',
-    // D2: Count tickets created this month
-    '=COUNTIFS(TicketData!M:M, A2, TicketData!E:E, ">="&EOMONTH(TODAY(),-1)+1, TicketData!E:E, "<="&TODAY())',
-    // E2: Count tickets closed this month
-    '=COUNTIFS(TicketData!M:M, A2, TicketData!G:G, ">="&EOMONTH(TODAY(),-1)+1, TicketData!G:G, "<="&TODAY())',
-    // F2: Reference last refresh from Config
-    '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "Not yet refreshed")'
-  ];
-  sheet.getRange(2, 1, 1, formulaRow.length).setValues([formulaRow]);
+  // Single LET formula that outputs the entire sortable table
+  const mainFormula =
+    '=LET(' +
+    'locs, UNIQUE(FILTER(TicketData!M2:M, TicketData!M2:M<>"", TicketData!M2:M<>"LocationName")),' +
+    'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
+    'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
+    'col_a, locs,' +
+    'col_b, BYROW(locs, LAMBDA(l, IFERROR(INDEX(TicketData!N:N, MATCH(l, TicketData!M:M, 0)), ""))),' +
+    'col_c, BYROW(locs, LAMBDA(l, COUNTIFS(TicketData!M:M, l, TicketData!H:H, "No"))),' +
+    'col_d, BYROW(locs, LAMBDA(l, COUNTIFS(TicketData!M:M, l, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
+    'col_e, BYROW(locs, LAMBDA(l, COUNTIFS(TicketData!M:M, l, TicketData!G:G, ">="&mtdStart, TicketData!G:G, "<"&mtdEnd))),' +
+    'data, HSTACK(col_a, col_b, col_c, col_d, col_e),' +
+    'SORT(data, $G$2, $H$2))';
+
+  sheet.getRange('A2').setValue(mainFormula);
+  sheet.getRange('F2').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
+
+  // Default sort settings (column 3 = Open, descending)
+  sheet.getRange('G2').setValue(3);
+  sheet.getRange('H2').setValue('FALSE');
 
   // Format header
   sheet.getRange(1, 1, 1, headers.length)
@@ -833,11 +900,29 @@ function setupLocationBreakdownSheet(ss) {
   sheet.setColumnWidth(1, 200);  // Location Name
   sheet.setColumnWidth(2, 120);  // Location Type
   sheet.setColumnWidth(6, 180);  // Last Refreshed
+  sheet.setColumnWidth(7, 80);   // Sort Col#
+  sheet.setColumnWidth(8, 60);   // Desc?
 
   sheet.setFrozenRows(1);
 
-  // Add note
-  sheet.getRange('A2').setNote('This formula populates unique locations. Drag B2:F2 down to cover all location rows.');
+  // Add data validation for sort column
+  const sortColRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['1', '2', '3', '4', '5'], true)
+    .setHelpText('1=Location, 2=Type, 3=Open, 4=Created, 5=Closed')
+    .build();
+  sheet.getRange('G2').setDataValidation(sortColRule);
+
+  // Add data validation for sort order
+  const sortOrderRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['FALSE', 'TRUE'], true)
+    .setHelpText('FALSE=Descending, TRUE=Ascending')
+    .build();
+  sheet.getRange('H2').setDataValidation(sortOrderRule);
+
+  // Add notes
+  sheet.getRange('A2').setNote('This formula auto-populates from TicketData. Use Sort Col# and Desc? to change sorting.');
+  sheet.getRange('G2').setNote('Sort column: 1=Location, 2=Type, 3=Open, 4=Created, 5=Closed');
+  sheet.getRange('H2').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
 
   return true;
 }
@@ -851,30 +936,31 @@ function setupFunctionalAreaSummarySheet(ss) {
 
   const sheet = ss.insertSheet('FunctionalAreaSummary');
 
-  // Headers
-  const headers = ['Functional Area', 'Teams', 'Open', 'Created (MTD)', 'Closed (MTD)', 'Aged 30+', '% Aged 30+', 'Last Refreshed'];
+  // Headers - includes sort controls
+  const headers = ['Functional Area', 'Teams', 'Open', 'Created (MTD)', 'Closed (MTD)', 'Aged 30+', '% Aged 30+', 'Last Refreshed', 'Sort Col#', 'Desc?'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  // Formula row - aggregates from TeamWorkload
-  const formulaRow = [
-    // A2: Get unique Functional Areas from TeamWorkload
-    '=UNIQUE(FILTER(TeamWorkload!B2:B, TeamWorkload!B2:B<>"", TeamWorkload!A2:A<>""))',
-    // B2: Count teams in this FA
-    '=COUNTIF(TeamWorkload!$B:$B, A2)',
-    // C2: Sum open tickets for this FA
-    '=SUMIF(TeamWorkload!$B:$B, A2, TeamWorkload!$C:$C)',
-    // D2: Sum created MTD for this FA
-    '=SUMIF(TeamWorkload!$B:$B, A2, TeamWorkload!$D:$D)',
-    // E2: Sum closed MTD for this FA
-    '=SUMIF(TeamWorkload!$B:$B, A2, TeamWorkload!$E:$E)',
-    // F2: Sum aged 30+ for this FA
-    '=SUMIF(TeamWorkload!$B:$B, A2, TeamWorkload!$F:$F)',
-    // G2: Calculate % aged 30+
-    '=IF(C2>0, F2/C2, 0)',
-    // H2: Reference last refresh from Config
-    '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
-  ];
-  sheet.getRange(2, 1, 1, formulaRow.length).setValues([formulaRow]);
+  // Single LET formula that outputs the entire sortable table
+  // Aggregates from TeamWorkload sheet
+  const mainFormula =
+    '=LET(' +
+    'fas, UNIQUE(FILTER(TeamWorkload!B2:B, TeamWorkload!B2:B<>"", TeamWorkload!A2:A<>"")),' +
+    'col_a, fas,' +
+    'col_b, BYROW(fas, LAMBDA(f, COUNTIF(TeamWorkload!B:B, f))),' +
+    'col_c, BYROW(fas, LAMBDA(f, SUMIF(TeamWorkload!B:B, f, TeamWorkload!C:C))),' +
+    'col_d, BYROW(fas, LAMBDA(f, SUMIF(TeamWorkload!B:B, f, TeamWorkload!D:D))),' +
+    'col_e, BYROW(fas, LAMBDA(f, SUMIF(TeamWorkload!B:B, f, TeamWorkload!E:E))),' +
+    'col_f, BYROW(fas, LAMBDA(f, SUMIF(TeamWorkload!B:B, f, TeamWorkload!F:F))),' +
+    'col_g, BYROW(fas, LAMBDA(f, LET(open, SUMIF(TeamWorkload!B:B, f, TeamWorkload!C:C), aged, SUMIF(TeamWorkload!B:B, f, TeamWorkload!F:F), IF(open>0, aged/open, 0)))),' +
+    'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g),' +
+    'SORT(data, $I$2, $J$2))';
+
+  sheet.getRange('A2').setValue(mainFormula);
+  sheet.getRange('H2').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
+
+  // Default sort settings (column 3 = Open, descending)
+  sheet.getRange('I2').setValue(3);
+  sheet.getRange('J2').setValue('FALSE');
 
   // Format header
   sheet.getRange(1, 1, 1, headers.length)
@@ -888,11 +974,29 @@ function setupFunctionalAreaSummarySheet(ss) {
   // Column widths
   sheet.setColumnWidth(1, 180);  // Functional Area
   sheet.setColumnWidth(8, 180);  // Last Refreshed
+  sheet.setColumnWidth(9, 80);   // Sort Col#
+  sheet.setColumnWidth(10, 60);  // Desc?
 
   sheet.setFrozenRows(1);
 
-  // Add note
-  sheet.getRange('A2').setNote('This formula populates unique FAs from TeamWorkload. Drag B2:H2 down to cover all FA rows. Prerequisite: TeamWorkload must have data and Teams must have FunctionalArea filled in.');
+  // Add data validation for sort column
+  const sortColRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['1', '2', '3', '4', '5', '6', '7'], true)
+    .setHelpText('1=FA, 2=Teams, 3=Open, 4=Created, 5=Closed, 6=Aged, 7=%Aged')
+    .build();
+  sheet.getRange('I2').setDataValidation(sortColRule);
+
+  // Add data validation for sort order
+  const sortOrderRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['FALSE', 'TRUE'], true)
+    .setHelpText('FALSE=Descending, TRUE=Ascending')
+    .build();
+  sheet.getRange('J2').setDataValidation(sortOrderRule);
+
+  // Add notes
+  sheet.getRange('A2').setNote('This formula auto-populates from TeamWorkload. Prerequisite: TeamWorkload must have data and Teams must have FunctionalArea filled in.');
+  sheet.getRange('I2').setNote('Sort column: 1=FA, 2=Teams, 3=Open, 4=Created, 5=Closed, 6=Aged, 7=%Aged');
+  sheet.getRange('J2').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
 
   return true;
 }
@@ -1103,20 +1207,18 @@ function setupStaleTicketsSheet(ss) {
  * Reorder sheets for better user experience
  */
 function reorderSheets(ss) {
+  // Order for default sheets - additional analytics sheets will appear after these
   const preferredOrder = [
     'Instructions',
     'Config',
     'TicketData',
     'Teams',
-    'SLACompliance',
     'MonthlyVolume',
     'BacklogAging',
     'TeamWorkload',
-    'LocationBreakdown',
-    'FunctionalAreaSummary',
+    'SLACompliance',
     'PerformanceTrends',
     'AtRiskQueue',
-    'StaleTickets',
     'DailySnapshot',
     'Logs'
   ];

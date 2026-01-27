@@ -13,9 +13,12 @@
  * - New Tickets: Automatically fetched with open refresh
  * - Weekly: "Full Reload" catches deletions and corrections
  *
- * Analytics:
- * - SLA Compliance: Script-based, reads from consolidated TicketData
- * - Other analytics sheets are formula-based and auto-calculate
+ * Analytics Sheets:
+ * - 6 default sheets created by Setup Spreadsheet
+ * - 13 additional sheets available via "Add Analytics Sheet" menu
+ * - All sheets can be deleted and recreated as needed
+ * - Organized by category: Volume, Backlog, SLA, Team, Location, Issue
+ * - Default sheets marked with ★ in menu
  */
 
 /**
@@ -39,8 +42,33 @@ function onOpen() {
       .addItem('Full Reload', 'refreshTicketDataFull')
       .addItem('Show Status', 'showTicketDataStatus'))
     .addSeparator()
-    .addSubMenu(ui.createMenu('Analytics')
-      .addItem('Refresh SLA Compliance', 'refreshSlaCompliance'))
+    .addSubMenu(ui.createMenu('Add Analytics Sheet')
+      .addSubMenu(ui.createMenu('Volume & Trends')
+        .addItem('Monthly Volume ★', 'addMonthlyVolumeSheet')
+        .addItem('Performance Trends ★', 'addPerformanceTrendsSheet')
+        .addItem('Seasonal Comparison (YoY)', 'addSeasonalComparisonSheet')
+        .addItem('Temporal Patterns', 'addTemporalPatternsSheet'))
+      .addSubMenu(ui.createMenu('Backlog & Quality')
+        .addItem('Backlog Aging ★', 'addBacklogAgingSheet')
+        .addItem('Stale Tickets', 'addStaleTicketsSheet')
+        .addItem('Reopen Rate', 'addReopenRateSheet'))
+      .addSubMenu(ui.createMenu('SLA & Response')
+        .addItem('SLA Compliance ★', 'addSLAComplianceSheet')
+        .addItem('At-Risk Queue ★', 'addAtRiskQueueSheet')
+        .addItem('First Contact Resolution', 'addFirstContactResolutionSheet')
+        .addItem('Response Distribution', 'addResponseDistributionSheet')
+        .addItem('Response Trends', 'addResponseTrendsSheet'))
+      .addSubMenu(ui.createMenu('Team & Staff')
+        .addItem('Team Workload ★', 'addTeamWorkloadSheet')
+        .addItem('Technician Performance', 'addTechnicianPerformanceSheet')
+        .addItem('Functional Area Summary', 'addFunctionalAreaSummarySheet'))
+      .addSubMenu(ui.createMenu('Location')
+        .addItem('Location Breakdown', 'addLocationBreakdownSheet')
+        .addItem('Location Type Comparison', 'addLocationTypeComparisonSheet'))
+      .addSubMenu(ui.createMenu('Issue & Requester')
+        .addItem('Issue Category Volume', 'addIssueCategoryVolumeSheet')
+        .addItem('Priority Analysis', 'addPriorityAnalysisSheet')
+        .addItem('Frequent Requesters', 'addFrequentRequestersSheet')))
     .addSubMenu(ui.createMenu('Daily Snapshot')
       .addItem('Capture Now', 'appendDailySnapshot')
       .addItem('Populate Historical Estimates', 'populateHistoricalSnapshots'))

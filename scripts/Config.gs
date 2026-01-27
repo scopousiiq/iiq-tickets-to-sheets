@@ -15,7 +15,8 @@
 
 function getConfig() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
-  const data = sheet.getRange('A2:B50').getValues(); // Extended range for dynamic years
+  const allData = sheet.getDataRange().getValues();
+  const data = allData.slice(1); // Skip header row
 
   const rawConfig = {};
   data.forEach(row => {
@@ -147,7 +148,8 @@ function discoverYearsFromConfig(rawConfig, prefix) {
  */
 function getConfiguredYears(prefix) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
-  const data = sheet.getRange('A2:B50').getValues();
+  const allData = sheet.getDataRange().getValues();
+  const data = allData.slice(1); // Skip header row
 
   const rawConfig = {};
   data.forEach(row => {
@@ -161,20 +163,32 @@ function getConfiguredYears(prefix) {
 
 function updateLastRefresh() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
+  if (!sheet) return;
+
   const now = new Date().toISOString();
 
-  // Find LAST_REFRESH row and update
-  const data = sheet.getRange('A2:A20').getValues();
+  // Find LAST_REFRESH row and update (search full config range)
+  const data = sheet.getDataRange().getValues();
   for (let i = 0; i < data.length; i++) {
     if (data[i][0] === 'LAST_REFRESH') {
-      sheet.getRange(i + 2, 2).setValue(now);
-      break;
+      sheet.getRange(i + 1, 2).setValue(now);
+      return;
     }
   }
+
+  // If not found, append it
+  const lastRow = sheet.getLastRow();
+  sheet.getRange(lastRow + 1, 1, 1, 2).setValues([['LAST_REFRESH', now]]);
 }
 
 function logOperation(operation, status, details) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Logs');
+  if (!sheet) {
+    // Logs sheet doesn't exist - fail silently to avoid breaking operations
+    console.log(`[${operation}] ${status}: ${details}`);
+    return;
+  }
+
   sheet.appendRow([
     new Date().toISOString(),
     operation,

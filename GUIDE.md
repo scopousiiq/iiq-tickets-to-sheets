@@ -24,24 +24,32 @@ This guide explains how the IIQ Tickets to Sheets system works — the sheet str
 
 ### Step 1: Create the Spreadsheet
 
-Create a new Google Sheet with the following tabs (sheets):
+Create a new Google Sheet. The **Setup Spreadsheet** function will create all required sheets automatically, or you can create them manually.
+
+**Data Sheets (required):**
 
 | Sheet Name | Purpose |
 |------------|---------|
 | `Config` | API credentials and settings |
+| `TicketData` | Raw ticket dump with SLA metrics (35 columns) |
+| `Teams` | Team directory with FA mapping |
+| `DailySnapshot` | Daily backlog metrics for trending |
+| `Logs` | API call logs and errors |
+
+**Default Analytics Sheets (created by Setup):**
+
+| Sheet Name | Purpose |
+|------------|---------|
 | `MonthlyVolume` | Created/Closed/Open by month |
 | `BacklogAging` | Current open tickets by age bucket |
-| `Teams` | Team directory with FA mapping |
 | `TeamWorkload` | Per-team metrics for FA rollup |
 | `SLACompliance` | SLA breaches, response & resolution times |
 | `PerformanceTrends` | "Are we getting better?" trending metrics |
-| `LocationBreakdown` | Ticket distribution by location |
-| `FunctionalAreaSummary` | Aggregated metrics by Functional Area |
 | `AtRiskQueue` | Tickets approaching SLA thresholds |
-| `StaleTickets` | Tickets with no update in X days |
-| `DailySnapshot` | Daily backlog metrics for trending |
-| `TicketData` | Raw ticket dump with SLA metrics (35 columns) |
-| `Logs` | API call logs and errors |
+
+**Optional Analytics Sheets (add via menu):**
+
+Additional analytics sheets can be added via **IIQ Data > Add Analytics Sheet**. See the [Optional Analytics Sheets](#optional-analytics-sheets) section below for the full list.
 
 ### Step 2: Configure the Sheets
 
@@ -240,35 +248,47 @@ Create a new Google Sheet with the following tabs (sheets):
 | A | B | C | D | E | F | G |
 |---|---|---|---|---|---|---|
 | **Month** | **Year** | **Closed** | **Breaches** | **Breach Rate** | **Avg Response (hrs)** | **Avg Resolution (hrs)** |
-| January | 2026 | (script) | (script) | (script) | (script) | (script) |
-| February | 2026 | (script) | (script) | (script) | (script) | (script) |
+| January | 2026 | (formula) | (formula) | (formula) | (formula) | (formula) |
+| February | 2026 | (formula) | (formula) | (formula) | (formula) | (formula) |
 | ... | ... | | | | | |
 
-> **Note:** This sheet is **script-based** for reliability and performance when processing large datasets.
+> **Note:** This sheet uses formulas to calculate from TicketData - no script required.
 
 **Setup Instructions:**
 
-1. Run **IIQ Data > Analytics > Refresh SLA Compliance** to populate the sheet
-2. The script automatically calculates all months from your data
-
-**How it works:**
-- Reads TicketData to find all closed tickets with their closure dates and SLA metrics
-- SLA data is in consolidated columns AC-AI (ResponseThreshold, ResponseActual, ResponseBreach, ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning)
-- Groups by month/year and calculates aggregate metrics
-- Writes results sorted by most recent month first
+1. **Row 1 (Headers):** Enter the column headers manually
+2. **Column A & B:** Manually enter the months and years you want to track (or copy from MonthlyVolume)
+3. **Cell C2:** Count tickets closed in that month (drag down)
+   ```
+   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), COUNTIFS(TicketData!H:H, "Yes", TicketData!G:G, ">="&TEXT(DATE(B2,m,1), "YYYY-MM-DD"), TicketData!G:G, "<"&TEXT(DATE(B2,m+1,1), "YYYY-MM-DD")))
+   ```
+4. **Cell D2:** Count breaches (Response OR Resolution) for closed tickets that month (drag down)
+   ```
+   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), startDate, TEXT(DATE(B2,m,1), "YYYY-MM-DD"), endDate, TEXT(DATE(B2,m+1,1), "YYYY-MM-DD"), COUNTIFS(TicketData!H:H, "Yes", TicketData!G:G, ">="&startDate, TicketData!G:G, "<"&endDate, TicketData!AE:AE, TRUE) + COUNTIFS(TicketData!H:H, "Yes", TicketData!G:G, ">="&startDate, TicketData!G:G, "<"&endDate, TicketData!AH:AH, TRUE) - COUNTIFS(TicketData!H:H, "Yes", TicketData!G:G, ">="&startDate, TicketData!G:G, "<"&endDate, TicketData!AE:AE, TRUE, TicketData!AH:AH, TRUE))
+   ```
+5. **Cell E2:** Breach rate (drag down, format as percentage)
+   ```
+   =IF(C2>0, D2/C2, "N/A")
+   ```
+6. **Cell F2:** Avg Response time in hours (drag down)
+   ```
+   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), startDate, TEXT(DATE(B2,m,1), "YYYY-MM-DD"), endDate, TEXT(DATE(B2,m+1,1), "YYYY-MM-DD"), IFERROR(AVERAGEIFS(TicketData!AD:AD, TicketData!H:H, "Yes", TicketData!G:G, ">="&startDate, TicketData!G:G, "<"&endDate, TicketData!AD:AD, ">0")/60, "N/A"))
+   ```
+7. **Cell G2:** Avg Resolution time in hours (drag down)
+   ```
+   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), startDate, TEXT(DATE(B2,m,1), "YYYY-MM-DD"), endDate, TEXT(DATE(B2,m+1,1), "YYYY-MM-DD"), IFERROR(AVERAGEIFS(TicketData!AG:AG, TicketData!H:H, "Yes", TicketData!G:G, ">="&startDate, TicketData!G:G, "<"&endDate, TicketData!AG:AG, ">0")/60, "N/A"))
+   ```
 
 **Columns Explained:**
 - **Closed**: Count of tickets closed in that month
-- **Breaches**: Count where ResponseBreach=TRUE or ResolutionBreach=TRUE
+- **Breaches**: Count where ResponseBreach=TRUE OR ResolutionBreach=TRUE (avoiding double-count)
 - **Breach Rate**: Breaches / Closed
-- **Avg Response (hrs)**: Average ResponseActual (converted from minutes)
-- **Avg Resolution (hrs)**: Average ResolutionActual (converted from minutes)
-
-**When to refresh:**
-- After loading new ticket data
-- Can be added to a trigger for automated refresh
+- **Avg Response (hrs)**: Average ResponseActual (column AD, converted from minutes to hours)
+- **Avg Resolution (hrs)**: Average ResolutionActual (column AG, converted from minutes to hours)
 
 > **Prerequisites:** TicketData must be loaded with SLA metrics (columns AC-AI).
+>
+> **Tip:** Add more months by copying a row and changing the Month/Year values.
 
 #### Sheet: `PerformanceTrends`
 
@@ -519,6 +539,80 @@ This sheet requires two formula blocks - one for Response SLA at-risk tickets, o
 >
 > **Tip:** Adjust STALE_DAYS in the Config sheet to change the threshold (default 7 days).
 
+---
+
+### Optional Analytics Sheets
+
+Additional analytics sheets can be added via **IIQ Data > Add Analytics Sheet** menu. Each district can customize which metrics they track. All sheets can be deleted and recreated as needed.
+
+**Menu Structure:**
+
+```
+IIQ Data > Add Analytics Sheet >
+├── Volume & Trends
+│   ├── Monthly Volume ★
+│   ├── Performance Trends ★
+│   ├── Seasonal Comparison (YoY)
+│   └── Temporal Patterns
+├── Backlog & Quality
+│   ├── Backlog Aging ★
+│   ├── Stale Tickets
+│   └── Reopen Rate
+├── SLA & Response
+│   ├── SLA Compliance ★
+│   ├── At-Risk Queue ★
+│   ├── First Contact Resolution
+│   └── Response Distribution
+├── Team & Staff
+│   ├── Team Workload ★
+│   ├── Technician Performance
+│   └── Functional Area Summary
+├── Location
+│   ├── Location Breakdown
+│   └── Location Type Comparison
+└── Issue & Requester
+    ├── Issue Category Volume
+    ├── Priority Analysis
+    └── Frequent Requesters
+```
+
+★ = Default sheet (created by Setup Spreadsheet, can be recreated if deleted)
+
+**Available Optional Sheets:**
+
+| Sheet | Question Answered | Key Metrics |
+|-------|-------------------|-------------|
+| **Seasonal Comparison** | "How does this year compare to last year?" | YoY change by month for volume planning |
+| **Temporal Patterns** | "When do tickets come in?" | Day-of-week and hour-of-day distributions |
+| **Stale Tickets** | "Which tickets have no recent activity?" | Open tickets with no update in X days |
+| **Reopen Rate** | "Are we truly resolving issues?" | Reopened ticket detection and quality metrics |
+| **First Contact Resolution** | "How many tickets resolved same-day?" | Same-day %, 4-hour resolution %, monthly trend |
+| **Response Distribution** | "How consistent is our response time?" | Percentiles, distribution buckets, consistency |
+| **Technician Performance** | "How is workload distributed among staff?" | Per-technician: open, closed, aged, breach rate |
+| **Functional Area Summary** | "How are functional areas performing?" | Aggregated metrics by functional area |
+| **Location Breakdown** | "Which locations generate the most tickets?" | Per-location: open, created, closed |
+| **Location Type Comparison** | "Which school types generate most tickets?" | Metrics by Elementary/Middle/High/Admin |
+| **Issue Category Volume** | "What types of problems are we handling?" | Open/Closed by category, breach rate per category |
+| **Priority Analysis** | "Are high-priority tickets handled faster?" | Metrics by priority level, response times |
+| **Frequent Requesters** | "Who generates the most tickets?" | Top 50 requesters with category data |
+
+> **How to Add a Sheet:**
+> 1. Go to **IIQ Data > Add Analytics Sheet**
+> 2. Select the category (e.g., "Volume & Trends")
+> 3. Click the sheet you want to add
+> 4. The sheet will be created with all formulas pre-configured
+>
+> **How to Remove a Sheet:**
+> - Right-click the sheet tab and select "Delete"
+> - You can recreate it anytime via the menu
+>
+> **Customization:**
+> - All formulas are visible and editable
+> - Modify age buckets, thresholds, or calculations as needed
+> - Create your own analytics sheets using TicketData as the source
+
+---
+
 #### Sheet: `TicketData`
 
 | Col | Header | Description |
@@ -602,13 +696,13 @@ The Apps Script source code is in the `scripts/` folder of this repository.
 | [`ApiClient.gs`](scripts/ApiClient.gs) | HTTP requests with retry/exponential backoff for rate limiting |
 | [`Teams.gs`](scripts/Teams.gs) | Team data loading from API |
 | [`TicketData.gs`](scripts/TicketData.gs) | Bulk ticket data loader with consolidated SLA (35 columns, year-based pagination) |
-| [`SlaCompliance.gs`](scripts/SlaCompliance.gs) | SLA compliance analytics (reads from consolidated TicketData) |
 | [`DailySnapshot.gs`](scripts/DailySnapshot.gs) | Daily backlog metrics capture for trending |
 | [`Menu.gs`](scripts/Menu.gs) | IIQ Data menu for data loader and analytics functions |
 | [`Triggers.gs`](scripts/Triggers.gs) | Time-driven trigger functions for automated updates |
-| [`Setup.gs`](scripts/Setup.gs) | Spreadsheet setup and sheet creation functions |
+| [`Setup.gs`](scripts/Setup.gs) | Spreadsheet setup and default sheet creation |
+| [`OptionalMetrics.gs`](scripts/OptionalMetrics.gs) | Optional analytics sheets (19 total, added via menu) |
 
-> **Note:** Analytics sheets use formulas (see Part 1). Scripts handle data loading (TicketData with SLA, Teams), daily snapshots (DailySnapshot), and orchestration (Menu, Triggers).
+> **Note:** Analytics sheets use formulas (see Part 1). Scripts handle data loading (TicketData with SLA, Teams), daily snapshots (DailySnapshot), and orchestration (Menu, Triggers). OptionalMetrics.gs provides menu functions to add/recreate any analytics sheet.
 
 ### File Dependencies
 
@@ -624,28 +718,42 @@ Script-based data loaders:
     └── DailySnapshot.gs (reads from TicketData sheet)
             └── Config.gs
 
-Script-based analytics:
-    └── SlaCompliance.gs (reads from consolidated TicketData)
-            └── Config.gs
-
 Menu.gs (IIQ Data Menu)
-    └── References data loader and analytics functions
+    └── References data loader and OptionalMetrics functions
 
 Triggers.gs (Automated Updates)
     └── Data loader and analytics scripts above
 
 Setup.gs (Spreadsheet Setup)
-    └── Creates all sheets with headers and formulas
+    └── Creates data sheets and 6 default analytics sheets
 
-Formula-based analytics sheets (no scripts needed):
+OptionalMetrics.gs (Optional Analytics)
+    └── Creates any of 19 analytics sheets via menu
+    └── Uses setup functions from Setup.gs for default sheets
+
+Formula-based analytics sheets (19 total, no scripts needed):
+    DEFAULT (created by Setup):
     ├── MonthlyVolume           → reads from TicketData
     ├── BacklogAging            → reads from TicketData and Config
     ├── TeamWorkload            → reads from TicketData and Teams
-    ├── FunctionalAreaSummary   → reads from TeamWorkload and Config
+    ├── SLACompliance           → reads from TicketData (SLA columns AC-AI)
     ├── PerformanceTrends       → reads from TicketData, SLACompliance, DailySnapshot
-    ├── AtRiskQueue             → reads from TicketData (SLA columns AC-AI) and Config
+    └── AtRiskQueue             → reads from TicketData (SLA columns AC-AI) and Config
+
+    OPTIONAL (add via menu):
+    ├── StaleTickets            → reads from TicketData and Config
     ├── LocationBreakdown       → reads from TicketData and Config
-    └── StaleTickets            → reads from TicketData and Config
+    ├── FunctionalAreaSummary   → reads from TeamWorkload and Config
+    ├── SeasonalComparison      → reads from TicketData (YoY comparison)
+    ├── TemporalPatterns        → reads from TicketData (day/hour analysis)
+    ├── ReopenRate              → reads from TicketData (quality metric)
+    ├── FirstContactResolution  → reads from TicketData (FCR metric)
+    ├── ResponseDistribution    → reads from TicketData (percentiles)
+    ├── TechnicianPerformance   → reads from TicketData (per-owner)
+    ├── LocationTypeComparison  → reads from TicketData (by school type)
+    ├── IssueCategoryVolume     → reads from TicketData (by category)
+    ├── PriorityAnalysis        → reads from TicketData (by priority)
+    └── FrequentRequesters      → reads from TicketData (top requesters)
 ```
 
 ---
@@ -655,14 +763,16 @@ Formula-based analytics sheets (no scripts needed):
 ### Step 1: Create and Configure the Spreadsheet
 
 1. Create a new Google Spreadsheet
-2. Create all sheets: `Config`, `MonthlyVolume`, `BacklogAging`, `Teams`, `TeamWorkload`, `SLACompliance`, `LocationBreakdown`, `FunctionalAreaSummary`, `AtRiskQueue`, `StaleTickets`, `PerformanceTrends`, `DailySnapshot`, `TicketData`, `Logs`
-3. Set up headers as shown in Part 1
-4. **Or run Setup.gs**: Go to **IIQ Data > Setup > Setup Spreadsheet** to auto-create all sheets
+2. **Recommended:** Run **IIQ Data > Setup > Setup Spreadsheet** to auto-create all required sheets
+   - Creates data sheets: Config, TicketData, Teams, DailySnapshot, Logs
+   - Creates 6 default analytics sheets: MonthlyVolume, BacklogAging, TeamWorkload, SLACompliance, PerformanceTrends, AtRiskQueue
+3. **Or create manually:** Set up each sheet with headers as shown in Part 1
+4. **Add more analytics later:** Use **IIQ Data > Add Analytics Sheet** to add any of the 13 optional analytics sheets
 
 ### Step 2: Add the Apps Script Code
 
 1. Go to **Extensions > Apps Script**
-2. Create a new `.gs` file for each script in the `scripts/` folder (9 files total)
+2. Create a new `.gs` file for each script in the `scripts/` folder (10 files total)
 3. Copy the code from each file and save the project
 
 ### Step 3: Configure API Access
@@ -823,7 +933,7 @@ After initial data load is complete, set up triggers to keep data current:
 >
 > **Power BI Tip:** Use this sheet to create a pivot table or chart grouped by Functional Area to see aggregate metrics across all teams in each area.
 
-### SLACompliance Sheet (Script-Based)
+### SLACompliance Sheet (Formula-Calculated)
 
 | Month | Year | Closed | Breaches | Breach Rate | Avg Response (hrs) | Avg Resolution (hrs) |
 |-------|------|--------|----------|-------------|-------------------|---------------------|
@@ -831,10 +941,10 @@ After initial data load is complete, set up triggers to keep data current:
 | February | 2026 | 445 | 28 | 6.3% | 2.1 | 16.2 |
 | March | 2026 | 498 | 41 | 8.2% | 2.8 | 22.1 |
 
-> **Script-Based:** Run **IIQ Data > Analytics > Refresh SLA Compliance** to populate. The script reads from consolidated TicketData (SLA metrics in columns AC-AI), which is faster and more reliable than formula-based calculations for large datasets.
+> **Formula-Based:** This sheet calculates automatically from TicketData - no refresh needed. Data updates when TicketData is refreshed.
 >
 > **Metrics Explained:**
-> - **Breaches**: Count of tickets where response or resolution time exceeded SLA threshold
+> - **Breaches**: Count of tickets where response OR resolution time exceeded SLA threshold
 > - **Breach Rate**: Breaches ÷ Closed tickets
 > - **Avg Response**: Average time to first response (in hours)
 > - **Avg Resolution**: Average time to close ticket (in hours)
@@ -1031,23 +1141,40 @@ Once your data is flowing, here are some ideas for getting more value:
 
 ## Features & Capabilities
 
+### Default Analytics (created by Setup)
+
 | Feature | Sheet(s) | Status |
 |---------|----------|--------|
-| Tickets Created/Closed by month | MonthlyVolume | Implemented |
-| Net Backlog Change | MonthlyVolume | Implemented |
-| Closure Rate | MonthlyVolume, PerformanceTrends | Implemented |
-| Backlog Aging (0-15, 16-30, 31-60, 61-90, 90+) | BacklogAging | Implemented |
-| SLA Breaches and Breach Rate | SLACompliance, PerformanceTrends | Implemented |
-| Avg Response/Resolution Time | SLACompliance, PerformanceTrends | Implemented |
-| Functional Area Reporting | FunctionalAreaSummary | Implemented |
-| Team-level Metrics | TeamWorkload | Implemented |
-| Location Breakdown | LocationBreakdown | Implemented |
-| At-Risk Queue (approaching SLA) | AtRiskQueue | Implemented |
-| Stale Tickets (no update X days) | StaleTickets | Implemented |
-| % Tickets Aged 30+ | FunctionalAreaSummary, PerformanceTrends | Implemented |
-| Drill-down to Assigned Groups | TeamWorkload | Implemented |
-| **"Are we getting better?" Trending** | PerformanceTrends, DailySnapshot | **Implemented** |
-| Historical Backlog Tracking | DailySnapshot | Implemented |
+| Tickets Created/Closed by month | MonthlyVolume | Default |
+| Net Backlog Change | MonthlyVolume | Default |
+| Closure Rate | MonthlyVolume, PerformanceTrends | Default |
+| Backlog Aging (0-15, 16-30, 31-60, 61-90, 90+) | BacklogAging | Default |
+| SLA Breaches and Breach Rate | SLACompliance, PerformanceTrends | Default |
+| Avg Response/Resolution Time | SLACompliance, PerformanceTrends | Default |
+| Team-level Metrics | TeamWorkload | Default |
+| At-Risk Queue (approaching SLA) | AtRiskQueue | Default |
+| **"Are we getting better?" Trending** | PerformanceTrends, DailySnapshot | **Default** |
+| Historical Backlog Tracking | DailySnapshot | Default |
+
+### Optional Analytics (add via menu)
+
+| Feature | Sheet(s) | Category |
+|---------|----------|----------|
+| Stale Tickets (no update X days) | StaleTickets | Backlog & Quality |
+| Reopen Rate (quality metric) | ReopenRate | Backlog & Quality |
+| Location Breakdown | LocationBreakdown | Location |
+| Location Type Comparison (Elem/Middle/High) | LocationTypeComparison | Location |
+| Functional Area Reporting | FunctionalAreaSummary | Team & Staff |
+| Technician Performance | TechnicianPerformance | Team & Staff |
+| Seasonal/Year-over-Year Comparison | SeasonalComparison | Volume & Trends |
+| Temporal Patterns (day/hour) | TemporalPatterns | Volume & Trends |
+| First Contact Resolution Rate | FirstContactResolution | SLA & Response |
+| Response Time Distribution | ResponseDistribution | SLA & Response |
+| Issue Category Volume | IssueCategoryVolume | Issue & Requester |
+| Priority Analysis | PriorityAnalysis | Issue & Requester |
+| Frequent Requesters | FrequentRequesters | Issue & Requester |
+
+> **19 Total Analytics Sheets:** 6 default + 13 optional. All can be deleted and recreated via **IIQ Data > Add Analytics Sheet** menu.
 
 ---
 

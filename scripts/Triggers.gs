@@ -209,6 +209,10 @@ function triggerWeeklyFullRefresh() {
       `Reset complete. Will reload years > ${historicalCutoff}. Run triggerDataContinue to reload.`);
 
     // Step 4: Start reloading immediately
+    if (!ticketSheet) {
+      logOperation('Trigger', 'ERROR', 'TicketData sheet not found - cannot reload');
+      return;
+    }
     const result = runTicketDataLoader(ticketSheet);
     logOperation('Trigger', 'WEEKLY_RELOAD',
       `Initial reload: ${result.batchCount} batches, ${result.ticketCount} tickets, ` +
@@ -238,7 +242,7 @@ function triggerWeeklyFullRefresh() {
  *    - Useful for large districts where 2-hour refresh doesn't finish in one run
  *
  * 3. BOTH COMPLETE:
- *    - Does nothing (no log to avoid noise)
+ *    - Does nothing (minimal log to confirm it ran)
  *
  * You can leave this trigger enabled permanently - it only runs when needed.
  */
@@ -268,36 +272,55 @@ function triggerDataContinue() {
   }
 
   // Priority 2: Check if open ticket refresh needs continuing
-  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  // Read progress directly from config sheet for most accurate state
+  const progress = getOpenRefreshProgress();
   const savedDate = config.openRefreshDate || '';
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
-  if (savedDate === today) {
-    const progress = getOpenRefreshProgress();
+  // Log diagnostic info about the state we found
+  logOperation('Trigger', 'CHECK',
+    `Open refresh state: date=${savedDate}, today=${today}, openPage=${progress.openPage}, ` +
+    `openComplete=${progress.openComplete}, closedPage=${progress.closedPage}, ` +
+    `closedComplete=${progress.closedComplete}`);
 
-    // If refresh started today but isn't complete, continue it
-    if (!progress.openComplete || !progress.closedComplete) {
-      const sheet = ss.getSheetByName('TicketData');
-      if (!sheet) {
-        logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
-        return;
-      }
+  // Check if there's an incomplete refresh to continue
+  // Allow continuing yesterday's refresh if it didn't complete (handles day boundary edge case)
+  const refreshInProgress = progress.openPage >= 0 || progress.closedPage >= 0;
+  const refreshJustStarted = savedDate === today && progress.openPage < 0 && !progress.openComplete;
+  const refreshIncomplete = !progress.openComplete || !progress.closedComplete;
 
-      logOperation('Trigger', 'CONTINUE', 'Continuing open ticket refresh');
-
-      try {
-        const result = runOpenTicketRefresh(sheet);
-        logOperation('Trigger', 'OPEN_REFRESH',
-          `Updated ${result.updatedCount}, appended ${result.appendedCount}, ` +
-          `${result.ticketCount} total tickets, ${result.batchCount} batches, ` +
-          `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
-      } catch (error) {
-        logOperation('Trigger', 'ERROR', `Open ticket refresh continue failed: ${error.message}`);
-      }
+  if ((refreshInProgress || refreshJustStarted) && refreshIncomplete) {
+    const sheet = ss.getSheetByName('TicketData');
+    if (!sheet) {
+      logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
       return;
     }
+
+    logOperation('Trigger', 'CONTINUE',
+      `Continuing open ticket refresh (savedDate=${savedDate}, today=${today})`);
+
+    try {
+      const result = runOpenTicketRefresh(sheet);
+      logOperation('Trigger', 'OPEN_REFRESH',
+        `Updated ${result.updatedCount}, appended ${result.appendedCount}, ` +
+        `${result.ticketCount} total tickets, ${result.batchCount} batches, ` +
+        `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
+    } catch (error) {
+      logOperation('Trigger', 'ERROR', `Open ticket refresh continue failed: ${error.message}`);
+    }
+    return;
   }
 
-  // Both complete - do nothing (no log to avoid noise)
+  // Nothing to do - log why for diagnostics
+  if (progress.openComplete && progress.closedComplete) {
+    logOperation('Trigger', 'IDLE', `Open refresh already complete for ${savedDate}`);
+  } else if (!savedDate) {
+    logOperation('Trigger', 'IDLE', 'No open refresh has been started yet (waiting for triggerOpenTicketRefresh)');
+  } else {
+    logOperation('Trigger', 'IDLE',
+      `Unexpected state - date=${savedDate}, inProgress=${refreshInProgress}, ` +
+      `justStarted=${refreshJustStarted}, incomplete=${refreshIncomplete}`);
+  }
 }
 
 // =============================================================================
