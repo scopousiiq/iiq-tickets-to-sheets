@@ -165,7 +165,7 @@ function triggerNewTickets() {
  *
  * This catches edge cases that incremental updates might miss:
  * - Deleted tickets
- * - Data corrections in IIQ
+ * - Data corrections in iiQ
  * - Any sync issues
  *
  * Preserves historical data (2+ years old) to minimize reload time.

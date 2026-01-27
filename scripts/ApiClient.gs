@@ -1,6 +1,6 @@
 /**
- * IIQ API Client
- * Handles HTTP requests to the IncidentIQ API
+ * iiQ API Client
+ * Handles HTTP requests to the Incident IQ API
  * Includes retry logic with exponential backoff for rate limiting
  */
 

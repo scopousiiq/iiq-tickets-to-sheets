@@ -1,6 +1,6 @@
 # Implementation Guide
 
-This guide explains how the IIQ Tickets to Sheets system works — the sheet structure, formulas, and technical details. It's written for IT staff who want to understand or customize the system.
+This guide explains how the iiQ Tickets to Sheets system works — the sheet structure, formulas, and technical details. It's written for IT staff who want to understand or customize the system.
 
 **Just want to get started?** See the [README](README.md) for quick setup instructions.
 
@@ -8,7 +8,7 @@ This guide explains how the IIQ Tickets to Sheets system works — the sheet str
 
 ```
 ┌─────────────┐     ┌──────────────────┐     ┌─────────────┐
-│  IIQ API    │────▶│  Google Sheets   │────▶│  Power BI   │
+│  iiQ API    │────▶│  Google Sheets   │────▶│  Power BI   │
 │             │     │  + Apps Script   │     │             │
 │ /tickets    │     │                  │     │ Dashboards  │
 │ /teams      │     │ • Config sheet   │     │             │
@@ -49,7 +49,7 @@ Create a new Google Sheet. The **Setup Spreadsheet** function will create all re
 
 **Optional Analytics Sheets (add via menu):**
 
-Additional analytics sheets can be added via **IIQ Data > Add Analytics Sheet**. See the [Optional Analytics Sheets](#optional-analytics-sheets) section below for the full list.
+Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**. See the [Optional Analytics Sheets](#optional-analytics-sheets) section below for the full list.
 
 ### Step 2: Configure the Sheets
 
@@ -59,8 +59,8 @@ Additional analytics sheets can be added via **IIQ Data > Add Analytics Sheet**.
 
 | Setting | Value | Description |
 |---------|-------|-------------|
-| `API_BASE_URL` | `https://your-district.incidentiq.com` | Your IIQ URL (the `/api` is added automatically) |
-| `BEARER_TOKEN` | (your JWT token) | Get this from IIQ Admin > Integrations > API |
+| `API_BASE_URL` | `https://your-district.incidentiq.com` | Your iiQ URL (the `/api` is added automatically) |
+| `BEARER_TOKEN` | (your JWT token) | Get this from iiQ Admin > Integrations > API |
 | `SITE_ID` | (your site UUID) | Only needed for multi-site districts |
 
 **Optional Settings (defaults work for most districts):**
@@ -196,7 +196,7 @@ Additional analytics sheets can be added via **IIQ Data > Add Analytics Sheet**.
 
 > **What is Functional Area?** This is your own label for grouping teams. For example, you might label Help Desk Tier 1, Help Desk Tier 2, and Field Services as "IT Support Services" — then the FunctionalAreaSummary sheet will show combined metrics for all those teams.
 >
-> After running **IIQ Data > Refresh Teams**, fill in column C with your Functional Area labels. You can paste values directly — there's no dropdown restriction.
+> After running **iiQ Data > Refresh Teams**, fill in column C with your Functional Area labels. You can paste values directly — there's no dropdown restriction.
 
 #### Sheet: `TeamWorkload`
 
@@ -543,12 +543,12 @@ This sheet requires two formula blocks - one for Response SLA at-risk tickets, o
 
 ### Optional Analytics Sheets
 
-Additional analytics sheets can be added via **IIQ Data > Add Analytics Sheet** menu. Each district can customize which metrics they track. All sheets can be deleted and recreated as needed.
+Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet** menu. Each district can customize which metrics they track. All sheets can be deleted and recreated as needed.
 
 **Menu Structure:**
 
 ```
-IIQ Data > Add Analytics Sheet >
+iiQ Data > Add Analytics Sheet >
 ├── Volume & Trends
 │   ├── Monthly Volume ★
 │   ├── Performance Trends ★
@@ -597,7 +597,7 @@ IIQ Data > Add Analytics Sheet >
 | **Frequent Requesters** | "Who generates the most tickets?" | Top 50 requesters with category data |
 
 > **How to Add a Sheet:**
-> 1. Go to **IIQ Data > Add Analytics Sheet**
+> 1. Go to **iiQ Data > Add Analytics Sheet**
 > 2. Select the category (e.g., "Volume & Trends")
 > 3. Click the sheet you want to add
 > 4. The sheet will be created with all formulas pre-configured
@@ -697,7 +697,7 @@ The Apps Script source code is in the `scripts/` folder of this repository.
 | [`Teams.gs`](scripts/Teams.gs) | Team data loading from API |
 | [`TicketData.gs`](scripts/TicketData.gs) | Bulk ticket data loader with consolidated SLA (35 columns, year-based pagination) |
 | [`DailySnapshot.gs`](scripts/DailySnapshot.gs) | Daily backlog metrics capture for trending |
-| [`Menu.gs`](scripts/Menu.gs) | IIQ Data menu for data loader and analytics functions |
+| [`Menu.gs`](scripts/Menu.gs) | iiQ Data menu for data loader and analytics functions |
 | [`Triggers.gs`](scripts/Triggers.gs) | Time-driven trigger functions for automated updates |
 | [`Setup.gs`](scripts/Setup.gs) | Spreadsheet setup and default sheet creation |
 | [`OptionalMetrics.gs`](scripts/OptionalMetrics.gs) | Optional analytics sheets (19 total, added via menu) |
@@ -718,7 +718,7 @@ Script-based data loaders:
     └── DailySnapshot.gs (reads from TicketData sheet)
             └── Config.gs
 
-Menu.gs (IIQ Data Menu)
+Menu.gs (iiQ Data Menu)
     └── References data loader and OptionalMetrics functions
 
 Triggers.gs (Automated Updates)
@@ -763,11 +763,11 @@ Formula-based analytics sheets (19 total, no scripts needed):
 ### Step 1: Create and Configure the Spreadsheet
 
 1. Create a new Google Spreadsheet
-2. **Recommended:** Run **IIQ Data > Setup > Setup Spreadsheet** to auto-create all required sheets
+2. **Recommended:** Run **iiQ Data > Setup > Setup Spreadsheet** to auto-create all required sheets
    - Creates data sheets: Config, TicketData, Teams, DailySnapshot, Logs
    - Creates 6 default analytics sheets: MonthlyVolume, BacklogAging, TeamWorkload, SLACompliance, PerformanceTrends, AtRiskQueue
 3. **Or create manually:** Set up each sheet with headers as shown in Part 1
-4. **Add more analytics later:** Use **IIQ Data > Add Analytics Sheet** to add any of the 13 optional analytics sheets
+4. **Add more analytics later:** Use **iiQ Data > Add Analytics Sheet** to add any of the 13 optional analytics sheets
 
 ### Step 2: Add the Apps Script Code
 
@@ -778,7 +778,7 @@ Formula-based analytics sheets (19 total, no scripts needed):
 ### Step 3: Configure API Access
 
 1. In the `Config` sheet, enter:
-   - `API_BASE_URL`: Your IIQ instance URL (e.g., `https://yourdistrict.incidentiq.com`)
+   - `API_BASE_URL`: Your iiQ instance URL (e.g., `https://yourdistrict.incidentiq.com`)
    - `BEARER_TOKEN`: Your API authentication token
    - `SITE_ID`: Your site UUID (if required)
    - `PAGE_SIZE`: `100` (recommended)
@@ -786,8 +786,8 @@ Formula-based analytics sheets (19 total, no scripts needed):
 ### Step 4: Authorize and Run
 
 1. Reload the spreadsheet
-2. You should see a new menu: **IIQ Data**
-3. Click **IIQ Data > Refresh Teams** first
+2. You should see a new menu: **iiQ Data**
+3. Click **iiQ Data > Refresh Teams** first
 4. Authorize the script when prompted
 5. Once teams load, manually fill in the **Functional Area** column in the Teams sheet
 
@@ -795,8 +795,8 @@ Formula-based analytics sheets (19 total, no scripts needed):
 
 Before setting up automated triggers, complete the initial bulk load:
 
-1. Click **IIQ Data > Ticket Data > Continue Loading (Initial)**
-2. Wait for it to finish (~5 minutes), then check **IIQ Data > Ticket Data > Show Status**
+1. Click **iiQ Data > Ticket Data > Continue Loading (Initial)**
+2. Wait for it to finish (~5 minutes), then check **iiQ Data > Ticket Data > Show Status**
 3. If any year shows "Page X of Y" instead of "Complete", run Continue Loading again
 4. Repeat until all years show "Complete"
 
@@ -1101,17 +1101,17 @@ The TicketData sheet includes 35 columns (A-AI) with consolidated SLA metrics. S
 | What You See | What's Wrong | How to Fix It |
 |--------------|--------------|---------------|
 | "API configuration missing" | Config sheet isn't set up | Fill in `API_BASE_URL` and `BEARER_TOKEN` in the Config sheet |
-| "HTTP 401" error | Your API token expired | Get a new Bearer token from IIQ Admin > Integrations > API |
+| "HTTP 401" error | Your API token expired | Get a new Bearer token from iiQ Admin > Integrations > API |
 | "HTTP 403" error | API user doesn't have permission | Check that your API user has read access to tickets |
-| "HTTP 429" or "RATE_LIMITED" in Logs | IIQ is throttling your requests | Increase `THROTTLE_MS` in Config to 2000 or 3000 |
+| "HTTP 429" or "RATE_LIMITED" in Logs | iiQ is throttling your requests | Increase `THROTTLE_MS` in Config to 2000 or 3000 |
 | Script timeout after ~6 minutes | Normal — Google's limit | Just run "Continue Loading" again — progress is saved |
-| Some tickets have blank SLA columns | Those tickets don't have SLA policies | Expected behavior — not all tickets have SLA assigned in IIQ |
+| Some tickets have blank SLA columns | Those tickets don't have SLA policies | Expected behavior — not all tickets have SLA assigned in iiQ |
 | Formulas show #REF! errors | TicketData sheet is empty | Run the initial data load first |
 | TeamWorkload shows blank Functional Areas | Teams sheet column C is empty | Fill in Functional Area labels in the Teams sheet |
 
 ### Rate Limiting (HTTP 429)
 
-If you're getting rate limited by IncidentIQ:
+If you're getting rate limited by Incident IQ:
 
 1. **Increase the delay between API calls**: Set `THROTTLE_MS` to `2000` (2 seconds) or `3000` (3 seconds) in the Config sheet
 2. **Check your Logs sheet**: Look for "RATE_LIMITED" or "RETRY" entries to see how often it's happening
@@ -1174,7 +1174,7 @@ Once your data is flowing, here are some ideas for getting more value:
 | Priority Analysis | PriorityAnalysis | Issue & Requester |
 | Frequent Requesters | FrequentRequesters | Issue & Requester |
 
-> **19 Total Analytics Sheets:** 6 default + 13 optional. All can be deleted and recreated via **IIQ Data > Add Analytics Sheet** menu.
+> **19 Total Analytics Sheets:** 6 default + 13 optional. All can be deleted and recreated via **iiQ Data > Add Analytics Sheet** menu.
 
 ---
 

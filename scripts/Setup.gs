@@ -22,9 +22,9 @@
  * - AtRiskResolution: Tickets approaching Resolution SLA breach
  *
  * Additional analytics sheets can be added via:
- * IIQ Data > Add Analytics Sheet menu
+ * iiQ Data > Add Analytics Sheet menu
  *
- * Usage: Run setupSpreadsheet() from the IIQ Data > Setup menu
+ * Usage: Run setupSpreadsheet() from the iiQ Data > Setup menu
  */
 
 /**
@@ -35,7 +35,7 @@ function setupSpreadsheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const response = ui.alert(
-    'Setup IIQ Data Spreadsheet',
+    'Setup iiQ Data Spreadsheet',
     'This will create/configure the following sheets:\n\n' +
     'DATA SHEETS:\n' +
     '- Instructions (setup guide)\n' +
@@ -53,7 +53,7 @@ function setupSpreadsheet() {
     '- AtRiskResponse\n' +
     '- AtRiskResolution\n\n' +
     'Additional analytics sheets can be added later via:\n' +
-    'IIQ Data > Add Analytics Sheet\n\n' +
+    'iiQ Data > Add Analytics Sheet\n\n' +
     'Existing sheets will not be overwritten.\n\n' +
     'Continue?',
     ui.ButtonSet.YES_NO
@@ -73,7 +73,7 @@ function setupSpreadsheet() {
   if (setupLogsSheet(ss)) created.push('Logs'); else skipped.push('Logs');
 
   // Create default analytics sheets
-  // Additional sheets can be added via IIQ Data > Add Analytics Sheet menu
+  // Additional sheets can be added via iiQ Data > Add Analytics Sheet menu
   if (setupMonthlyVolumeSheet(ss)) created.push('MonthlyVolume'); else skipped.push('MonthlyVolume');
   if (setupBacklogAgingSheet(ss)) created.push('BacklogAging'); else skipped.push('BacklogAging');
   if (setupTeamWorkloadSheet(ss)) created.push('TeamWorkload'); else skipped.push('TeamWorkload');
@@ -110,17 +110,17 @@ function setupInstructionsSheet(ss) {
 
   // Instructions content
   const content = [
-    ['IIQ TICKET & SLA DATA - SETUP AND USAGE GUIDE'],
+    ['iiQ TICKET & SLA DATA - SETUP AND USAGE GUIDE'],
     [''],
     ['═══════════════════════════════════════════════════════════════════════════════'],
     ['OVERVIEW'],
     ['═══════════════════════════════════════════════════════════════════════════════'],
     [''],
-    ['This spreadsheet extracts ticket and SLA data from IncidentIQ (IIQ) for analytics'],
+    ['This spreadsheet extracts ticket and SLA data from Incident IQ (iiQ) for analytics'],
     ['and Power BI consumption. Data is loaded via Google Apps Script and refreshed'],
     ['automatically via time-driven triggers.'],
     [''],
-    ['Data Flow: IIQ API → Google Apps Script → This Spreadsheet → Power BI'],
+    ['Data Flow: iiQ API → Google Apps Script → This Spreadsheet → Power BI'],
     [''],
     [''],
     ['═══════════════════════════════════════════════════════════════════════════════'],
@@ -128,8 +128,8 @@ function setupInstructionsSheet(ss) {
     ['═══════════════════════════════════════════════════════════════════════════════'],
     [''],
     ['1. CONFIGURE API CREDENTIALS (Config sheet)'],
-    ['   • API_BASE_URL: Your IIQ instance (e.g., https://district.incidentiq.com)'],
-    ['   • BEARER_TOKEN: JWT token from IIQ (Admin > Integrations > API)'],
+    ['   • API_BASE_URL: Your iiQ instance (e.g., https://district.incidentiq.com)'],
+    ['   • BEARER_TOKEN: JWT token from iiQ (Admin > Integrations > API)'],
     ['   • SITE_ID: Optional - only needed for multi-site instances'],
     [''],
     ['2. CONFIGURE YEAR TRACKING (Config sheet)'],
@@ -146,15 +146,15 @@ function setupInstructionsSheet(ss) {
     ['   • TICKET_2025_LAST_FETCH'],
     [''],
     ['3. VERIFY CONFIGURATION'],
-    ['   • Menu: IIQ Data > Setup > Verify Configuration'],
+    ['   • Menu: iiQ Data > Setup > Verify Configuration'],
     ['   • Fixes any issues reported before proceeding'],
     [''],
     ['4. LOAD TEAM DIRECTORY'],
-    ['   • Menu: IIQ Data > Refresh Teams'],
+    ['   • Menu: iiQ Data > Refresh Teams'],
     ['   • Then fill in FunctionalArea column for each team (optional)'],
     [''],
     ['5. START LOADING TICKET DATA'],
-    ['   • Menu: IIQ Data > Ticket Data > Continue Loading'],
+    ['   • Menu: iiQ Data > Ticket Data > Continue Loading'],
     ['   • Script runs for ~5.5 minutes then pauses'],
     ['   • Run again to continue (or set up triggers for automation)'],
     [''],
@@ -200,7 +200,7 @@ function setupInstructionsSheet(ss) {
     ['  - SLA: Thresholds, Actuals, Breach status (Response & Resolution)'],
     [''],
     ['• Teams'],
-    ['  Team directory loaded from IIQ. Add FunctionalArea values for grouping.'],
+    ['  Team directory loaded from iiQ. Add FunctionalArea values for grouping.'],
     [''],
     ['• DailySnapshot'],
     ['  Daily backlog metrics captured at 7 PM. Used for trending analysis.'],
@@ -214,7 +214,7 @@ function setupInstructionsSheet(ss) {
     [''],
     ['• SLACompliance'],
     ['  Monthly SLA breach rates and average response/resolution times.'],
-    ['  Refresh via: IIQ Data > Analytics > Refresh SLA Compliance'],
+    ['  Refresh via: iiQ Data > Analytics > Refresh SLA Compliance'],
     [''],
     ['• MonthlyVolume'],
     ['  Tickets created vs closed by month. Shows net backlog change.'],
@@ -232,14 +232,14 @@ function setupInstructionsSheet(ss) {
     ['MENU REFERENCE'],
     ['═══════════════════════════════════════════════════════════════════════════════'],
     [''],
-    ['IIQ Data > Setup'],
+    ['iiQ Data > Setup'],
     ['  • Setup Spreadsheet - Create all sheets (safe to run multiple times)'],
     ['  • Verify Configuration - Check API settings'],
     [''],
-    ['IIQ Data > Refresh Teams'],
-    ['  Load/refresh team directory from IIQ'],
+    ['iiQ Data > Refresh Teams'],
+    ['  Load/refresh team directory from iiQ'],
     [''],
-    ['IIQ Data > Ticket Data'],
+    ['iiQ Data > Ticket Data'],
     ['  • Continue Loading (Initial) - Resume initial data load (runs ~5.5 min)'],
     ['  • Open Ticket Refresh (Start) - Begin fresh open ticket refresh'],
     ['  • Open Ticket Refresh (Continue) - Resume if refresh timed out'],
@@ -247,10 +247,10 @@ function setupInstructionsSheet(ss) {
     ['  • Full Reload - Clear ALL data and start fresh (use sparingly)'],
     ['  • Show Status - Display loading progress by year'],
     [''],
-    ['IIQ Data > Analytics'],
+    ['iiQ Data > Analytics'],
     ['  • Refresh SLA Compliance - Recalculate SLA metrics'],
     [''],
-    ['IIQ Data > Daily Snapshot'],
+    ['iiQ Data > Daily Snapshot'],
     ['  • Capture Now - Record today\'s backlog metrics'],
     ['  • Populate Historical Estimates - Create estimated past snapshots'],
     [''],
@@ -1307,7 +1307,7 @@ function reorderSheets(ss) {
  */
 function addSetupMenu() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('IIQ Setup')
+  ui.createMenu('iiQ Setup')
     .addItem('Setup Spreadsheet', 'setupSpreadsheet')
     .addItem('Verify Configuration', 'verifyConfiguration')
     .addToUi();

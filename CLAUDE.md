@@ -4,18 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Google Apps Script project for extracting IncidentIQ (IIQ) ticket and SLA data into Google Sheets. The data is used for Power BI consumption and analytics dashboards. This is not a Node.js project - it's Google Apps Script (.gs files) that runs within Google Sheets.
+Google Apps Script project for extracting Incident IQ (iiQ) ticket and SLA data into Google Sheets. The data is used for Power BI consumption and analytics dashboards. This is not a Node.js project - it's Google Apps Script (.gs files) that runs within Google Sheets.
 
 ## Architecture
 
 ```
-IIQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
+iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
            (scripts/*.gs)         (formula-based     (consumption)
                                    analytics)
 ```
 
 **Data Flow:**
-1. Scripts fetch data from IIQ API using Bearer token authentication
+1. Scripts fetch data from iiQ API using Bearer token authentication
 2. Raw data lands in `TicketData` sheet (35 columns including consolidated SLA metrics)
 3. Analytics sheets (`MonthlyVolume`, `BacklogAging`, `TeamWorkload`, etc.) calculate via Google Sheets formulas - no scripts needed
 4. Power BI connects to Google Sheets for dashboards
@@ -40,7 +40,7 @@ IIQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `TicketData.gs` | Bulk ticket loader - 35 columns (28 ticket + 7 SLA), fetches SLA per-batch, year-based pagination, 5.5min timeout with resume |
 | `Teams.gs` | Team directory loader, preserves Functional Area mappings |
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively) |
-| `Menu.gs` | Creates "IIQ Data" menu in Google Sheets |
+| `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
 | `Triggers.gs` | Time-driven trigger functions (no UI dialogs) |
 | `OptionalMetrics.gs` | Additional analytics sheets added via menu (10 optional KPI sheets) |
 
@@ -102,7 +102,7 @@ const rows = tickets.map(t => extractTicketRow(t, now, year, slaMap));
 
 ## Analytics Sheets (All Available)
 
-All analytics sheets can be added/recreated via **IIQ Data > Add Analytics Sheet** menu. Each is formula-based and auto-calculates from TicketData. Default sheets marked with ★.
+All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet** menu. Each is formula-based and auto-calculates from TicketData. Default sheets marked with ★.
 
 ### Volume & Trends
 | Sheet | Question Answered | Key Metrics |
@@ -181,22 +181,22 @@ All analytics sheets can be added/recreated via **IIQ Data > Add Analytics Sheet
 2. Go to Extensions > Apps Script
 3. Copy all `.gs` files from the `scripts/` directory
 4. Save and refresh the spreadsheet
-5. Run **IIQ Data > Setup > Setup Spreadsheet** to create all sheets
+5. Run **iiQ Data > Setup > Setup Spreadsheet** to create all sheets
 6. Fill in **Config** sheet with API credentials:
-   - `API_BASE_URL`: Your IIQ instance URL
+   - `API_BASE_URL`: Your iiQ instance URL
    - `BEARER_TOKEN`: JWT authentication token
    - `SITE_ID`: Optional site UUID
 7. Configure year tracking rows (e.g., `TICKET_2024_LAST_PAGE`, `TICKET_2025_LAST_FETCH`)
-8. Run **IIQ Data > Setup > Verify Configuration** to check settings
-9. Run **IIQ Data > Refresh Teams** to load team directory
-10. Run **IIQ Data > Ticket Data > Continue Loading** to start loading data
+8. Run **iiQ Data > Setup > Verify Configuration** to check settings
+9. Run **iiQ Data > Refresh Teams** to load team directory
+10. Run **iiQ Data > Ticket Data > Continue Loading** to start loading data
 
 ## Testing Changes
 
 1. Open the Google Sheet linked to this project
 2. Go to Extensions > Apps Script
 3. Copy updated `.gs` file content
-4. Save and run the function manually or via the IIQ Data menu
+4. Save and run the function manually or via the iiQ Data menu
 5. Check the `Logs` sheet for operation results
 
 ## Trigger Setup (Optimized for Freshness + Efficiency)
@@ -245,7 +245,7 @@ This is the "keep things moving" trigger. It serves two purposes:
 ## Config Sheet Keys
 
 Required:
-- `API_BASE_URL`: IIQ instance URL (e.g., `https://district.incidentiq.com`) — `/api` is added automatically
+- `API_BASE_URL`: iiQ instance URL (e.g., `https://district.incidentiq.com`) — `/api` is added automatically
 - `BEARER_TOKEN`: JWT authentication token
 - `SITE_ID`: Site UUID (if required)
 

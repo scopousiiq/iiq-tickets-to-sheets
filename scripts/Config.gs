@@ -1,5 +1,5 @@
 /**
- * IIQ API Configuration
+ * iiQ API Configuration
  * Reads settings from the Config sheet
  *
  * Year Discovery (Tickets):

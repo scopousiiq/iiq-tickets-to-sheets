@@ -1,7 +1,7 @@
 /**
  * Analytics Sheets - All Available Metric Sheets
  *
- * All analytics sheets can be added individually via the IIQ Data > Add Analytics Sheet menu.
+ * All analytics sheets can be added individually via the iiQ Data > Add Analytics Sheet menu.
  * This allows districts to customize which metrics they use and recreate sheets if deleted.
  *
  * DEFAULT SHEETS (created by Setup Spreadsheet):

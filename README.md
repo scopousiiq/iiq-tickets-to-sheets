@@ -1,6 +1,6 @@
-# IIQ Tickets to Sheets
+# iiQ Tickets to Sheets
 
-Extract IncidentIQ ticket and SLA data into Google Sheets for analytics and Power BI dashboards. Built for K-12 school district IT departments.
+Extract Incident IQ ticket and SLA data into Google Sheets for analytics and Power BI dashboards. Built for K-12 school district IT departments.
 
 ## Quick Start
 
@@ -18,29 +18,29 @@ This template includes all sheets and formulas pre-configured. You just need to 
 2. Go to **Extensions > Apps Script**
 3. Copy all `.gs` files from the `scripts/` folder in this repository
 4. Save and reload the spreadsheet
-5. Click **IIQ Data > Setup > Setup Spreadsheet** to create all sheets automatically
+5. Click **iiQ Data > Setup > Setup Spreadsheet** to create all sheets automatically
 
 ### 2. Configure API Access
 
-In the `Config` sheet, enter your IncidentIQ credentials:
+In the `Config` sheet, enter your Incident IQ credentials:
 
 | Setting | Value | Where to Find It |
 |---------|-------|------------------|
-| `API_BASE_URL` | `https://yourdistrict.incidentiq.com` | Your IIQ URL (the `/api` is added automatically) |
-| `BEARER_TOKEN` | Your API token | IIQ Admin > Integrations > API |
+| `API_BASE_URL` | `https://yourdistrict.incidentiq.com` | Your iiQ URL (the `/api` is added automatically) |
+| `BEARER_TOKEN` | Your API token | iiQ Admin > Integrations > API |
 | `SITE_ID` | Your site UUID (optional) | Only needed for multi-site districts |
 
 ### 3. Load Your Data
 
-1. Reload the spreadsheet to see the **IIQ Data** menu
-2. Click **IIQ Data > Setup > Verify Configuration** to check your settings
-3. Click **IIQ Data > Refresh Teams** — authorize when prompted
-4. Click **IIQ Data > Ticket Data > Continue Loading (Initial)** to start importing
+1. Reload the spreadsheet to see the **iiQ Data** menu
+2. Click **iiQ Data > Setup > Verify Configuration** to check your settings
+3. Click **iiQ Data > Refresh Teams** — authorize when prompted
+4. Click **iiQ Data > Ticket Data > Continue Loading (Initial)** to start importing
 
 > **Tip for large districts:** Instead of manually running "Continue Loading" repeatedly, set up a trigger:
 > 1. Go to **Extensions > Apps Script > Triggers** (clock icon)
 > 2. Add `triggerDataContinue` to run every 10 minutes
-> 3. Check **IIQ Data > Ticket Data > Show Status** periodically until all years show "Complete"
+> 3. Check **iiQ Data > Ticket Data > Show Status** periodically until all years show "Complete"
 > 4. You can leave this trigger enabled — it also helps complete open ticket refreshes
 >
 > SLA data is included automatically — no separate step needed.
@@ -91,7 +91,7 @@ Once your initial load is complete, set up triggers to keep data fresh:
 
 ### Additional Analytics (add via menu)
 
-Use **IIQ Data > Add Analytics Sheet** to add any of these 13 optional sheets:
+Use **iiQ Data > Add Analytics Sheet** to add any of these 13 optional sheets:
 
 | Category | Available Sheets |
 |----------|------------------|
@@ -109,10 +109,10 @@ Use **IIQ Data > Add Analytics Sheet** to add any of these 13 optional sheets:
 | Problem | Solution |
 |---------|----------|
 | "API configuration missing" | Fill in `API_BASE_URL` and `BEARER_TOKEN` in the Config sheet |
-| HTTP 401 error | Your Bearer token expired — get a new one from IIQ |
-| HTTP 429 / Rate limited | IIQ is throttling you — increase `THROTTLE_MS` in Config to 2000 or higher |
+| HTTP 401 error | Your Bearer token expired — get a new one from iiQ |
+| HTTP 429 / Rate limited | iiQ is throttling you — increase `THROTTLE_MS` in Config to 2000 or higher |
 | Script timeout | Normal for large districts — just run "Continue Loading" again |
-| Missing SLA data for some tickets | Expected — not all tickets have SLA policies assigned in IIQ |
+| Missing SLA data for some tickets | Expected — not all tickets have SLA policies assigned in iiQ |
 
 ## Documentation
 

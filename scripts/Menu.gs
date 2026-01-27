@@ -1,5 +1,5 @@
 /**
- * IIQ Data Menu
+ * iiQ Data Menu
  *
  * Provides menu access to data loader and analytics functions.
  *
@@ -22,11 +22,11 @@
  */
 
 /**
- * Create the IIQ Data menu when the spreadsheet opens
+ * Create the iiQ Data menu when the spreadsheet opens
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('IIQ Data')
+  ui.createMenu('iiQ Data')
     .addSubMenu(ui.createMenu('Setup')
       .addItem('Setup Spreadsheet', 'setupSpreadsheet')
       .addItem('Verify Configuration', 'verifyConfiguration'))
