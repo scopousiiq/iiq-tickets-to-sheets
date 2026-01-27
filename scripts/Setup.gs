@@ -18,7 +18,8 @@
  * - TeamWorkload: Tickets by team
  * - SLACompliance: Monthly SLA metrics
  * - PerformanceTrends: "Are we getting better?" trending
- * - AtRiskQueue: Tickets approaching SLA breach
+ * - AtRiskResponse: Tickets approaching Response SLA breach
+ * - AtRiskResolution: Tickets approaching Resolution SLA breach
  *
  * Additional analytics sheets can be added via:
  * IIQ Data > Add Analytics Sheet menu
@@ -49,7 +50,8 @@ function setupSpreadsheet() {
     '- TeamWorkload\n' +
     '- SLACompliance\n' +
     '- PerformanceTrends\n' +
-    '- AtRiskQueue\n\n' +
+    '- AtRiskResponse\n' +
+    '- AtRiskResolution\n\n' +
     'Additional analytics sheets can be added later via:\n' +
     'IIQ Data > Add Analytics Sheet\n\n' +
     'Existing sheets will not be overwritten.\n\n' +
@@ -77,7 +79,8 @@ function setupSpreadsheet() {
   if (setupTeamWorkloadSheet(ss)) created.push('TeamWorkload'); else skipped.push('TeamWorkload');
   if (setupSLAComplianceSheet(ss)) created.push('SLACompliance'); else skipped.push('SLACompliance');
   if (setupPerformanceTrendsSheet(ss)) created.push('PerformanceTrends'); else skipped.push('PerformanceTrends');
-  if (setupAtRiskQueueSheet(ss)) created.push('AtRiskQueue'); else skipped.push('AtRiskQueue');
+  if (setupAtRiskResponseSheet(ss)) created.push('AtRiskResponse'); else skipped.push('AtRiskResponse');
+  if (setupAtRiskResolutionSheet(ss)) created.push('AtRiskResolution'); else skipped.push('AtRiskResolution');
 
   // Reorder sheets for better UX
   reorderSheets(ss);
@@ -1002,54 +1005,35 @@ function setupFunctionalAreaSummarySheet(ss) {
 }
 
 /**
- * Setup AtRiskQueue sheet with formulas
- * Shows tickets approaching SLA breach threshold
+ * Setup AtRiskResponse sheet with formulas
+ * Shows tickets approaching Response SLA breach threshold
  * @returns {boolean} true if created, false if already exists
  */
-function setupAtRiskQueueSheet(ss) {
-  if (ss.getSheetByName('AtRiskQueue')) return false;
+function setupAtRiskResponseSheet(ss) {
+  if (ss.getSheetByName('AtRiskResponse')) return false;
 
-  const sheet = ss.insertSheet('AtRiskQueue');
+  const sheet = ss.insertSheet('AtRiskResponse');
 
   // Headers
-  const headers = ['Ticket Number', 'Subject', 'Team', 'SLA Type', 'Threshold (hrs)', 'Elapsed (hrs)', '% of SLA', 'Time Remaining (hrs)'];
+  const headers = ['Ticket Number', 'Subject', 'Team', 'Threshold (hrs)', 'Elapsed (hrs)', '% of SLA', 'Time Remaining (hrs)'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  // Note: SLA data is now in TicketData columns:
-  // AC (29): ResponseThreshold, AD (30): ResponseActual, AE (31): ResponseBreach
-  // AF (32): ResolutionThreshold, AG (33): ResolutionActual, AH (34): ResolutionBreach
-  // AI (35): IsRunning
+  // Response SLA at-risk formula
+  // Shows open tickets where Response SLA usage is between risk% and 100%
+  const riskLookup = 'IFERROR(VLOOKUP("SLA_RISK_PERCENT",Config!A:B,2,FALSE)/100,0.75)';
+  const formula =
+    '=IFERROR(SORT(FILTER(' +
+    '{TicketData!B:B, LEFT(TicketData!C:C,60), TicketData!K:K, ' +
+    'TicketData!AC:AC/60, TicketData!AD:AD/60, ' +
+    'TicketData!AD:AD/TicketData!AC:AC, (TicketData!AC:AC-TicketData!AD:AD)/60}, ' +
+    '(TicketData!H:H="No")*' +
+    '(TicketData!AC:AC>0)*' +
+    '(TicketData!AE:AE<>TRUE)*' +
+    '(TicketData!AD:AD/TicketData!AC:AC>=' + riskLookup + ')*' +
+    '(TicketData!AD:AD/TicketData!AC:AC<1)' +
+    '), 6, FALSE), "No at-risk Response tickets")';
 
-  // Response SLA at-risk formula (adapted for consolidated TicketData)
-  // Filters open tickets where Response SLA is between risk% and 100%
-  const responseFormula =
-    '=LET(riskPct, IFERROR(VLOOKUP("SLA_RISK_PERCENT",Config!A:B,2,FALSE)/100, 0.75), ' +
-    'data, FILTER({TicketData!B:B, TicketData!C:C, TicketData!K:K, TicketData!AC:AC, TicketData!AD:AD}, ' +
-    '(TicketData!H:H="No")*(TicketData!AI:AI=TRUE)*(TicketData!AC:AC>0)*(TicketData!AD:AD>0)*' +
-    '(TicketData!AD:AD/TicketData!AC:AC>=riskPct)*(TicketData!AD:AD/TicketData!AC:AC<1)*(TicketData!AE:AE<>TRUE)), ' +
-    'IFERROR(SORT({INDEX(data,,1), LEFT(INDEX(data,,2),60), INDEX(data,,3), ' +
-    'IF(ROWS(data)>0,"Response",""), INDEX(data,,4)/60, INDEX(data,,5)/60, ' +
-    'INDEX(data,,5)/INDEX(data,,4), (INDEX(data,,4)-INDEX(data,,5))/60}, 7, FALSE), ' +
-    '"No at-risk Response tickets"))';
-
-  sheet.getRange('A2').setValue(responseFormula);
-
-  // Add section label for Resolution tickets
-  sheet.getRange('A20').setValue('--- Resolution SLA At-Risk ---');
-  sheet.getRange('A20').setFontWeight('bold').setFontColor('#666666');
-
-  // Resolution SLA at-risk formula
-  const resolutionFormula =
-    '=LET(riskPct, IFERROR(VLOOKUP("SLA_RISK_PERCENT",Config!A:B,2,FALSE)/100, 0.75), ' +
-    'data, FILTER({TicketData!B:B, TicketData!C:C, TicketData!K:K, TicketData!AF:AF, TicketData!AG:AG}, ' +
-    '(TicketData!H:H="No")*(TicketData!AI:AI=TRUE)*(TicketData!AF:AF>0)*(TicketData!AG:AG>0)*' +
-    '(TicketData!AG:AG/TicketData!AF:AF>=riskPct)*(TicketData!AG:AG/TicketData!AF:AF<1)*(TicketData!AH:AH<>TRUE)), ' +
-    'IFERROR(SORT({INDEX(data,,1), LEFT(INDEX(data,,2),60), INDEX(data,,3), ' +
-    'IF(ROWS(data)>0,"Resolution",""), INDEX(data,,4)/60, INDEX(data,,5)/60, ' +
-    'INDEX(data,,5)/INDEX(data,,4), (INDEX(data,,4)-INDEX(data,,5))/60}, 7, FALSE), ' +
-    '"No at-risk Resolution tickets"))';
-
-  sheet.getRange('A21').setValue(resolutionFormula);
+  sheet.getRange('A2').setValue(formula);
 
   // Format header
   sheet.getRange(1, 1, 1, headers.length)
@@ -1058,21 +1042,98 @@ function setupAtRiskQueueSheet(ss) {
     .setFontColor('white');
 
   // Format columns
-  sheet.getRange('E:F').setNumberFormat('0.0');   // Hours
-  sheet.getRange('G:G').setNumberFormat('0.0%');  // % of SLA
-  sheet.getRange('H:H').setNumberFormat('0.0');   // Time Remaining
+  sheet.getRange('D:E').setNumberFormat('0.0');   // Hours
+  sheet.getRange('F:F').setNumberFormat('0.0%');  // % of SLA
+  sheet.getRange('G:G').setNumberFormat('0.0');   // Time Remaining
 
   // Column widths
   sheet.setColumnWidth(1, 120);  // Ticket Number
-  sheet.setColumnWidth(2, 250);  // Subject
+  sheet.setColumnWidth(2, 300);  // Subject
   sheet.setColumnWidth(3, 150);  // Team
 
   sheet.setFrozenRows(1);
 
   // Add note
-  sheet.getRange('A2').setNote('Shows tickets where SLA usage is between SLA_RISK_PERCENT (default 75%) and 100%. Sorted by % of SLA descending (most urgent first).');
+  sheet.getRange('A1').setNote(
+    'Response SLA At-Risk Queue\n\n' +
+    'Shows open tickets where Response SLA usage is between\n' +
+    'SLA_RISK_PERCENT (default 75%) and 100%.\n\n' +
+    'Sorted by % of SLA descending (most urgent first).\n\n' +
+    'Response SLA = time to first response/acknowledgment.'
+  );
 
   return true;
+}
+
+/**
+ * Setup AtRiskResolution sheet with formulas
+ * Shows tickets approaching Resolution SLA breach threshold
+ * @returns {boolean} true if created, false if already exists
+ */
+function setupAtRiskResolutionSheet(ss) {
+  if (ss.getSheetByName('AtRiskResolution')) return false;
+
+  const sheet = ss.insertSheet('AtRiskResolution');
+
+  // Headers
+  const headers = ['Ticket Number', 'Subject', 'Team', 'Threshold (hrs)', 'Elapsed (hrs)', '% of SLA', 'Time Remaining (hrs)'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // Resolution SLA at-risk formula
+  // Shows open tickets where Resolution SLA usage is between risk% and 100%
+  const riskLookup = 'IFERROR(VLOOKUP("SLA_RISK_PERCENT",Config!A:B,2,FALSE)/100,0.75)';
+  const formula =
+    '=IFERROR(SORT(FILTER(' +
+    '{TicketData!B:B, LEFT(TicketData!C:C,60), TicketData!K:K, ' +
+    'TicketData!AF:AF/60, TicketData!AG:AG/60, ' +
+    'TicketData!AG:AG/TicketData!AF:AF, (TicketData!AF:AF-TicketData!AG:AG)/60}, ' +
+    '(TicketData!H:H="No")*' +
+    '(TicketData!AF:AF>0)*' +
+    '(TicketData!AH:AH<>TRUE)*' +
+    '(TicketData!AG:AG/TicketData!AF:AF>=' + riskLookup + ')*' +
+    '(TicketData!AG:AG/TicketData!AF:AF<1)' +
+    '), 6, FALSE), "No at-risk Resolution tickets")';
+
+  sheet.getRange('A2').setValue(formula);
+
+  // Format header
+  sheet.getRange(1, 1, 1, headers.length)
+    .setFontWeight('bold')
+    .setBackground('#ff5722')
+    .setFontColor('white');
+
+  // Format columns
+  sheet.getRange('D:E').setNumberFormat('0.0');   // Hours
+  sheet.getRange('F:F').setNumberFormat('0.0%');  // % of SLA
+  sheet.getRange('G:G').setNumberFormat('0.0');   // Time Remaining
+
+  // Column widths
+  sheet.setColumnWidth(1, 120);  // Ticket Number
+  sheet.setColumnWidth(2, 300);  // Subject
+  sheet.setColumnWidth(3, 150);  // Team
+
+  sheet.setFrozenRows(1);
+
+  // Add note
+  sheet.getRange('A1').setNote(
+    'Resolution SLA At-Risk Queue\n\n' +
+    'Shows open tickets where Resolution SLA usage is between\n' +
+    'SLA_RISK_PERCENT (default 75%) and 100%.\n\n' +
+    'Sorted by % of SLA descending (most urgent first).\n\n' +
+    'Resolution SLA = time to fully resolve/close the ticket.'
+  );
+
+  return true;
+}
+
+/**
+ * @deprecated Use setupAtRiskResponseSheet and setupAtRiskResolutionSheet instead
+ * Kept for backward compatibility - creates both new sheets
+ */
+function setupAtRiskQueueSheet(ss) {
+  const createdResponse = setupAtRiskResponseSheet(ss);
+  const createdResolution = setupAtRiskResolutionSheet(ss);
+  return createdResponse || createdResolution;
 }
 
 /**
@@ -1218,7 +1279,8 @@ function reorderSheets(ss) {
     'TeamWorkload',
     'SLACompliance',
     'PerformanceTrends',
-    'AtRiskQueue',
+    'AtRiskResponse',
+    'AtRiskResolution',
     'DailySnapshot',
     'Logs'
   ];

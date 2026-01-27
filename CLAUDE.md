@@ -97,7 +97,8 @@ const rows = tickets.map(t => extractTicketRow(t, now, year, slaMap));
 | TeamWorkload | Formula | Open tickets and aging by team |
 | SLACompliance | Formula | Monthly SLA breach rates and avg response/resolution times |
 | PerformanceTrends | Formula | "Are we getting better?" trending metrics |
-| AtRiskQueue | Formula | Tickets approaching SLA breach |
+| AtRiskResponse | Formula | Tickets approaching Response SLA breach |
+| AtRiskResolution | Formula | Tickets approaching Resolution SLA breach |
 
 ## Analytics Sheets (All Available)
 
@@ -122,7 +123,8 @@ All analytics sheets can be added/recreated via **IIQ Data > Add Analytics Sheet
 | Sheet | Question Answered | Key Metrics |
 |-------|-------------------|-------------|
 | SLACompliance ★ | "Are we meeting our SLAs?" | Monthly breach rates, avg response/resolution times |
-| AtRiskQueue ★ | "Which tickets are about to breach?" | Tickets at 75%+ of SLA threshold |
+| AtRiskResponse ★ | "Which tickets are about to breach Response SLA?" | Tickets at 75%+ of Response threshold |
+| AtRiskResolution ★ | "Which tickets are about to breach Resolution SLA?" | Tickets at 75%+ of Resolution threshold |
 | FirstContactResolution | "How many tickets resolved same-day?" | Same-day %, 4-hour resolution %, monthly trend |
 | ResponseDistribution | "How consistent is our response time?" | Percentiles, distribution buckets, consistency metrics |
 | ResponseTrends | "Are response times improving over time?" | Monthly avg/median/90th%, % meeting targets, consistency |

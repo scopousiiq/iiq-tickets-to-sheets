@@ -101,14 +101,26 @@ function addSLAComplianceSheet() {
 }
 
 /**
- * Add At-Risk Queue sheet (default sheet - can recreate if deleted)
+ * Add At-Risk Response sheet (default sheet - can recreate if deleted)
  */
-function addAtRiskQueueSheet() {
+function addAtRiskResponseSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupAtRiskQueueSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'AtRiskQueue sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
+  if (setupAtRiskResponseSheet(ss)) {
+    SpreadsheetApp.getUi().alert('Created', 'AtRiskResponse sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
   } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'AtRiskQueue sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert('Already Exists', 'AtRiskResponse sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
+
+/**
+ * Add At-Risk Resolution sheet (default sheet - can recreate if deleted)
+ */
+function addAtRiskResolutionSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (setupAtRiskResolutionSheet(ss)) {
+    SpreadsheetApp.getUi().alert('Created', 'AtRiskResolution sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
+  } else {
+    SpreadsheetApp.getUi().alert('Already Exists', 'AtRiskResolution sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }
 

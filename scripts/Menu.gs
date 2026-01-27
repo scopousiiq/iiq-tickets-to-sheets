@@ -14,8 +14,8 @@
  * - Weekly: "Full Reload" catches deletions and corrections
  *
  * Analytics Sheets:
- * - 6 default sheets created by Setup Spreadsheet
- * - 13 additional sheets available via "Add Analytics Sheet" menu
+ * - 7 default sheets created by Setup Spreadsheet
+ * - 12 additional sheets available via "Add Analytics Sheet" menu
  * - All sheets can be deleted and recreated as needed
  * - Organized by category: Volume, Backlog, SLA, Team, Location, Issue
  * - Default sheets marked with ★ in menu
@@ -54,7 +54,8 @@ function onOpen() {
         .addItem('Reopen Rate', 'addReopenRateSheet'))
       .addSubMenu(ui.createMenu('SLA & Response')
         .addItem('SLA Compliance ★', 'addSLAComplianceSheet')
-        .addItem('At-Risk Queue ★', 'addAtRiskQueueSheet')
+        .addItem('At-Risk Response ★', 'addAtRiskResponseSheet')
+        .addItem('At-Risk Resolution ★', 'addAtRiskResolutionSheet')
         .addItem('First Contact Resolution', 'addFirstContactResolutionSheet')
         .addItem('Response Distribution', 'addResponseDistributionSheet')
         .addItem('Response Trends', 'addResponseTrendsSheet'))
