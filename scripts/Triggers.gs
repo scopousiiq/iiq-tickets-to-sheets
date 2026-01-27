@@ -83,15 +83,23 @@
  * - Uses in-place updates for efficiency
  * - Appends new tickets not already in sheet
  *
+ * NOTE: Skips if initial data load is not complete.
  * NOTE: For large districts, this may not complete in one run.
- * Use triggerOpenRefreshContinue (every 10 min) to ensure completion.
+ * Use triggerDataContinue (every 10 min) to ensure completion.
  */
 function triggerOpenTicketRefresh() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('TicketData');
+  const config = getConfig();
 
   if (!sheet) {
     logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
+    return;
+  }
+
+  // Only run if initial load is complete
+  if (!isTicketLoadingComplete(config)) {
+    logOperation('Trigger', 'SKIP', 'Open ticket refresh skipped - initial load not complete. Run triggerDataContinue to complete initial load.');
     return;
   }
 
