@@ -45,6 +45,32 @@ function getConfig() {
     return false;
   }
 
+  // Helper to get date as yyyy-MM-dd string (handles Date objects from Sheets)
+  function getDateString(val) {
+    if (!val) return '';
+    if (val instanceof Date) {
+      // Format Date object as yyyy-MM-dd
+      const year = val.getFullYear();
+      const month = String(val.getMonth() + 1).padStart(2, '0');
+      const day = String(val.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    // If it's already a string in yyyy-MM-dd format, return as-is
+    const str = String(val).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      return str;
+    }
+    // Try to parse other date formats
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      const year = parsed.getFullYear();
+      const month = String(parsed.getMonth() + 1).padStart(2, '0');
+      const day = String(parsed.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    return '';
+  }
+
   // Auto-discover years from config keys for tickets
   const ticketYears = discoverYearsFromConfig(rawConfig, 'TICKET');
 
@@ -85,7 +111,7 @@ function getConfig() {
   }
 
   // Open refresh progress tracking
-  config.openRefreshDate = getStringValue(rawConfig['OPEN_REFRESH_DATE']);
+  config.openRefreshDate = getDateString(rawConfig['OPEN_REFRESH_DATE']);
   config.openRefreshOpenPage = getIntValue(rawConfig['OPEN_REFRESH_OPEN_PAGE'], -1);
   config.openRefreshOpenComplete = getBoolValue(rawConfig['OPEN_REFRESH_OPEN_COMPLETE']);
   config.openRefreshClosedPage = getIntValue(rawConfig['OPEN_REFRESH_CLOSED_PAGE'], -1);
