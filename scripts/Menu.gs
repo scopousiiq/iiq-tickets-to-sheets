@@ -4,7 +4,7 @@
  * Provides menu access to data loader and analytics functions.
  *
  * Data Loading:
- * - Ticket Data includes consolidated SLA metrics (35 columns)
+ * - Ticket Data includes consolidated SLA metrics (36 columns)
  * - SLA data is fetched per-batch during ticket loading
  *
  * Refresh Strategy:

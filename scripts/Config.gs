@@ -9,7 +9,7 @@
  * - To remove a year: delete those rows (and optionally clear data)
  *
  * SLA Data:
- * - SLA metrics are consolidated into TicketData (columns 29-35)
+ * - SLA metrics are consolidated into TicketData (columns 30-36)
  * - SLA is fetched per-batch during ticket loading, no separate SLA loading phase
  */
 

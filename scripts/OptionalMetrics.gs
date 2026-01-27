@@ -432,11 +432,11 @@ function setupIssueCategoryVolumeSheet(ss) {
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, cats,' +
-    'col_b, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!X:X, c, TicketData!H:H, "No"))),' +
-    'col_c, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!X:X, c, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
-    'col_d, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!X:X, c, TicketData!G:G, ">="&mtdStart, TicketData!G:G, "<"&mtdEnd))),' +
-    'col_e, BYROW(cats, LAMBDA(c, IFERROR(AVERAGEIFS(TicketData!Q:Q, TicketData!X:X, c, TicketData!H:H, "Yes"), "N/A"))),' +
-    'col_f, BYROW(cats, LAMBDA(c, LET(total, COUNTIFS(TicketData!X:X, c, TicketData!H:H, "Yes"), breached, COUNTIFS(TicketData!X:X, c, TicketData!H:H, "Yes", TicketData!AE:AE, TRUE)+COUNTIFS(TicketData!X:X, c, TicketData!H:H, "Yes", TicketData!AH:AH, TRUE), IF(total>0, breached/total, "N/A")))),' +
+    'col_b, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "No"))),' +
+    'col_c, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
+    'col_d, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
+    'col_e, BYROW(cats, LAMBDA(c, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!Y:Y, c, TicketData!I:I, "Yes"), "N/A"))),' +
+    'col_f, BYROW(cats, LAMBDA(c, LET(total, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Yes"), breached, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Yes", TicketData!AF:AF, TRUE)+COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Yes", TicketData!AI:AI, TRUE), IF(total>0, breached/total, "N/A")))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f),' +
     'SORT(data, $H$2, $I$2))';
 
@@ -517,12 +517,12 @@ function setupPriorityAnalysisSheet(ss) {
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, pris,' +
-    'col_b, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!R:R, p, TicketData!H:H, "No"))),' +
-    'col_c, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!R:R, p, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
-    'col_d, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!R:R, p, TicketData!G:G, ">="&mtdStart, TicketData!G:G, "<"&mtdEnd))),' +
-    'col_e, BYROW(pris, LAMBDA(p, IFERROR(AVERAGEIFS(TicketData!Q:Q, TicketData!R:R, p, TicketData!H:H, "Yes"), "N/A"))),' +
-    'col_f, BYROW(pris, LAMBDA(p, IFERROR(AVERAGEIFS(TicketData!AD:AD, TicketData!R:R, p, TicketData!H:H, "Yes", TicketData!AD:AD, ">0")/60, "N/A"))),' +
-    'col_g, BYROW(pris, LAMBDA(p, LET(total, COUNTIFS(TicketData!R:R, p, TicketData!H:H, "Yes"), breached, COUNTIFS(TicketData!R:R, p, TicketData!H:H, "Yes", TicketData!AE:AE, TRUE)+COUNTIFS(TicketData!R:R, p, TicketData!H:H, "Yes", TicketData!AH:AH, TRUE), IF(total>0, breached/total, "N/A")))),' +
+    'col_b, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "No"))),' +
+    'col_c, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
+    'col_d, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
+    'col_e, BYROW(pris, LAMBDA(p, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!S:S, p, TicketData!I:I, "Yes"), "N/A"))),' +
+    'col_f, BYROW(pris, LAMBDA(p, IFERROR(AVERAGEIFS(TicketData!AE:AE, TicketData!S:S, p, TicketData!I:I, "Yes", TicketData!AE:AE, ">0")/60, "N/A"))),' +
+    'col_g, BYROW(pris, LAMBDA(p, LET(total, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Yes"), breached, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Yes", TicketData!AF:AF, TRUE)+COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Yes", TicketData!AI:AI, TRUE), IF(total>0, breached/total, "N/A")))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g),' +
     'SORT(data, 2, FALSE))';
 
@@ -579,16 +579,16 @@ function setupFirstContactResolutionSheet(ss) {
     ['', '', ''],
     ['--- Current Month ---', '', ''],
     ['Total Closed (MTD)',
-     '=LET(mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"), mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"), COUNTIFS(TicketData!G:G, ">="&mtdStart, TicketData!G:G, "<"&mtdEnd))',
+     '=LET(mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"), mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"), COUNTIFS(TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))',
      'Tickets closed this month'],
     ['Resolved Same Day (<24 hrs)',
-     '=LET(mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"), mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"), COUNTIFS(TicketData!G:G, ">="&mtdStart, TicketData!G:G, "<"&mtdEnd, TicketData!Q:Q, "<=1"))',
+     '=LET(mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"), mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"), COUNTIFS(TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd, TicketData!R:R, "<=1"))',
      'Closed within 1 day of creation'],
     ['Same Day Rate',
      '=IF(B4>0, B5/B4, "N/A")',
      'FCR target: 40-60%'],
     ['Resolved Within 4 Hours',
-     '=LET(mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"), mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"), COUNTIFS(TicketData!G:G, ">="&mtdStart, TicketData!G:G, "<"&mtdEnd, TicketData!AG:AG, "<=240", TicketData!AG:AG, ">0"))',
+     '=LET(mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"), mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"), COUNTIFS(TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd, TicketData!AH:AH, "<=240", TicketData!AH:AH, ">0"))',
      'Closed within 4 hours (resolution SLA)'],
     ['4-Hour Resolution Rate',
      '=IF(B4>0, B7/B4, "N/A")',
@@ -616,13 +616,13 @@ function setupFirstContactResolutionSheet(ss) {
       period.monthName,
       y,
       // Total closed - simplified formula using hardcoded year/month
-      `=COUNTIFS(TicketData!G:G, ">="&TEXT(DATE(${y},${monthNum},1), "YYYY-MM-DD"), TicketData!G:G, "<"&TEXT(DATE(${y},${monthNum}+1,1), "YYYY-MM-DD"))`,
+      `=COUNTIFS(TicketData!H:H, ">="&TEXT(DATE(${y},${monthNum},1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(${y},${monthNum}+1,1), "YYYY-MM-DD"))`,
       // Same day
-      `=COUNTIFS(TicketData!G:G, ">="&TEXT(DATE(${y},${monthNum},1), "YYYY-MM-DD"), TicketData!G:G, "<"&TEXT(DATE(${y},${monthNum}+1,1), "YYYY-MM-DD"), TicketData!Q:Q, "<=1")`,
+      `=COUNTIFS(TicketData!H:H, ">="&TEXT(DATE(${y},${monthNum},1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(${y},${monthNum}+1,1), "YYYY-MM-DD"), TicketData!R:R, "<=1")`,
       // Same day %
       `=IF(C${rowNum}>0, D${rowNum}/C${rowNum}, "N/A")`,
       // 4-hour
-      `=COUNTIFS(TicketData!G:G, ">="&TEXT(DATE(${y},${monthNum},1), "YYYY-MM-DD"), TicketData!G:G, "<"&TEXT(DATE(${y},${monthNum}+1,1), "YYYY-MM-DD"), TicketData!AG:AG, "<=240", TicketData!AG:AG, ">0")`,
+      `=COUNTIFS(TicketData!H:H, ">="&TEXT(DATE(${y},${monthNum},1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(${y},${monthNum}+1,1), "YYYY-MM-DD"), TicketData!AH:AH, "<=240", TicketData!AH:AH, ">0")`,
       // 4-hour %
       `=IF(C${rowNum}>0, F${rowNum}/C${rowNum}, "N/A")`
     ]);
@@ -699,13 +699,13 @@ function setupTechnicianPerformanceSheet(ss) {
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, techs,' +
-    'col_b, BYROW(techs, LAMBDA(t, IFERROR(INDEX(TicketData!K:K, MATCH(t, TicketData!P:P, 0)), ""))),' +
-    'col_c, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!P:P, t, TicketData!H:H, "No"))),' +
-    'col_d, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!P:P, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
-    'col_e, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!P:P, t, TicketData!G:G, ">="&mtdStart, TicketData!G:G, "<"&mtdEnd))),' +
-    'col_f, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!P:P, t, TicketData!H:H, "No", TicketData!Q:Q, ">=30"))),' +
-    'col_g, BYROW(techs, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!Q:Q, TicketData!P:P, t, TicketData!H:H, "Yes"), "N/A"))),' +
-    'col_h, BYROW(techs, LAMBDA(t, LET(total, COUNTIFS(TicketData!P:P, t, TicketData!H:H, "Yes"), breached, COUNTIFS(TicketData!P:P, t, TicketData!H:H, "Yes", TicketData!AE:AE, TRUE)+COUNTIFS(TicketData!P:P, t, TicketData!H:H, "Yes", TicketData!AH:AH, TRUE), IF(total>0, breached/total, "N/A")))),' +
+    'col_b, BYROW(techs, LAMBDA(t, IFERROR(INDEX(TicketData!L:L, MATCH(t, TicketData!Q:Q, 0)), ""))),' +
+    'col_c, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "No"))),' +
+    'col_d, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
+    'col_e, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
+    'col_f, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "No", TicketData!R:R, ">=30"))),' +
+    'col_g, BYROW(techs, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!Q:Q, t, TicketData!I:I, "Yes"), "N/A"))),' +
+    'col_h, BYROW(techs, LAMBDA(t, LET(total, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Yes"), breached, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Yes", TicketData!AF:AF, TRUE)+COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Yes", TicketData!AI:AI, TRUE), IF(total>0, breached/total, "N/A")))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h),' +
     'SORT(data, $J$2, $K$2))';
 
@@ -800,9 +800,9 @@ function setupSeasonalComparisonSheet(ss) {
       // YoY %
       `=IF(C${rowNum}>0, (B${rowNum}-C${rowNum})/C${rowNum}, "N/A")`,
       // Closed this year
-      `=LET(m, ${m + 1}, COUNTIFS(TicketData!G:G, ">="&TEXT(DATE(${currentYear},m,1), "YYYY-MM-DD"), TicketData!G:G, "<"&TEXT(DATE(${currentYear},m+1,1), "YYYY-MM-DD")))`,
+      `=LET(m, ${m + 1}, COUNTIFS(TicketData!H:H, ">="&TEXT(DATE(${currentYear},m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(${currentYear},m+1,1), "YYYY-MM-DD")))`,
       // Closed last year
-      `=LET(m, ${m + 1}, COUNTIFS(TicketData!G:G, ">="&TEXT(DATE(${lastYear},m,1), "YYYY-MM-DD"), TicketData!G:G, "<"&TEXT(DATE(${lastYear},m+1,1), "YYYY-MM-DD")))`,
+      `=LET(m, ${m + 1}, COUNTIFS(TicketData!H:H, ">="&TEXT(DATE(${lastYear},m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(${lastYear},m+1,1), "YYYY-MM-DD")))`,
       // Closed YoY %
       `=IF(G${rowNum}>0, (F${rowNum}-G${rowNum})/G${rowNum}, "N/A")`
     ]);
@@ -880,13 +880,13 @@ function setupLocationTypeComparisonSheet(ss) {
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, types,' +
-    'col_b, BYROW(types, LAMBDA(t, COUNTA(UNIQUE(FILTER(TicketData!M:M, TicketData!N:N=t))))),' +
-    'col_c, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!N:N, t, TicketData!H:H, "No"))),' +
-    'col_d, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!N:N, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
-    'col_e, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!N:N, t, TicketData!G:G, ">="&mtdStart, TicketData!G:G, "<"&mtdEnd))),' +
-    'col_f, BYROW(types, LAMBDA(t, LET(locs, COUNTA(UNIQUE(FILTER(TicketData!M:M, TicketData!N:N=t))), open, COUNTIFS(TicketData!N:N, t, TicketData!H:H, "No"), IF(locs>0, open/locs, 0)))),' +
-    'col_g, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!N:N, t, TicketData!H:H, "No", TicketData!Q:Q, ">=30"))),' +
-    'col_h, BYROW(types, LAMBDA(t, LET(open, COUNTIFS(TicketData!N:N, t, TicketData!H:H, "No"), aged, COUNTIFS(TicketData!N:N, t, TicketData!H:H, "No", TicketData!Q:Q, ">=30"), IF(open>0, aged/open, 0)))),' +
+    'col_b, BYROW(types, LAMBDA(t, COUNTA(UNIQUE(FILTER(TicketData!N:N, TicketData!O:O=t))))),' +
+    'col_c, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "No"))),' +
+    'col_d, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
+    'col_e, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
+    'col_f, BYROW(types, LAMBDA(t, LET(locs, COUNTA(UNIQUE(FILTER(TicketData!N:N, TicketData!O:O=t))), open, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "No"), IF(locs>0, open/locs, 0)))),' +
+    'col_g, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "No", TicketData!R:R, ">=30"))),' +
+    'col_h, BYROW(types, LAMBDA(t, LET(open, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "No"), aged, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "No", TicketData!R:R, ">=30"), IF(open>0, aged/open, 0)))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h),' +
     'SORT(data, 3, FALSE))';
 
@@ -943,10 +943,10 @@ function setupReopenRateSheet(ss) {
     ['', '', ''],
     ['--- Reopen Detection ---', '', ''],
     ['Currently Open with ClosedDate',
-     '=COUNTIFS(TicketData!H:H, "No", TicketData!G:G, "<>")',
+     '=COUNTIFS(TicketData!I:I, "No", TicketData!H:H, "<>")',
      'Tickets that were closed but are now open (reopened)'],
     ['Total Open Tickets',
-     '=COUNTIFS(TicketData!H:H, "No")',
+     '=COUNTIFS(TicketData!I:I, "No")',
      'All currently open tickets'],
     ['Implied Reopen Rate',
      '=IF(B5>0, B4/B5, 0)',
@@ -954,10 +954,10 @@ function setupReopenRateSheet(ss) {
     ['', '', ''],
     ['--- Quality Indicators ---', '', ''],
     ['Tickets Closed Multiple Times',
-     '=COUNTIFS(TicketData!H:H, "No", TicketData!G:G, "<>", TicketData!Q:Q, ">7")',
+     '=COUNTIFS(TicketData!I:I, "No", TicketData!H:H, "<>", TicketData!R:R, ">7")',
      'Reopened tickets open for 7+ days (significant rework)'],
     ['Avg Age of Reopened',
-     '=IFERROR(AVERAGEIFS(TicketData!Q:Q, TicketData!H:H, "No", TicketData!G:G, "<>"), "N/A")',
+     '=IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!I:I, "No", TicketData!H:H, "<>"), "N/A")',
      'How long reopened tickets have been open'],
     ['', '', ''],
     ['--- Reopened Tickets List ---', '', 'Sorted by age, oldest first'],
@@ -1039,11 +1039,11 @@ function setupFrequentRequestersSheet(ss) {
     '=LET(' +
     'reqs, UNIQUE(FILTER(TicketData!AB2:AB, TicketData!AB2:AB<>"", TicketData!AB2:AB<>"RequesterName")),' +
     'col_a, reqs,' +
-    'col_b, BYROW(reqs, LAMBDA(r, COUNTIF(TicketData!AB:AB, r))),' +
-    'col_c, BYROW(reqs, LAMBDA(r, COUNTIFS(TicketData!AB:AB, r, TicketData!H:H, "No"))),' +
-    'col_d, BYROW(reqs, LAMBDA(r, COUNTIFS(TicketData!AB:AB, r, TicketData!H:H, "Yes"))),' +
-    'col_e, BYROW(reqs, LAMBDA(r, IFERROR(INDEX(SORT(UNIQUE(FILTER(TicketData!X:X, TicketData!AB:AB=r, TicketData!X:X<>"")), 1, FALSE), 1), ""))),' +
-    'col_f, BYROW(reqs, LAMBDA(r, IFERROR(AVERAGEIFS(TicketData!Q:Q, TicketData!AB:AB, r, TicketData!H:H, "Yes"), "N/A"))),' +
+    'col_b, BYROW(reqs, LAMBDA(r, COUNTIF(TicketData!AC:AC, r))),' +
+    'col_c, BYROW(reqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "No"))),' +
+    'col_d, BYROW(reqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Yes"))),' +
+    'col_e, BYROW(reqs, LAMBDA(r, IFERROR(INDEX(SORT(UNIQUE(FILTER(TicketData!Y:Y, TicketData!AC:AC=r, TicketData!Y:Y<>"")), 1, FALSE), 1), ""))),' +
+    'col_f, BYROW(reqs, LAMBDA(r, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AC:AC, r, TicketData!I:I, "Yes"), "N/A"))),' +
     'sorted, SORT(HSTACK(col_a, col_b, col_c, col_d, col_e, col_f), $H$2, $I$2),' +
     'IFERROR(ARRAY_CONSTRAIN(sorted, 50, 6), sorted))';
 
@@ -1122,58 +1122,58 @@ function setupResponseDistributionSheet(ss) {
     ['', '', '', ''],
     ['--- Response Time Distribution ---', '', '', ''],
     ['Average',
-     '=IFERROR(AVERAGEIF(TicketData!AD:AD, ">0")/60, "N/A")',
-     '=IFERROR(AVERAGEIF(TicketData!AG:AG, ">0")/60, "N/A")',
+     '=IFERROR(AVERAGEIF(TicketData!AE:AE, ">0")/60, "N/A")',
+     '=IFERROR(AVERAGEIF(TicketData!AH:AH, ">0")/60, "N/A")',
      'Mean time across all closed tickets with SLA data'],
     ['Median (50th %)',
-     '=IFERROR(MEDIAN(FILTER(TicketData!AD:AD, TicketData!AD:AD>0))/60, "N/A")',
-     '=IFERROR(MEDIAN(FILTER(TicketData!AG:AG, TicketData!AG:AG>0))/60, "N/A")',
+     '=IFERROR(MEDIAN(FILTER(TicketData!AE:AE, TicketData!AE:AE>0))/60, "N/A")',
+     '=IFERROR(MEDIAN(FILTER(TicketData!AH:AH, TicketData!AH:AH>0))/60, "N/A")',
      'Middle value - less affected by outliers'],
     ['25th Percentile',
-     '=IFERROR(PERCENTILE(FILTER(TicketData!AD:AD, TicketData!AD:AD>0), 0.25)/60, "N/A")',
-     '=IFERROR(PERCENTILE(FILTER(TicketData!AG:AG, TicketData!AG:AG>0), 0.25)/60, "N/A")',
+     '=IFERROR(PERCENTILE(FILTER(TicketData!AE:AE, TicketData!AE:AE>0), 0.25)/60, "N/A")',
+     '=IFERROR(PERCENTILE(FILTER(TicketData!AH:AH, TicketData!AH:AH>0), 0.25)/60, "N/A")',
      '25% of tickets faster than this'],
     ['75th Percentile',
-     '=IFERROR(PERCENTILE(FILTER(TicketData!AD:AD, TicketData!AD:AD>0), 0.75)/60, "N/A")',
-     '=IFERROR(PERCENTILE(FILTER(TicketData!AG:AG, TicketData!AG:AG>0), 0.75)/60, "N/A")',
+     '=IFERROR(PERCENTILE(FILTER(TicketData!AE:AE, TicketData!AE:AE>0), 0.75)/60, "N/A")',
+     '=IFERROR(PERCENTILE(FILTER(TicketData!AH:AH, TicketData!AH:AH>0), 0.75)/60, "N/A")',
      '75% of tickets faster than this'],
     ['90th Percentile',
-     '=IFERROR(PERCENTILE(FILTER(TicketData!AD:AD, TicketData!AD:AD>0), 0.90)/60, "N/A")',
-     '=IFERROR(PERCENTILE(FILTER(TicketData!AG:AG, TicketData!AG:AG>0), 0.90)/60, "N/A")',
+     '=IFERROR(PERCENTILE(FILTER(TicketData!AE:AE, TicketData!AE:AE>0), 0.90)/60, "N/A")',
+     '=IFERROR(PERCENTILE(FILTER(TicketData!AH:AH, TicketData!AH:AH>0), 0.90)/60, "N/A")',
      '90% of tickets faster than this (worst 10%)'],
     ['Minimum',
-     '=IFERROR(MIN(FILTER(TicketData!AD:AD, TicketData!AD:AD>0))/60, "N/A")',
-     '=IFERROR(MIN(FILTER(TicketData!AG:AG, TicketData!AG:AG>0))/60, "N/A")',
+     '=IFERROR(MIN(FILTER(TicketData!AE:AE, TicketData!AE:AE>0))/60, "N/A")',
+     '=IFERROR(MIN(FILTER(TicketData!AH:AH, TicketData!AH:AH>0))/60, "N/A")',
      'Fastest response/resolution'],
     ['Maximum',
-     '=IFERROR(MAX(FILTER(TicketData!AD:AD, TicketData!AD:AD>0))/60, "N/A")',
-     '=IFERROR(MAX(FILTER(TicketData!AG:AG, TicketData!AG:AG>0))/60, "N/A")',
+     '=IFERROR(MAX(FILTER(TicketData!AE:AE, TicketData!AE:AE>0))/60, "N/A")',
+     '=IFERROR(MAX(FILTER(TicketData!AH:AH, TicketData!AH:AH>0))/60, "N/A")',
      'Slowest response/resolution'],
     ['Std Deviation',
-     '=IFERROR(STDEV(FILTER(TicketData!AD:AD, TicketData!AD:AD>0))/60, "N/A")',
-     '=IFERROR(STDEV(FILTER(TicketData!AG:AG, TicketData!AG:AG>0))/60, "N/A")',
+     '=IFERROR(STDEV(FILTER(TicketData!AE:AE, TicketData!AE:AE>0))/60, "N/A")',
+     '=IFERROR(STDEV(FILTER(TicketData!AH:AH, TicketData!AH:AH>0))/60, "N/A")',
      'Consistency measure (lower = more consistent)'],
     ['', '', '', ''],
     ['--- Time Buckets (Response) ---', '', '', ''],
     ['< 1 hour',
-     '=COUNTIFS(TicketData!AD:AD, ">0", TicketData!AD:AD, "<60")',
-     '=COUNTIFS(TicketData!AD:AD, ">0", TicketData!AD:AD, "<60")/COUNTIF(TicketData!AD:AD, ">0")',
+     '=COUNTIFS(TicketData!AE:AE, ">0", TicketData!AE:AE, "<60")',
+     '=COUNTIFS(TicketData!AE:AE, ">0", TicketData!AE:AE, "<60")/COUNTIF(TicketData!AE:AE, ">0")',
      'Count | % of total'],
     ['1-4 hours',
-     '=COUNTIFS(TicketData!AD:AD, ">=60", TicketData!AD:AD, "<240")',
-     '=COUNTIFS(TicketData!AD:AD, ">=60", TicketData!AD:AD, "<240")/COUNTIF(TicketData!AD:AD, ">0")',
+     '=COUNTIFS(TicketData!AE:AE, ">=60", TicketData!AE:AE, "<240")',
+     '=COUNTIFS(TicketData!AE:AE, ">=60", TicketData!AE:AE, "<240")/COUNTIF(TicketData!AE:AE, ">0")',
      'Count | % of total'],
     ['4-8 hours',
-     '=COUNTIFS(TicketData!AD:AD, ">=240", TicketData!AD:AD, "<480")',
-     '=COUNTIFS(TicketData!AD:AD, ">=240", TicketData!AD:AD, "<480")/COUNTIF(TicketData!AD:AD, ">0")',
+     '=COUNTIFS(TicketData!AE:AE, ">=240", TicketData!AE:AE, "<480")',
+     '=COUNTIFS(TicketData!AE:AE, ">=240", TicketData!AE:AE, "<480")/COUNTIF(TicketData!AE:AE, ">0")',
      'Count | % of total'],
     ['8-24 hours',
-     '=COUNTIFS(TicketData!AD:AD, ">=480", TicketData!AD:AD, "<1440")',
-     '=COUNTIFS(TicketData!AD:AD, ">=480", TicketData!AD:AD, "<1440")/COUNTIF(TicketData!AD:AD, ">0")',
+     '=COUNTIFS(TicketData!AE:AE, ">=480", TicketData!AE:AE, "<1440")',
+     '=COUNTIFS(TicketData!AE:AE, ">=480", TicketData!AE:AE, "<1440")/COUNTIF(TicketData!AE:AE, ">0")',
      'Count | % of total'],
     ['> 24 hours',
-     '=COUNTIF(TicketData!AD:AD, ">=1440")',
-     '=COUNTIF(TicketData!AD:AD, ">=1440")/COUNTIF(TicketData!AD:AD, ">0")',
+     '=COUNTIF(TicketData!AE:AE, ">=1440")',
+     '=COUNTIF(TicketData!AE:AE, ">=1440")/COUNTIF(TicketData!AE:AE, ">0")',
      'Count | % of total'],
   ];
 
@@ -1355,7 +1355,7 @@ function setupResponseTrendsSheet(ss) {
     const monthNum = period.monthNum;
 
     // Build date filter conditions used across formulas
-    const dateFilter = `TicketData!G:G, ">="&TEXT(DATE(${y},${monthNum},1), "YYYY-MM-DD"), TicketData!G:G, "<"&TEXT(DATE(${y},${monthNum}+1,1), "YYYY-MM-DD")`;
+    const dateFilter = `TicketData!H:H, ">="&TEXT(DATE(${y},${monthNum},1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(${y},${monthNum}+1,1), "YYYY-MM-DD")`;
     const arrayDateFilter = `(TicketData!G2:G>=DATE(${y},${monthNum},1))*(TicketData!G2:G<DATE(${y},${monthNum}+1,1))`;
 
     dataRows.push([
@@ -1364,21 +1364,21 @@ function setupResponseTrendsSheet(ss) {
       // Closed count
       `=COUNTIFS(${dateFilter})`,
       // Avg Response (hrs) - column AD is ResponseActual in minutes
-      `=IFERROR(AVERAGEIFS(TicketData!AD:AD, ${dateFilter}, TicketData!AD:AD, ">0")/60, "N/A")`,
+      `=IFERROR(AVERAGEIFS(TicketData!AE:AE, ${dateFilter}, TicketData!AE:AE, ">0")/60, "N/A")`,
       // Median Response (hrs)
       `=IFERROR(MEDIAN(FILTER(TicketData!AD2:AD, ${arrayDateFilter}*(TicketData!AD2:AD>0)))/60, "N/A")`,
       // 90th percentile Response (hrs)
       `=IFERROR(PERCENTILE(FILTER(TicketData!AD2:AD, ${arrayDateFilter}*(TicketData!AD2:AD>0)), 0.9)/60, "N/A")`,
       // Avg Resolution (hrs) - column AG is ResolutionActual in minutes
-      `=IFERROR(AVERAGEIFS(TicketData!AG:AG, ${dateFilter}, TicketData!AG:AG, ">0")/60, "N/A")`,
+      `=IFERROR(AVERAGEIFS(TicketData!AH:AH, ${dateFilter}, TicketData!AH:AH, ">0")/60, "N/A")`,
       // Median Resolution (hrs)
       `=IFERROR(MEDIAN(FILTER(TicketData!AG2:AG, ${arrayDateFilter}*(TicketData!AG2:AG>0)))/60, "N/A")`,
       // 90th percentile Resolution (hrs)
       `=IFERROR(PERCENTILE(FILTER(TicketData!AG2:AG, ${arrayDateFilter}*(TicketData!AG2:AG>0)), 0.9)/60, "N/A")`,
       // % Responded within 4 hours (240 min)
-      `=IFERROR(COUNTIFS(${dateFilter}, TicketData!AD:AD, ">0", TicketData!AD:AD, "<=240")/COUNTIFS(${dateFilter}, TicketData!AD:AD, ">0"), "N/A")`,
+      `=IFERROR(COUNTIFS(${dateFilter}, TicketData!AE:AE, ">0", TicketData!AE:AE, "<=240")/COUNTIFS(${dateFilter}, TicketData!AE:AE, ">0"), "N/A")`,
       // % Resolved within 24 hours (1440 min)
-      `=IFERROR(COUNTIFS(${dateFilter}, TicketData!AG:AG, ">0", TicketData!AG:AG, "<=1440")/COUNTIFS(${dateFilter}, TicketData!AG:AG, ">0"), "N/A")`,
+      `=IFERROR(COUNTIFS(${dateFilter}, TicketData!AH:AH, ">0", TicketData!AH:AH, "<=1440")/COUNTIFS(${dateFilter}, TicketData!AH:AH, ">0"), "N/A")`,
       // Response Std Dev (consistency measure)
       `=IFERROR(STDEV(FILTER(TicketData!AD2:AD, ${arrayDateFilter}*(TicketData!AD2:AD>0)))/60, "N/A")`
     ]);

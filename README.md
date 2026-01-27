@@ -76,7 +76,7 @@ Go to Extensions > Apps Script > Triggers (clock icon) and add these triggers:
 
 | Sheet | What It Shows |
 |-------|---------------|
-| `TicketData` | All ticket data with SLA metrics (35 columns) — your raw data source |
+| `TicketData` | All ticket data with SLA metrics (36 columns) — your raw data source |
 | `Teams` | Team directory — add your Functional Area labels here |
 | `DailySnapshot` | Historical backlog counts for trend analysis |
 

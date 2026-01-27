@@ -16,7 +16,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 
 **Data Flow:**
 1. Scripts fetch data from iiQ API using Bearer token authentication
-2. Raw data lands in `TicketData` sheet (35 columns including consolidated SLA metrics)
+2. Raw data lands in `TicketData` sheet (36 columns including consolidated SLA metrics)
 3. Analytics sheets (`MonthlyVolume`, `BacklogAging`, `TeamWorkload`, etc.) calculate via Google Sheets formulas - no scripts needed
 4. Power BI connects to Google Sheets for dashboards
 
@@ -37,7 +37,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `Setup.gs` | Initial spreadsheet setup - creates all sheets, headers, and formulas |
 | `Config.gs` | Reads settings from Config sheet, year discovery via regex, logging utilities |
 | `ApiClient.gs` | HTTP client with retry/exponential backoff (429, 503, network errors) |
-| `TicketData.gs` | Bulk ticket loader - 35 columns (28 ticket + 7 SLA), fetches SLA per-batch, year-based pagination, 5.5min timeout with resume |
+| `TicketData.gs` | Bulk ticket loader - 36 columns (28 ticket + 7 SLA), fetches SLA per-batch, year-based pagination, 5.5min timeout with resume |
 | `Teams.gs` | Team directory loader, preserves Functional Area mappings |
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively) |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
@@ -84,7 +84,7 @@ const rows = tickets.map(t => extractTicketRow(t, now, year, slaMap));
 |-------|------|---------|
 | Instructions | Static | Setup and usage guide |
 | Config | Manual | API settings, progress tracking |
-| TicketData | Data | Main ticket data (35 columns with SLA) |
+| TicketData | Data | Main ticket data (36 columns with SLA) |
 | Teams | Data | Team directory with Functional Area mapping |
 | DailySnapshot | Data | Daily backlog metrics for trending |
 | Logs | Data | Operation logs |
@@ -149,22 +149,22 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | PriorityAnalysis | "Are high-priority tickets handled faster?" | Metrics by priority level, response/resolution times |
 | FrequentRequesters | "Who generates the most tickets?" | Top 50 requesters with category and resolution data |
 
-## TicketData Column Layout (35 columns)
+## TicketData Column Layout (36 columns)
 
 | Columns | Description |
 |---------|-------------|
 | A-D | Core: TicketId, TicketNumber, Subject, Year |
-| E-H | Dates: CreatedDate, ModifiedDate, ClosedDate, IsClosed |
-| I | Status (WorkflowStep) |
-| J-K | Team: TeamId, TeamName |
-| L-N | Location: LocationId, LocationName, LocationType |
-| O-P | Owner: OwnerId, OwnerName |
-| Q | AgeDays |
-| R-T | Priority: Priority, IsPastDue, DueDate |
-| U-V | SLA (basic): SlaId, SlaName |
-| W-Z | Issue: IssueCategoryId, IssueCategoryName, IssueTypeId, IssueTypeName |
-| AA-AB | Requester: RequesterId, RequesterName |
-| AC-AI | SLA Metrics: ResponseThreshold, ResponseActual, ResponseBreach, ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning |
+| E-I | Dates: CreatedDate, StartedDate, ModifiedDate, ClosedDate, IsClosed |
+| J | Status (WorkflowStep) |
+| K-L | Team: TeamId, TeamName |
+| M-O | Location: LocationId, LocationName, LocationType |
+| P-Q | Owner: OwnerId, OwnerName |
+| R | AgeDays |
+| S-U | Priority: Priority, IsPastDue, DueDate |
+| V-W | SLA (basic): SlaId, SlaName |
+| X-AA | Issue: IssueCategoryId, IssueCategoryName, IssueTypeId, IssueTypeName |
+| AB-AC | Requester: RequesterId, RequesterName |
+| AD-AJ | SLA Metrics: ResponseThreshold, ResponseActual, ResponseBreach, ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning |
 
 ## Google Apps Script Notes
 

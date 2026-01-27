@@ -31,7 +31,7 @@ Create a new Google Sheet. The **Setup Spreadsheet** function will create all re
 | Sheet Name | Purpose |
 |------------|---------|
 | `Config` | API credentials and settings |
-| `TicketData` | Raw ticket dump with SLA metrics (35 columns) |
+| `TicketData` | Raw ticket dump with SLA metrics (36 columns) |
 | `Teams` | Team directory with FA mapping |
 | `DailySnapshot` | Daily backlog metrics for trending |
 | `Logs` | API call logs and errors |
@@ -92,7 +92,7 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
 > **Consolidated SLA Data:**
 > - SLA metrics are fetched per-batch during ticket loading (single API call per batch)
 > - No separate SLA loading phase - SLA data is always in sync with ticket data
-> - TicketData columns 29-35 contain: ResponseThreshold, ResponseActual, ResponseBreach, ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning
+> - TicketData columns 30-36 (AD-AJ) contain: ResponseThreshold, ResponseActual, ResponseBreach, ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning
 > - Tickets without SLA policies will have blank values in these columns
 >
 > **To add a ticket year (e.g., 2023):**
@@ -653,7 +653,7 @@ iiQ Data > Add Analytics Sheet >
 | AH | **ResolutionBreach** | TRUE if actual > threshold, FALSE otherwise |
 | AI | **IsRunning** | TRUE if SLA timer is still active (ticket not yet resolved) |
 
-> **Note:** Raw ticket data dump with consolidated SLA metrics for Power BI analysis. Data is loaded by year with automatic resume capability. 35 columns total.
+> **Note:** Raw ticket data dump with consolidated SLA metrics for Power BI analysis. Data is loaded by year with automatic resume capability. 36 columns total.
 >
 > **Loading Strategy:**
 > - **Historical years (2024, 2025)**: Standard pagination with page tracking. Once complete, these don't change.
@@ -695,7 +695,7 @@ The Apps Script source code is in the `scripts/` folder of this repository.
 | [`Config.gs`](scripts/Config.gs) | Configuration reading from Config sheet, logging utilities |
 | [`ApiClient.gs`](scripts/ApiClient.gs) | HTTP requests with retry/exponential backoff for rate limiting |
 | [`Teams.gs`](scripts/Teams.gs) | Team data loading from API |
-| [`TicketData.gs`](scripts/TicketData.gs) | Bulk ticket data loader with consolidated SLA (35 columns, year-based pagination) |
+| [`TicketData.gs`](scripts/TicketData.gs) | Bulk ticket data loader with consolidated SLA (36 columns, year-based pagination) |
 | [`DailySnapshot.gs`](scripts/DailySnapshot.gs) | Daily backlog metrics capture for trending |
 | [`Menu.gs`](scripts/Menu.gs) | iiQ Data menu for data loader and analytics functions |
 | [`Triggers.gs`](scripts/Triggers.gs) | Time-driven trigger functions for automated updates |
@@ -1039,7 +1039,7 @@ In Apps Script, go to **Triggers** (clock icon) and add these triggers:
 
 ### TicketData Sheet (After Refresh)
 
-The TicketData sheet includes 35 columns (A-AI) with consolidated SLA metrics. Sample rows:
+The TicketData sheet includes 36 columns (A-AJ) with consolidated SLA metrics. Sample rows:
 
 | Column | Row 1 | Row 2 | Row 3 |
 |--------|-------|-------|-------|

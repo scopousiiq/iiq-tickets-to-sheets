@@ -406,7 +406,7 @@ function runNewTicketsCheck(sheet, config) {
   tickets.sort((a, b) => new Date(a.CreatedDate) - new Date(b.CreatedDate));
   const rows = tickets.map(ticket => extractTicketRow(ticket, now, currentYear, slaMap));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 35).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, 36).setValues(rows);
 
   // Update last fetch timestamp
   const lastTicket = tickets[tickets.length - 1];
@@ -425,7 +425,7 @@ function filterAndRewriteTicketData(sheet, historicalCutoff) {
     return { keptCount: 0, clearedCount: 0 };
   }
 
-  const data = sheet.getRange(2, 1, lastRow - 1, 35).getValues();
+  const data = sheet.getRange(2, 1, lastRow - 1, 36).getValues();
   const rowsToKeep = [];
   let clearedCount = 0;
 
@@ -440,23 +440,23 @@ function filterAndRewriteTicketData(sheet, historicalCutoff) {
     }
   }
 
-  sheet.getRange(2, 1, lastRow - 1, 35).clear();
+  sheet.getRange(2, 1, lastRow - 1, 36).clear();
 
   if (rowsToKeep.length > 0) {
-    sheet.getRange(2, 1, rowsToKeep.length, 35).setValues(rowsToKeep);
+    sheet.getRange(2, 1, rowsToKeep.length, 36).setValues(rowsToKeep);
   }
 
   return { keptCount: rowsToKeep.length, clearedCount: clearedCount };
 }
 
 /**
- * Create the TicketData sheet with headers (35 columns including SLA metrics)
+ * Create the TicketData sheet with headers (36 columns including SLA metrics)
  */
 function createTicketSheet(ss) {
   const sheet = ss.insertSheet('TicketData');
-  sheet.getRange(1, 1, 1, 35).setValues([[
+  sheet.getRange(1, 1, 1, 36).setValues([[
     'TicketId', 'TicketNumber', 'Subject', 'Year',
-    'CreatedDate', 'ModifiedDate', 'ClosedDate', 'IsClosed',
+    'CreatedDate', 'StartedDate', 'ModifiedDate', 'ClosedDate', 'IsClosed',
     'Status', 'TeamId', 'TeamName', 'LocationId', 'LocationName', 'LocationType',
     'OwnerId', 'OwnerName', 'AgeDays', 'Priority', 'IsPastDue', 'DueDate',
     'SlaId', 'SlaName', 'IssueCategoryId', 'IssueCategoryName',

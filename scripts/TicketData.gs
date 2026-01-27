@@ -15,7 +15,7 @@
  *
  * SLA Data:
  * - SLA metrics are fetched for each batch of tickets (single API call per batch)
- * - Columns 29-35: ResponseThreshold, ResponseActual, ResponseBreach,
+ * - Columns 30-36 (AD-AJ): ResponseThreshold, ResponseActual, ResponseBreach,
  *   ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning
  */
 
@@ -90,7 +90,7 @@ function refreshTicketDataFull() {
   // Clear all data (keep header row)
   const lastRow = sheet.getLastRow();
   if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, 35).clear();
+    sheet.getRange(2, 1, lastRow - 1, 36).clear();
   }
 
   // Reset all year progress
@@ -322,7 +322,7 @@ function processHistoricalYearBatch(sheet, year, config) {
   const now = new Date();
   const rows = response.Items.map(ticket => extractTicketRow(ticket, now, year, slaMap));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 35).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, 36).setValues(rows);
 
   // Update progress
   updateConfigValue(`TICKET_${year}_LAST_PAGE`, nextPage);
@@ -404,7 +404,7 @@ function processCurrentYearBatch(sheet, config) {
   const now = new Date();
   const rows = tickets.map(ticket => extractTicketRow(ticket, now, currentYear, slaMap));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 35).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, 36).setValues(rows);
 
   // Update last fetch timestamp
   const lastTicket = tickets[tickets.length - 1];
@@ -420,7 +420,7 @@ function processCurrentYearBatch(sheet, config) {
 
 /**
  * Extract a row of data from a ticket object
- * Returns 35 columns for comprehensive analytics (including SLA metrics)
+ * Returns 36 columns for comprehensive analytics (including SLA metrics)
  *
  * @param {Object} ticket - Ticket object from API
  * @param {Date} now - Current timestamp for age calculation
@@ -465,41 +465,42 @@ function extractTicketRow(ticket, now, year, slaMap) {
     ticket.TicketNumber || '',
     (ticket.Subject || '').substring(0, 200),
     year,
-    // E-H: Dates and status
+    // E-I: Dates and status
     ticket.CreatedDate || '',
+    ticket.StartedDate || '',
     ticket.ModifiedDate || '',
     ticket.ClosedDate || '',
     ticket.IsClosed ? 'Yes' : 'No',
-    // I: Workflow status
+    // J: Workflow status
     ticket.WorkflowStep ? (ticket.WorkflowStep.StatusName || ticket.WorkflowStep.Name || '') : '',
-    // J-K: Team
+    // K-L: Team
     ticket.AssignedToTeam ? (ticket.AssignedToTeam.TeamId || '') : '',
     ticket.AssignedToTeam ? (ticket.AssignedToTeam.TeamName || '') : '',
-    // L-N: Location
+    // M-O: Location
     ticket.Location ? (ticket.Location.LocationId || '') : '',
     ticket.Location ? (ticket.Location.Name || '') : '',
     locationType,
-    // O-P: Owner
+    // P-Q: Owner
     ticket.Owner ? (ticket.Owner.UserId || '') : '',
     ticket.Owner ? (ticket.Owner.Name || '') : '',
-    // Q: Age
+    // R: Age
     ageDays,
-    // R-T: Priority and Due Date
+    // S-U: Priority and Due Date
     ticket.Priority || '',
     ticket.IsPastDue ? 'Yes' : 'No',
     ticket.DueDate || '',
-    // U-V: SLA (basic)
+    // V-W: SLA (basic)
     ticketSla.SlaId || '',
     slaName,
-    // W-Z: Issue Category and Type
+    // X-AA: Issue Category and Type
     issue.IssueCategoryId || '',
     issue.IssueCategoryName || '',
     issue.IssueTypeId || '',
     issue.Name || '', // Issue type name is in Name field
-    // AA-AB: Requester (For)
+    // AB-AC: Requester (For)
     ticket.For ? (ticket.For.UserId || '') : '',
     ticket.For ? (ticket.For.Name || '') : '',
-    // AC-AI: SLA Metrics (from detailed SLA API)
+    // AD-AJ: SLA Metrics (from detailed SLA API)
     slaMetrics ? slaMetrics.responseThreshold : '',
     slaMetrics ? slaMetrics.responseActual : '',
     slaMetrics ? slaMetrics.responseBreach : '',
@@ -1077,7 +1078,7 @@ function processTicketBatch(sheet, tickets, ticketIdToRow, now) {
 
     if (existingRow) {
       // Update existing row
-      sheet.getRange(existingRow, 1, 1, 35).setValues([rowData]);
+      sheet.getRange(existingRow, 1, 1, 36).setValues([rowData]);
       updated++;
     } else {
       // Queue for append
@@ -1089,7 +1090,7 @@ function processTicketBatch(sheet, tickets, ticketIdToRow, now) {
   // Batch append new rows
   if (rowsToAppend.length > 0) {
     const lastRow = sheet.getLastRow();
-    sheet.getRange(lastRow + 1, 1, rowsToAppend.length, 35).setValues(rowsToAppend);
+    sheet.getRange(lastRow + 1, 1, rowsToAppend.length, 36).setValues(rowsToAppend);
 
     // Update the map with new rows (for subsequent batches)
     for (let i = 0; i < rowsToAppend.length; i++) {

@@ -7,7 +7,7 @@
  * Data Sheets (always created):
  * - Instructions: Setup and usage guide
  * - Config: API settings and progress tracking
- * - TicketData: Main data (35 columns including SLA metrics)
+ * - TicketData: Main data (36 columns including SLA metrics)
  * - Teams: Team directory with Functional Area mapping
  * - DailySnapshot: Daily backlog metrics for trending
  * - Logs: Operation logs
@@ -40,7 +40,7 @@ function setupSpreadsheet() {
     'DATA SHEETS:\n' +
     '- Instructions (setup guide)\n' +
     '- Config (API settings)\n' +
-    '- TicketData (35 columns)\n' +
+    '- TicketData (36 columns)\n' +
     '- Teams (directory)\n' +
     '- DailySnapshot (trending)\n' +
     '- Logs (operations)\n\n' +
@@ -194,7 +194,7 @@ function setupInstructionsSheet(ss) {
     [''],
     ['DATA SHEETS (populated by scripts):'],
     [''],
-    ['• TicketData (35 columns)'],
+    ['• TicketData (36 columns)'],
     ['  Main ticket data including SLA metrics. Columns include:'],
     ['  - Ticket info: ID, Number, Subject, Status, Priority'],
     ['  - Dates: Created, Modified, Closed'],
@@ -405,7 +405,7 @@ function setupConfigSheet(ss) {
 }
 
 /**
- * Setup TicketData sheet with 35-column header
+ * Setup TicketData sheet with 36-column header
  * @returns {boolean} true if created, false if already exists
  */
 function setupTicketDataSheet(ss) {
@@ -415,7 +415,7 @@ function setupTicketDataSheet(ss) {
 
   const headers = [
     'TicketId', 'TicketNumber', 'Subject', 'Year',
-    'CreatedDate', 'ModifiedDate', 'ClosedDate', 'IsClosed',
+    'CreatedDate', 'StartedDate', 'ModifiedDate', 'ClosedDate', 'IsClosed',
     'Status', 'TeamId', 'TeamName', 'LocationId', 'LocationName', 'LocationType',
     'OwnerId', 'OwnerName', 'AgeDays', 'Priority', 'IsPastDue', 'DueDate',
     'SlaId', 'SlaName', 'IssueCategoryId', 'IssueCategoryName',
@@ -569,15 +569,15 @@ function setupSLAComplianceSheet(ss) {
       period.monthName,
       y,
       // Closed: Count tickets closed in this month
-      `=COUNTIFS(TicketData!H:H, "Yes", TicketData!G:G, ">="&${startDate}, TicketData!G:G, "<"&${endDate})`,
+      `=COUNTIFS(TicketData!I:I, "Yes", TicketData!H:H, ">="&${startDate}, TicketData!H:H, "<"&${endDate})`,
       // Breaches: Count where ResponseBreach=TRUE OR ResolutionBreach=TRUE (closed tickets in this month)
-      `=LET(startDate, ${startDate}, endDate, ${endDate}, COUNTIFS(TicketData!H:H, "Yes", TicketData!G:G, ">="&startDate, TicketData!G:G, "<"&endDate, TicketData!AE:AE, TRUE) + COUNTIFS(TicketData!H:H, "Yes", TicketData!G:G, ">="&startDate, TicketData!G:G, "<"&endDate, TicketData!AH:AH, TRUE) - COUNTIFS(TicketData!H:H, "Yes", TicketData!G:G, ">="&startDate, TicketData!G:G, "<"&endDate, TicketData!AE:AE, TRUE, TicketData!AH:AH, TRUE))`,
+      `=LET(startDate, ${startDate}, endDate, ${endDate}, COUNTIFS(TicketData!I:I, "Yes", TicketData!H:H, ">="&startDate, TicketData!H:H, "<"&endDate, TicketData!AF:AF, TRUE) + COUNTIFS(TicketData!I:I, "Yes", TicketData!H:H, ">="&startDate, TicketData!H:H, "<"&endDate, TicketData!AI:AI, TRUE) - COUNTIFS(TicketData!I:I, "Yes", TicketData!H:H, ">="&startDate, TicketData!H:H, "<"&endDate, TicketData!AF:AF, TRUE, TicketData!AI:AI, TRUE))`,
       // Breach Rate
       `=IF(C${rowNum}>0, D${rowNum}/C${rowNum}, "N/A")`,
       // Avg Response (hrs): Average of ResponseActual (col AD) for closed tickets, convert minutes to hours
-      `=IFERROR(AVERAGEIFS(TicketData!AD:AD, TicketData!H:H, "Yes", TicketData!G:G, ">="&${startDate}, TicketData!G:G, "<"&${endDate}, TicketData!AD:AD, ">0")/60, "N/A")`,
+      `=IFERROR(AVERAGEIFS(TicketData!AE:AE, TicketData!I:I, "Yes", TicketData!H:H, ">="&${startDate}, TicketData!H:H, "<"&${endDate}, TicketData!AE:AE, ">0")/60, "N/A")`,
       // Avg Resolution (hrs): Average of ResolutionActual (col AG) for closed tickets, convert minutes to hours
-      `=IFERROR(AVERAGEIFS(TicketData!AG:AG, TicketData!H:H, "Yes", TicketData!G:G, ">="&${startDate}, TicketData!G:G, "<"&${endDate}, TicketData!AG:AG, ">0")/60, "N/A")`
+      `=IFERROR(AVERAGEIFS(TicketData!AH:AH, TicketData!I:I, "Yes", TicketData!H:H, ">="&${startDate}, TicketData!H:H, "<"&${endDate}, TicketData!AH:AH, ">0")/60, "N/A")`
     ]);
   }
 
@@ -651,7 +651,7 @@ function setupMonthlyVolumeSheet(ss) {
       // Created formula
       `=COUNTIFS(TicketData!E:E, ">="&${startDate}, TicketData!E:E, "<"&${endDate})`,
       // Closed formula
-      `=COUNTIFS(TicketData!G:G, ">="&${startDate}, TicketData!G:G, "<"&${endDate})`,
+      `=COUNTIFS(TicketData!H:H, ">="&${startDate}, TicketData!H:H, "<"&${endDate})`,
       // Net Change
       `=C${rowNum}-D${rowNum}`,
       // Closure Rate
@@ -710,7 +710,7 @@ function setupBacklogAgingSheet(ss) {
     // Row 2: 0-15 days
     [
       '0-15 days',
-      '=COUNTIFS(TicketData!H:H, "No", TicketData!Q:Q, ">=0", TicketData!Q:Q, "<=15")',
+      '=COUNTIFS(TicketData!I:I, "No", TicketData!R:R, ">=0", TicketData!R:R, "<=15")',
       '=IF($B$7>0, B2/$B$7, 0)',
       '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!Q2:Q},(TicketData!H2:H="No")*(TicketData!Q2:Q>=0)*(TicketData!Q2:Q<=15)),2,FALSE),1,1),"")',
       '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
@@ -718,7 +718,7 @@ function setupBacklogAgingSheet(ss) {
     // Row 3: 16-30 days
     [
       '16-30 days',
-      '=COUNTIFS(TicketData!H:H, "No", TicketData!Q:Q, ">=16", TicketData!Q:Q, "<=30")',
+      '=COUNTIFS(TicketData!I:I, "No", TicketData!R:R, ">=16", TicketData!R:R, "<=30")',
       '=IF($B$7>0, B3/$B$7, 0)',
       '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!Q2:Q},(TicketData!H2:H="No")*(TicketData!Q2:Q>=16)*(TicketData!Q2:Q<=30)),2,FALSE),1,1),"")',
       '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
@@ -726,7 +726,7 @@ function setupBacklogAgingSheet(ss) {
     // Row 4: 31-60 days
     [
       '31-60 days',
-      '=COUNTIFS(TicketData!H:H, "No", TicketData!Q:Q, ">=31", TicketData!Q:Q, "<=60")',
+      '=COUNTIFS(TicketData!I:I, "No", TicketData!R:R, ">=31", TicketData!R:R, "<=60")',
       '=IF($B$7>0, B4/$B$7, 0)',
       '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!Q2:Q},(TicketData!H2:H="No")*(TicketData!Q2:Q>=31)*(TicketData!Q2:Q<=60)),2,FALSE),1,1),"")',
       '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
@@ -734,7 +734,7 @@ function setupBacklogAgingSheet(ss) {
     // Row 5: 61-90 days
     [
       '61-90 days',
-      '=COUNTIFS(TicketData!H:H, "No", TicketData!Q:Q, ">=61", TicketData!Q:Q, "<=90")',
+      '=COUNTIFS(TicketData!I:I, "No", TicketData!R:R, ">=61", TicketData!R:R, "<=90")',
       '=IF($B$7>0, B5/$B$7, 0)',
       '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!Q2:Q},(TicketData!H2:H="No")*(TicketData!Q2:Q>=61)*(TicketData!Q2:Q<=90)),2,FALSE),1,1),"")',
       '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
@@ -742,7 +742,7 @@ function setupBacklogAgingSheet(ss) {
     // Row 6: 90+ days
     [
       '90+ days',
-      '=COUNTIFS(TicketData!H:H, "No", TicketData!Q:Q, ">90")',
+      '=COUNTIFS(TicketData!I:I, "No", TicketData!R:R, ">90")',
       '=IF($B$7>0, B6/$B$7, 0)',
       '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!Q2:Q},(TicketData!H2:H="No")*(TicketData!Q2:Q>90)),2,FALSE),1,1),"")',
       '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
@@ -809,10 +809,10 @@ function setupTeamWorkloadSheet(ss) {
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, teams,' +
     'col_b, BYROW(teams, LAMBDA(t, IFERROR(VLOOKUP(t, Teams!B:C, 2, FALSE), ""))),' +
-    'col_c, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!K:K, t, TicketData!H:H, "No"))),' +
-    'col_d, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!K:K, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
-    'col_e, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!K:K, t, TicketData!G:G, ">="&mtdStart, TicketData!G:G, "<"&mtdEnd))),' +
-    'col_f, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!K:K, t, TicketData!H:H, "No", TicketData!Q:Q, ">=30"))),' +
+    'col_c, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "No"))),' +
+    'col_d, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
+    'col_e, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
+    'col_f, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "No", TicketData!R:R, ">=30"))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f),' +
     'SORT(data, $H$2, $I$2))';
 
@@ -882,10 +882,10 @@ function setupLocationBreakdownSheet(ss) {
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, locs,' +
-    'col_b, BYROW(locs, LAMBDA(l, IFERROR(INDEX(TicketData!N:N, MATCH(l, TicketData!M:M, 0)), ""))),' +
-    'col_c, BYROW(locs, LAMBDA(l, COUNTIFS(TicketData!M:M, l, TicketData!H:H, "No"))),' +
-    'col_d, BYROW(locs, LAMBDA(l, COUNTIFS(TicketData!M:M, l, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
-    'col_e, BYROW(locs, LAMBDA(l, COUNTIFS(TicketData!M:M, l, TicketData!G:G, ">="&mtdStart, TicketData!G:G, "<"&mtdEnd))),' +
+    'col_b, BYROW(locs, LAMBDA(l, IFERROR(INDEX(TicketData!O:O, MATCH(l, TicketData!N:N, 0)), ""))),' +
+    'col_c, BYROW(locs, LAMBDA(l, COUNTIFS(TicketData!N:N, l, TicketData!I:I, "No"))),' +
+    'col_d, BYROW(locs, LAMBDA(l, COUNTIFS(TicketData!N:N, l, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
+    'col_e, BYROW(locs, LAMBDA(l, COUNTIFS(TicketData!N:N, l, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e),' +
     'SORT(data, $G$2, $H$2))';
 
@@ -1026,14 +1026,14 @@ function setupAtRiskResponseSheet(ss) {
   const riskLookup = 'IFERROR(VLOOKUP("SLA_RISK_PERCENT",Config!A:B,2,FALSE)/100,0.75)';
   const formula =
     '=IFERROR(SORT(FILTER(' +
-    '{TicketData!B:B, LEFT(TicketData!C:C,60), TicketData!K:K, ' +
-    'TicketData!AC:AC/60, TicketData!AD:AD/60, ' +
-    'TicketData!AD:AD/TicketData!AC:AC, (TicketData!AC:AC-TicketData!AD:AD)/60}, ' +
-    '(TicketData!H:H="No")*' +
-    '(TicketData!AC:AC>0)*' +
-    '(TicketData!AE:AE<>TRUE)*' +
-    '(TicketData!AD:AD/TicketData!AC:AC>=' + riskLookup + ')*' +
-    '(TicketData!AD:AD/TicketData!AC:AC<1)' +
+    '{TicketData!B:B, LEFT(TicketData!C:C,60), TicketData!L:L, ' +
+    'TicketData!AD:AD/60, TicketData!AE:AE/60, ' +
+    'TicketData!AE:AE/TicketData!AD:AD, (TicketData!AD:AD-TicketData!AE:AE)/60}, ' +
+    '(TicketData!I:I="No")*' +
+    '(TicketData!AD:AD>0)*' +
+    '(TicketData!AF:AF<>TRUE)*' +
+    '(TicketData!AE:AE/TicketData!AD:AD>=' + riskLookup + ')*' +
+    '(TicketData!AE:AE/TicketData!AD:AD<1)' +
     '), 6, FALSE), "No at-risk Response tickets")';
 
   sheet.getRange('A2').setValue(formula);
@@ -1087,14 +1087,14 @@ function setupAtRiskResolutionSheet(ss) {
   const riskLookup = 'IFERROR(VLOOKUP("SLA_RISK_PERCENT",Config!A:B,2,FALSE)/100,0.75)';
   const formula =
     '=IFERROR(SORT(FILTER(' +
-    '{TicketData!B:B, LEFT(TicketData!C:C,60), TicketData!K:K, ' +
-    'TicketData!AF:AF/60, TicketData!AG:AG/60, ' +
-    'TicketData!AG:AG/TicketData!AF:AF, (TicketData!AF:AF-TicketData!AG:AG)/60}, ' +
-    '(TicketData!H:H="No")*' +
-    '(TicketData!AF:AF>0)*' +
-    '(TicketData!AH:AH<>TRUE)*' +
-    '(TicketData!AG:AG/TicketData!AF:AF>=' + riskLookup + ')*' +
-    '(TicketData!AG:AG/TicketData!AF:AF<1)' +
+    '{TicketData!B:B, LEFT(TicketData!C:C,60), TicketData!L:L, ' +
+    'TicketData!AG:AG/60, TicketData!AH:AH/60, ' +
+    'TicketData!AH:AH/TicketData!AG:AG, (TicketData!AG:AG-TicketData!AH:AH)/60}, ' +
+    '(TicketData!I:I="No")*' +
+    '(TicketData!AG:AG>0)*' +
+    '(TicketData!AI:AI<>TRUE)*' +
+    '(TicketData!AH:AH/TicketData!AG:AG>=' + riskLookup + ')*' +
+    '(TicketData!AH:AH/TicketData!AG:AG<1)' +
     '), 6, FALSE), "No at-risk Resolution tickets")';
 
   sheet.getRange('A2').setValue(formula);
@@ -1166,9 +1166,9 @@ function setupPerformanceTrendsSheet(ss) {
         months[m],
         year,
         // C: Count tickets closed in that month
-        `=LET(m, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), COUNTIFS(TicketData!G:G, ">="&TEXT(DATE(B${rowNum},m,1), "YYYY-MM-DD"), TicketData!G:G, "<"&TEXT(DATE(B${rowNum},m+1,1), "YYYY-MM-DD")))`,
+        `=LET(m, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), COUNTIFS(TicketData!H:H, ">="&TEXT(DATE(B${rowNum},m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(B${rowNum},m+1,1), "YYYY-MM-DD")))`,
         // D: Average resolution time in DAYS for tickets closed that month
-        `=LET(m, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), IFERROR(AVERAGEIFS(TicketData!Q:Q, TicketData!H:H, "Yes", TicketData!G:G, ">="&TEXT(DATE(B${rowNum},m,1), "YYYY-MM-DD"), TicketData!G:G, "<"&TEXT(DATE(B${rowNum},m+1,1), "YYYY-MM-DD")), "N/A"))`,
+        `=LET(m, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!I:I, "Yes", TicketData!H:H, ">="&TEXT(DATE(B${rowNum},m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(B${rowNum},m+1,1), "YYYY-MM-DD")), "N/A"))`,
         // E: Closure rate (Closed ÷ Created)
         `=LET(m, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), created, COUNTIFS(TicketData!E:E, ">="&TEXT(DATE(B${rowNum},m,1), "YYYY-MM-DD"), TicketData!E:E, "<"&TEXT(DATE(B${rowNum},m+1,1), "YYYY-MM-DD")), IF(created>0, C${rowNum}/created, "N/A"))`,
         // F: Breach rate - lookup from SLACompliance
