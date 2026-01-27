@@ -193,8 +193,9 @@ function getTicketDataStatus() {
       status = 'Complete';
     } else if (lastPage < 0) {
       status = 'Not started';
-    } else if (totalPages > 0) {
-      status = `Page ${lastPage + 1} of ${totalPages}`;
+    } else if (totalPages >= 0) {
+      // totalPages is now last page INDEX (0-indexed), convert to 1-indexed for display
+      status = `Page ${lastPage + 1} of ${totalPages + 1}`;
     } else {
       status = `Page ${lastPage + 1} (total unknown)`;
     }
@@ -296,14 +297,16 @@ function processHistoricalYearBatch(sheet, year, config) {
     { Facet: 'createddate', Value: dateRange }
   ], nextPage, batchSize, { field: 'TicketCreatedDate', direction: 'asc' });
 
-  // On first page, calculate total pages
+  // On first page, calculate total pages and store last page index
   if (nextPage === 0 && response.Paging) {
     // Handle both TotalRows and Total field names (API may use either)
     const totalRows = response.Paging.TotalRows || response.Paging.Total || 0;
     const totalPages = Math.ceil(Number(totalRows) / batchSize);
+    const lastPageIndex = totalPages - 1;
     // Write as string to prevent Sheets from auto-formatting as date
-    updateConfigValue(`TICKET_${year}_TOTAL_PAGES`, String(totalPages));
-    logOperation('Ticket Data', 'INFO', `Year ${year}: ${totalRows} tickets, ${totalPages} pages`);
+    // Store last page INDEX (0-indexed) so LAST_PAGE and TOTAL_PAGES match when complete
+    updateConfigValue(`TICKET_${year}_TOTAL_PAGES`, String(lastPageIndex));
+    logOperation('Ticket Data', 'INFO', `Year ${year}: ${totalRows} tickets, ${totalPages} pages (last index: ${lastPageIndex})`);
   }
 
   if (!response.Items || response.Items.length === 0) {
@@ -327,11 +330,14 @@ function processHistoricalYearBatch(sheet, year, config) {
   // Update progress
   updateConfigValue(`TICKET_${year}_LAST_PAGE`, nextPage);
 
-  // Check if complete
-  const totalPages = config[`ticket${year}TotalPages`] ||
-    (response.Paging ? Math.ceil(response.Paging.TotalRows / batchSize) : 0);
+  // Check if complete (totalPages now stores last page INDEX, not count)
+  // Use -1 as sentinel for "unknown", so check explicitly
+  let lastPageIndex = config[`ticket${year}TotalPages`];
+  if (lastPageIndex < 0) {
+    lastPageIndex = response.Paging ? Math.ceil(response.Paging.TotalRows / batchSize) - 1 : 0;
+  }
 
-  if (nextPage >= totalPages - 1) {
+  if (nextPage >= lastPageIndex) {
     updateConfigValue(`TICKET_${year}_COMPLETE`, 'TRUE');
     logOperation('Ticket Data', 'COMPLETE', `Year ${year} finished`);
   }

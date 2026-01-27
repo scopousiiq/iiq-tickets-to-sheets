@@ -26,6 +26,13 @@ function appendDailySnapshot() {
     return;
   }
 
+  // Don't capture snapshot if ticket loading is incomplete - would produce bad data
+  const config = getConfig();
+  if (!isTicketLoadingComplete(config)) {
+    logOperation('DailySnapshot', 'SKIP', 'Ticket loading not complete - snapshot skipped to avoid bad data');
+    return;
+  }
+
   const today = new Date();
   const todayStr = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 

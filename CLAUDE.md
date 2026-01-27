@@ -39,7 +39,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `ApiClient.gs` | HTTP client with retry/exponential backoff (429, 503, network errors) |
 | `TicketData.gs` | Bulk ticket loader - 36 columns (28 ticket + 7 SLA), fetches SLA per-batch, year-based pagination, 5.5min timeout with resume |
 | `Teams.gs` | Team directory loader, preserves Functional Area mappings |
-| `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively) |
+| `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively). Skips if loading incomplete. |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
 | `Triggers.gs` | Time-driven trigger functions (no UI dialogs) |
 | `OptionalMetrics.gs` | Additional analytics sheets added via menu (14 optional KPI sheets) |
@@ -263,8 +263,12 @@ Optional:
 - `SLA_RISK_PERCENT`: Percentage threshold for SLA risk warnings (default 75)
 
 Progress Tracking (managed automatically):
-- `TICKET_{YEAR}_LAST_PAGE`, `TICKET_{YEAR}_COMPLETE`: Historical year loading progress
+- `TICKET_{YEAR}_LAST_PAGE`: Last completed page index (0-indexed, -1 = not started)
+- `TICKET_{YEAR}_TOTAL_PAGES`: Last page index (0-indexed, -1 = unknown). Matches `LAST_PAGE` when complete.
+- `TICKET_{YEAR}_COMPLETE`: TRUE when year is fully loaded
 - `TICKET_{YEAR}_LAST_FETCH`: Current year incremental sync timestamp
 - `OPEN_REFRESH_DATE`: Date of current open ticket refresh
 - `OPEN_REFRESH_OPEN_PAGE`, `OPEN_REFRESH_OPEN_COMPLETE`: Open ticket refresh progress
 - `OPEN_REFRESH_CLOSED_PAGE`, `OPEN_REFRESH_CLOSED_COMPLETE`: Recently closed refresh progress
+
+**Pagination Note:** All page tracking uses 0-indexed values. For a year with 6 pages of data, after completion both `LAST_PAGE` and `TOTAL_PAGES` will be `5`. The UI displays 1-indexed values ("Page 6 of 6").
