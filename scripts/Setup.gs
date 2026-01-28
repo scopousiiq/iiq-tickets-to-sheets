@@ -802,9 +802,10 @@ function setupTeamWorkloadSheet(ss) {
 
   // Single LET formula that outputs the entire sortable table
   // This populates columns A-F dynamically based on TicketData
+  // Note: Uses column L (TeamName) consistently for matching
   const mainFormula =
     '=LET(' +
-    'teams, UNIQUE(FILTER(TicketData!K2:K, TicketData!K2:K<>"", TicketData!K2:K<>"TeamName")),' +
+    'teams, UNIQUE(FILTER(TicketData!L2:L, TicketData!L2:L<>"", TicketData!L2:L<>"TeamName")),' +
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, teams,' +
@@ -1236,7 +1237,7 @@ function setupStaleTicketsSheet(ss) {
   // Single formula that returns all stale tickets, sorted by days since update
   // Uses STALE_DAYS from Config (default 7)
   const staleFormula =
-    '=IFERROR(SORT(FILTER({TicketData!B2:B, LEFT(TicketData!C2:C,80), TicketData!K2:K, ' +
+    '=IFERROR(SORT(FILTER({TicketData!B2:B, LEFT(TicketData!C2:C,80), TicketData!L2:L, ' +
     'INT(TODAY()-DATEVALUE(LEFT(TicketData!F2:F,10))), LEFT(TicketData!F2:F,10), ' +
     'LEFT(TicketData!E2:E,10), TicketData!I2:I}, ' +
     '(TicketData!H2:H="No")*(INT(TODAY()-DATEVALUE(LEFT(TicketData!F2:F,10)))>=' +

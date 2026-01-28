@@ -984,7 +984,7 @@ function setupReopenRateSheet(ss) {
 
   // Formula to list reopened tickets
   const listFormula =
-    '=IFERROR(SORT(FILTER({TicketData!B2:B, LEFT(TicketData!C2:C,60), TicketData!K2:K, ' +
+    '=IFERROR(SORT(FILTER({TicketData!B2:B, LEFT(TicketData!C2:C,60), TicketData!L2:L, ' +
     'LEFT(TicketData!G2:G,10), TicketData!Q2:Q, TicketData!I2:I}, ' +
     '(TicketData!H2:H="No")*(TicketData!G2:G<>"")), 5, FALSE), "No reopened tickets found")';
 
