@@ -438,10 +438,10 @@ function setupIssueCategoryVolumeSheet(ss) {
   const headers = ['Issue Category', 'Open', 'Created (MTD)', 'Closed (MTD)', 'Avg Resolution (days)', 'Breach Rate', 'Last Refreshed', 'Sort Col#', 'Desc?'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  // Main formula - aggregates by IssueCategoryName (column X), with dynamic sorting
+  // Main formula - aggregates by IssueCategoryName (column Y), with dynamic sorting
   const mainFormula =
     '=LET(' +
-    'cats, UNIQUE(FILTER(TicketData!X2:X, TicketData!X2:X<>"", TicketData!X2:X<>"IssueCategoryName")),' +
+    'cats, UNIQUE(FILTER(TicketData!Y2:Y, TicketData!Y2:Y<>"", TicketData!Y2:Y<>"IssueCategoryName")),' +
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, cats,' +
@@ -523,10 +523,10 @@ function setupPriorityAnalysisSheet(ss) {
   const headers = ['Priority', 'Open', 'Created (MTD)', 'Closed (MTD)', 'Avg Resolution (days)', 'Avg Response (hrs)', 'Breach Rate', 'Last Refreshed'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  // Main formula - aggregates by Priority (column R)
+  // Main formula - aggregates by Priority (column S)
   const mainFormula =
     '=LET(' +
-    'pris, UNIQUE(FILTER(TicketData!R2:R, TicketData!R2:R<>"", TicketData!R2:R<>"Priority")),' +
+    'pris, UNIQUE(FILTER(TicketData!S2:S, TicketData!S2:S<>"", TicketData!S2:S<>"Priority")),' +
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, pris,' +
@@ -705,10 +705,10 @@ function setupTechnicianPerformanceSheet(ss) {
   const headers = ['Technician', 'Team', 'Open', 'Created (MTD)', 'Closed (MTD)', 'Aged 30+', 'Avg Resolution (days)', 'Breach Rate', 'Last Refreshed', 'Sort Col#', 'Desc?'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  // Main formula - aggregates by OwnerName (column P), with dynamic sorting
+  // Main formula - aggregates by OwnerName (column Q), with dynamic sorting
   const mainFormula =
     '=LET(' +
-    'techs, UNIQUE(FILTER(TicketData!P2:P, TicketData!P2:P<>"", TicketData!P2:P<>"OwnerName")),' +
+    'techs, UNIQUE(FILTER(TicketData!Q2:Q, TicketData!Q2:Q<>"", TicketData!Q2:Q<>"OwnerName")),' +
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, techs,' +
@@ -886,10 +886,10 @@ function setupLocationTypeComparisonSheet(ss) {
   const headers = ['Location Type', 'Locations', 'Open', 'Created (MTD)', 'Closed (MTD)', 'Avg per Location', 'Aged 30+', '% Aged', 'Last Refreshed'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  // Main formula - aggregates by LocationType (column N)
+  // Main formula - aggregates by LocationType (column O)
   const mainFormula =
     '=LET(' +
-    'types, UNIQUE(FILTER(TicketData!N2:N, TicketData!N2:N<>"", TicketData!N2:N<>"LocationType")),' +
+    'types, UNIQUE(FILTER(TicketData!O2:O, TicketData!O2:O<>"", TicketData!O2:O<>"LocationType")),' +
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, types,' +
@@ -1047,10 +1047,10 @@ function setupFrequentRequestersSheet(ss) {
   const headers = ['Requester', 'Total Tickets', 'Open', 'Closed', 'Top Category', 'Avg Resolution (days)', 'Last Refreshed', 'Sort Col#', 'Desc?'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  // Main formula - top 50 requesters, with dynamic sorting
+  // Main formula - top 50 requesters by RequesterName (column AC), with dynamic sorting
   const mainFormula =
     '=LET(' +
-    'reqs, UNIQUE(FILTER(TicketData!AB2:AB, TicketData!AB2:AB<>"", TicketData!AB2:AB<>"RequesterName")),' +
+    'reqs, UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AC2:AC<>"RequesterName")),' +
     'col_a, reqs,' +
     'col_b, BYROW(reqs, LAMBDA(r, COUNTIF(TicketData!AC:AC, r))),' +
     'col_c, BYROW(reqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "No"))),' +

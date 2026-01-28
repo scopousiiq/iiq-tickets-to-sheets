@@ -877,9 +877,10 @@ function setupLocationBreakdownSheet(ss) {
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
   // Single LET formula that outputs the entire sortable table
+  // Note: Uses column N (LocationName) consistently for matching
   const mainFormula =
     '=LET(' +
-    'locs, UNIQUE(FILTER(TicketData!M2:M, TicketData!M2:M<>"", TicketData!M2:M<>"LocationName")),' +
+    'locs, UNIQUE(FILTER(TicketData!N2:N, TicketData!N2:N<>"", TicketData!N2:N<>"LocationName")),' +
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, locs,' +
