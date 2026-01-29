@@ -89,17 +89,18 @@ Go to Extensions > Apps Script > Triggers (clock icon) and add these triggers:
 | `TeamWorkload` | Open tickets, created/closed this month, and aging by team |
 | `SLACompliance` | Monthly SLA breach rates and average response/resolution times |
 | `PerformanceTrends` | "Are we getting better?" — key metrics over time |
-| `AtRiskQueue` | Open tickets approaching SLA breach (action needed!) |
+| `AtRiskResponse` | Open tickets approaching Response SLA breach |
+| `AtRiskResolution` | Open tickets approaching Resolution SLA breach |
 
 ### Additional Analytics (add via menu)
 
-Use **iiQ Data > Add Analytics Sheet** to add any of these 14 optional sheets:
+Use **iiQ Data > Add Analytics Sheet** to add any of these 17 optional sheets:
 
 | Category | Available Sheets |
 |----------|------------------|
 | Volume & Trends | Seasonal Comparison (YoY), Temporal Patterns |
 | Backlog & Quality | Stale Tickets, Reopen Rate |
-| SLA & Response | First Contact Resolution, Response Distribution, Queue Time Analysis |
+| SLA & Response | First Contact Resolution, Response Distribution, Response Trends, Queue Time Analysis, Queue Time by Team, Queue Time Trend |
 | Team & Staff | Technician Performance, Functional Area Summary |
 | Location | Location Breakdown, Location Type Comparison |
 | Issue & Requester | Issue Category Volume, Priority Analysis, Frequent Requesters |

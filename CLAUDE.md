@@ -42,7 +42,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively). Skips if loading incomplete. |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
 | `Triggers.gs` | Time-driven trigger functions (no UI dialogs) |
-| `OptionalMetrics.gs` | Additional analytics sheets added via menu (14 optional KPI sheets) |
+| `OptionalMetrics.gs` | Additional analytics sheets added via menu (17 optional KPI sheets) |
 
 **Key Dependencies:**
 - `ApiClient.gs` → `Config.gs`
@@ -128,7 +128,9 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | FirstContactResolution | "How many tickets resolved same-day?" | Same-day %, 4-hour resolution %, monthly trend |
 | ResponseDistribution | "How consistent is our response time?" | Percentiles, distribution buckets, consistency metrics |
 | ResponseTrends | "Are response times improving over time?" | Monthly avg/median/90th%, % meeting targets, consistency |
-| QueueTimeAnalysis | "How long do tickets wait before being picked up?" | Queue time by team, distribution buckets, waiting tickets |
+| QueueTimeAnalysis | "How long do tickets wait before being picked up?" | Summary stats, distribution buckets, waiting tickets |
+| QueueTimeByTeam | "How does queue time vary by team?" | Per-team: avg queue time, ticket count |
+| QueueTimeTrend | "How is queue time trending over time?" | Monthly avg/median/90th%, ticket count, color-coded trends |
 
 ### Team & Staff
 | Sheet | Question Answered | Key Metrics |
@@ -166,6 +168,30 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | X-AA | Issue: IssueCategoryId, IssueCategoryName, IssueTypeId, IssueTypeName |
 | AB-AC | Requester: RequesterId, RequesterName |
 | AD-AJ | SLA Metrics: ResponseThreshold, ResponseActual, ResponseBreach, ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning |
+
+### Analytics Formula Column Reference
+
+**IMPORTANT:** Analytics sheets must use Name columns (not ID columns) for UNIQUE filters and COUNTIFS matching. The pattern is: get unique Names, then count/aggregate by Name.
+
+| Entity | ID Column (don't use) | Name Column (use this) |
+|--------|----------------------|------------------------|
+| Team | K (TeamId) | **L (TeamName)** |
+| Location | M (LocationId) | **N (LocationName)** |
+| LocationType | - | **O (LocationType)** |
+| Owner | P (OwnerId) | **Q (OwnerName)** |
+| Priority | - | **S (Priority)** |
+| IssueCategory | X (IssueCategoryId) | **Y (IssueCategoryName)** |
+| IssueType | Z (IssueTypeId) | **AA (IssueTypeName)** |
+| Requester | AB (RequesterId) | **AC (RequesterName)** |
+
+Example pattern for aggregating by team:
+```javascript
+// CORRECT: Use column L (TeamName) for both UNIQUE and COUNTIFS
+'teams, UNIQUE(FILTER(TicketData!L2:L, TicketData!L2:L<>"")),' +
+'col_c, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "No"))),'
+
+// WRONG: Don't mix K (TeamId) in UNIQUE with L (TeamName) in COUNTIFS
+```
 
 ## Google Apps Script Notes
 
