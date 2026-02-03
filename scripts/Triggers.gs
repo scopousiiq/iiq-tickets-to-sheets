@@ -91,9 +91,15 @@ function triggerOpenTicketRefresh() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('TicketData');
   const config = getConfig();
+  const reloadInProgress = getCurrentYearReloadInProgress();
 
   if (!sheet) {
     logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
+    return;
+  }
+
+  if (reloadInProgress) {
+    logOperation('Trigger', 'SKIP', 'Open ticket refresh skipped - current year reload in progress');
     return;
   }
 
@@ -135,9 +141,15 @@ function triggerNewTickets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('TicketData');
   const config = getConfig();
+  const reloadInProgress = getCurrentYearReloadInProgress();
 
   if (!sheet) {
     logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
+    return;
+  }
+
+  if (reloadInProgress) {
+    logOperation('Trigger', 'SKIP', 'New tickets check skipped - current year reload in progress');
     return;
   }
 
@@ -213,6 +225,13 @@ function triggerWeeklyFullRefresh() {
     // Step 3: Reset open refresh progress
     resetOpenRefreshProgress();
 
+    // Step 3b: Flag current-year reload in progress (persistent across runs)
+    if (config.currentYear && config.currentYear > historicalCutoff) {
+      setCurrentYearReloadInProgress(true);
+    } else {
+      setCurrentYearReloadInProgress(false);
+    }
+
     logOperation('Trigger', 'WEEKLY_RESET',
       `Reset complete. Will reload years > ${historicalCutoff}. Run triggerDataContinue to reload.`);
 
@@ -225,6 +244,9 @@ function triggerWeeklyFullRefresh() {
     logOperation('Trigger', 'WEEKLY_RELOAD',
       `Initial reload: ${result.batchCount} batches, ${result.ticketCount} tickets, ` +
       `complete=${result.complete}`);
+    if (result.complete) {
+      setCurrentYearReloadInProgress(false);
+    }
 
   } catch (error) {
     logOperation('Trigger', 'ERROR', `Weekly full refresh failed: ${error.message}`);
@@ -259,7 +281,8 @@ function triggerDataContinue() {
   const config = getConfig();
 
   // Priority 1: Check if initial ticket load needs continuing
-  const ticketsComplete = isTicketLoadingComplete(config);
+  const reloadInProgress = getCurrentYearReloadInProgress();
+  const ticketsComplete = reloadInProgress ? false : isTicketLoadingComplete(config);
   if (!ticketsComplete) {
     let sheet = ss.getSheetByName('TicketData');
     if (!sheet) {
@@ -273,6 +296,9 @@ function triggerDataContinue() {
       logOperation('Trigger', 'TICKET_DATA',
         `${result.batchCount} batches, ${result.ticketCount} tickets, ` +
         `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
+      if (reloadInProgress && result.complete) {
+        setCurrentYearReloadInProgress(false);
+      }
     } catch (error) {
       logOperation('Trigger', 'ERROR', `Ticket data continue failed: ${error.message}`);
     }
@@ -350,6 +376,23 @@ function isTicketLoadingComplete(config) {
   }
 
   return true;
+}
+
+/**
+ * Persistent flag to keep current-year reload running across trigger invocations
+ */
+function getCurrentYearReloadInProgress() {
+  const props = PropertiesService.getScriptProperties();
+  return props.getProperty('CURRENT_YEAR_RELOAD_IN_PROGRESS') === 'TRUE';
+}
+
+function setCurrentYearReloadInProgress(inProgress) {
+  const props = PropertiesService.getScriptProperties();
+  if (inProgress) {
+    props.setProperty('CURRENT_YEAR_RELOAD_IN_PROGRESS', 'TRUE');
+  } else {
+    props.deleteProperty('CURRENT_YEAR_RELOAD_IN_PROGRESS');
+  }
 }
 
 /**

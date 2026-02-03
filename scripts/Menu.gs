@@ -39,6 +39,8 @@ function onOpen() {
     .addSubMenu(ui.createMenu('Ticket Data')
       .addItem('Continue Loading (Initial)', 'refreshTicketDataContinue')
       .addSeparator()
+      .addItem('Clear Year Data + Reset Progress', 'clearYearDataAndResetProgress')
+      .addSeparator()
       .addItem('Open Ticket Refresh (Start)', 'refreshOpenTicketsStart')
       .addItem('Open Ticket Refresh (Continue)', 'refreshOpenTicketsContinue')
       .addItem('Open Refresh Status', 'showOpenRefreshStatus')

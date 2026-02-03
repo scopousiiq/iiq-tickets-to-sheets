@@ -57,6 +57,10 @@ function refreshTicketDataContinue() {
     `Runtime: ${(result.runtime / 1000).toFixed(1)} seconds`,
     ui.ButtonSet.OK
   );
+
+  if (result.complete) {
+    setCurrentYearReloadInProgress(false);
+  }
 }
 
 /**
@@ -97,6 +101,7 @@ function refreshTicketDataFull() {
   config.historicalYears.forEach(year => resetYearProgress(year));
   if (config.currentYear) {
     resetCurrentYearProgress(config.currentYear);
+    setCurrentYearReloadInProgress(true);
   }
 
   logOperation('Ticket Data', 'FULL_RESET', 'Cleared all data and reset all progress');
@@ -142,6 +147,7 @@ function refreshTicketDataCurrentYear() {
 
   // Reset current year progress
   resetCurrentYearProgress(currentYear);
+  setCurrentYearReloadInProgress(true);
 
   logOperation('Ticket Data', 'RESET_CURRENT', `Cleared ${currentYear} data, ready for re-fetch`);
 
@@ -154,6 +160,10 @@ function refreshTicketDataCurrentYear() {
     `${result.complete ? 'Current year refreshed!' : 'Run "Continue Loading" to finish.'}`,
     ui.ButtonSet.OK
   );
+
+  if (result.complete) {
+    setCurrentYearReloadInProgress(false);
+  }
 }
 
 /**
@@ -829,6 +839,8 @@ function deleteRowsByYear(sheet, year) {
 
     logOperation('Ticket Data', 'DELETE', `Deleted ${rowsToDelete.length} rows for year ${year}`);
   }
+
+  return rowsToDelete.length;
 }
 
 // =============================================================================
@@ -990,6 +1002,81 @@ function getOpenRefreshStatusText() {
  */
 function refreshOpenTickets() {
   refreshOpenTicketsStart();
+}
+
+/**
+ * Clear a configured year and reset its progress (dynamic, based on Config)
+ * Prevents duplicates when reloading after a partial wipe.
+ */
+function clearYearDataAndResetProgress() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('TicketData');
+
+  if (!sheet) {
+    ui.alert('Error', 'TicketData sheet not found.', ui.ButtonSet.OK);
+    return;
+  }
+
+  const config = getConfig();
+  const years = [...config.historicalYears];
+  if (config.currentYear) years.push(config.currentYear);
+
+  if (years.length === 0) {
+    ui.alert('No Years Configured', 'No ticket years found in Config.', ui.ButtonSet.OK);
+    return;
+  }
+
+  years.sort((a, b) => a - b);
+
+  const prompt = ui.prompt(
+    'Clear Year Data + Reset Progress',
+    `Enter a year to clear.\nConfigured years: ${years.join(', ')}`,
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (prompt.getSelectedButton() !== ui.Button.OK) return;
+
+  const yearText = String(prompt.getResponseText() || '').trim();
+  if (!/^\d{4}$/.test(yearText)) {
+    ui.alert('Invalid Year', 'Please enter a 4-digit year (e.g., 2025).', ui.ButtonSet.OK);
+    return;
+  }
+
+  const year = parseInt(yearText, 10);
+  if (!years.includes(year)) {
+    ui.alert('Not Configured', `Year ${year} is not configured in Config.`, ui.ButtonSet.OK);
+    return;
+  }
+
+  const isCurrent = config.currentYear === year;
+  const response = ui.alert(
+    `Clear ${year} Data`,
+    `This will:\n` +
+      `1. Delete all TicketData rows where Year = ${year}\n` +
+      `2. Reset ${year} progress keys in Config\n\n` +
+      `Continue?`,
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) return;
+
+  const deleted = deleteRowsByYear(sheet, year);
+  if (isCurrent) {
+    resetCurrentYearProgress(year);
+    setCurrentYearReloadInProgress(true);
+  } else {
+    resetYearProgress(year);
+  }
+
+  logOperation('Ticket Data', 'CLEAR_YEAR', `Cleared ${deleted} rows for ${year} and reset progress`);
+
+  ui.alert(
+    'Clear Complete',
+    `Deleted ${deleted} rows for ${year}.\n` +
+      `Progress reset. Run "Continue Loading (Initial)" to reload.`,
+    ui.ButtonSet.OK
+  );
 }
 
 /**
