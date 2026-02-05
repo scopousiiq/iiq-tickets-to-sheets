@@ -427,3 +427,113 @@ function logOperation(operation, status, details) {
     sheet.deleteRows(2, lastRow - 501);
   }
 }
+
+// =============================================================================
+// CONCURRENCY CONTROL - LockService helpers
+// =============================================================================
+
+/**
+ * Acquire the script lock for long-running operations.
+ * Prevents concurrent execution of data loading, refreshing, or destructive operations.
+ *
+ * @param {number} waitTimeMs - Time to wait for lock (default 2000ms for menu items)
+ * @returns {GoogleAppsScript.Lock.Lock|null} - Lock object if acquired, null if failed
+ */
+function acquireScriptLock(waitTimeMs = 2000) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(waitTimeMs);
+    return lock;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Try to acquire script lock without waiting (for triggers that should skip if busy)
+ *
+ * @param {number} waitTimeMs - Brief wait time (default 1000ms)
+ * @returns {GoogleAppsScript.Lock.Lock|null} - Lock object if acquired, null if busy
+ */
+function tryAcquireScriptLock(waitTimeMs = 1000) {
+  const lock = LockService.getScriptLock();
+  const acquired = lock.tryLock(waitTimeMs);
+  return acquired ? lock : null;
+}
+
+/**
+ * Release the script lock
+ *
+ * @param {GoogleAppsScript.Lock.Lock} lock - Lock object to release
+ */
+function releaseScriptLock(lock) {
+  if (lock) {
+    try {
+      lock.releaseLock();
+    } catch (e) {
+      // Lock may have already been released or expired - ignore
+    }
+  }
+}
+
+// =============================================================================
+// TRIGGER SAFETY - Prevent destructive operations while triggers are active
+// =============================================================================
+
+/**
+ * Check if any automated triggers are installed
+ *
+ * @returns {Object} - { hasTriggers: boolean, count: number, triggers: string[] }
+ */
+function checkForTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
+  const triggerNames = triggers.map(t => t.getHandlerFunction());
+  return {
+    hasTriggers: triggers.length > 0,
+    count: triggers.length,
+    triggers: triggerNames
+  };
+}
+
+/**
+ * Require that no triggers are installed before proceeding with destructive operations.
+ * Shows an error dialog if triggers exist.
+ *
+ * @param {string} operationName - Name of the operation for error message
+ * @returns {boolean} - true if safe to proceed (no triggers), false if blocked
+ */
+function requireNoTriggers(operationName) {
+  const ui = SpreadsheetApp.getUi();
+  const triggerStatus = checkForTriggers();
+
+  if (triggerStatus.hasTriggers) {
+    ui.alert(
+      'Triggers Must Be Removed',
+      `Cannot run "${operationName}" while automated triggers are installed.\n\n` +
+      `${triggerStatus.count} trigger(s) found:\n• ${triggerStatus.triggers.join('\n• ')}\n\n` +
+      `To proceed:\n` +
+      `1. Go to iiQ Data > Setup > Remove Automated Triggers\n` +
+      `2. Run "${operationName}" again\n` +
+      `3. Optionally re-add triggers via Setup > Setup Automated Triggers`,
+      ui.ButtonSet.OK
+    );
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Show a "busy" message when lock acquisition fails (for menu items)
+ *
+ * @param {string} operationName - Name of the operation that couldn't start
+ */
+function showOperationBusyMessage(operationName) {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert(
+    'Operation In Progress',
+    `Cannot start "${operationName}" because another operation is currently running.\n\n` +
+    `Please wait for the current operation to complete and try again.`,
+    ui.ButtonSet.OK
+  );
+}

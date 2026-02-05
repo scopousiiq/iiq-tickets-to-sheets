@@ -125,21 +125,33 @@ function appendDailySnapshot() {
  * meaningful backlog to snapshot (all tickets are closed).
  */
 function triggerDailySnapshot() {
-  const config = getConfig();
-
-  // Skip for historical school years - no meaningful backlog to capture
-  if (!isSchoolYearCurrent(config)) {
-    logOperation('Trigger', 'SKIP',
-      `Daily snapshot skipped - school year ${config.schoolYear} is historical`);
+  // SAFETY: Try to acquire lock - skip if another operation is running
+  const lock = tryAcquireScriptLock();
+  if (!lock) {
+    logOperation('Trigger', 'SKIP', 'Daily snapshot skipped - another operation is in progress');
     return;
   }
 
-  logOperation('Trigger', 'START', 'Daily snapshot triggered');
-
   try {
-    appendDailySnapshot();
-  } catch (error) {
-    logOperation('Trigger', 'ERROR', 'Daily snapshot failed: ' + error.message);
+    const config = getConfig();
+
+    // Skip for historical school years - no meaningful backlog to capture
+    if (!isSchoolYearCurrent(config)) {
+      logOperation('Trigger', 'SKIP',
+        `Daily snapshot skipped - school year ${config.schoolYear} is historical`);
+      return;
+    }
+
+    logOperation('Trigger', 'START', 'Daily snapshot triggered');
+
+    try {
+      appendDailySnapshot();
+    } catch (error) {
+      logOperation('Trigger', 'ERROR', 'Daily snapshot failed: ' + error.message);
+    }
+
+  } finally {
+    releaseScriptLock(lock);
   }
 }
 

@@ -38,7 +38,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | File | Purpose |
 |------|---------|
 | `Setup.gs` | Initial spreadsheet setup - creates all sheets, headers, and formulas |
-| `Config.gs` | Reads settings from Config sheet, school year date calculation, logging utilities |
+| `Config.gs` | Reads settings from Config sheet, school year date calculation, logging utilities, concurrency control (LockService helpers) |
 | `ApiClient.gs` | HTTP client with retry/exponential backoff (429, 503, network errors) |
 | `TicketData.gs` | Bulk ticket loader - 36 columns (28 ticket + 7 SLA), fetches SLA per-batch, school year pagination, 5.5min timeout with resume |
 | `Teams.gs` | Team directory loader, preserves Functional Area mappings |
@@ -90,6 +90,55 @@ const rows = tickets.map(t => extractTicketRow(t, now, config.schoolYear, slaMap
 **Rate Limiting:**
 - Exponential backoff: 2s base, doubles on retry (up to 3 retries)
 - Configurable throttle via `THROTTLE_MS` in Config sheet
+
+**Concurrency Control (LockService):**
+All long-running operations use Google Apps Script's `LockService` to prevent concurrent execution:
+- Menu functions use `acquireScriptLock()` - waits briefly, shows "busy" message if unavailable
+- Trigger functions use `tryAcquireScriptLock()` - skips gracefully if another operation is running
+- Locks auto-release after 6 minutes (matches Apps Script execution limit) or when script ends
+- Prevents data corruption from overlapping operations (e.g., trigger + manual menu action)
+
+```javascript
+// Menu item pattern:
+const lock = acquireScriptLock();
+if (!lock) {
+  showOperationBusyMessage('Operation Name');
+  return;
+}
+try {
+  // ... do work ...
+} finally {
+  releaseScriptLock(lock);
+}
+
+// Trigger pattern:
+const lock = tryAcquireScriptLock();
+if (!lock) {
+  logOperation('Trigger', 'SKIP', 'Skipped - another operation is in progress');
+  return;
+}
+try {
+  // ... do work ...
+} finally {
+  releaseScriptLock(lock);
+}
+```
+
+**Trigger Safety (Destructive Operations):**
+Destructive menu operations require all triggers to be removed first:
+- **Full Reload** - Clears all data and resets progress
+- **Clear Data + Reset Progress** - Clears data and unlocks configuration
+
+These operations call `requireNoTriggers()` which blocks if any triggers are installed, preventing:
+- Triggers running during reconfiguration
+- Triggers reloading data before configuration changes are complete
+- Data inconsistencies from trigger/menu overlap
+
+Workflow for destructive operations:
+1. Remove triggers: **iiQ Data > Setup > Remove Automated Triggers**
+2. Run destructive operation
+3. Make any configuration changes
+4. Re-add triggers: **iiQ Data > Setup > Setup Automated Triggers**
 
 ## Sheets Overview
 

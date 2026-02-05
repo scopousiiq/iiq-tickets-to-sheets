@@ -99,54 +99,66 @@
  * Use triggerDataContinue (every 10 min) to ensure completion.
  */
 function triggerOpenTicketRefresh() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('TicketData');
-  const config = getConfig();
-  const reloadInProgress = getCurrentYearReloadInProgress();
-
-  if (!sheet) {
-    logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
+  // SAFETY: Try to acquire lock - skip if another operation is running
+  const lock = tryAcquireScriptLock();
+  if (!lock) {
+    logOperation('Trigger', 'SKIP', 'Open ticket refresh skipped - another operation is in progress');
     return;
   }
-
-  // For historical school years, only run if there are still open tickets
-  if (!isSchoolYearCurrent(config)) {
-    const openCount = countOpenTickets(sheet);
-    if (openCount === 0) {
-      logOperation('Trigger', 'SKIP',
-        `Open ticket refresh skipped - school year ${config.schoolYear} is historical and all tickets are closed`);
-      return;
-    }
-    logOperation('Trigger', 'INFO',
-      `Historical school year ${config.schoolYear} still has ${openCount} open tickets - refreshing`);
-  }
-
-  if (reloadInProgress) {
-    logOperation('Trigger', 'SKIP', 'Open ticket refresh skipped - current year reload in progress');
-    return;
-  }
-
-  // Only run if initial load is complete
-  if (!isTicketLoadingComplete(config)) {
-    logOperation('Trigger', 'SKIP', 'Open ticket refresh skipped - initial load not complete. Run triggerDataContinue to complete initial load.');
-    return;
-  }
-
-  // Reset progress to start a new cycle (each trigger run = new cycle)
-  // This fetches tickets modified since the last successful run
-  resetOpenRefreshProgress();
-
-  logOperation('Trigger', 'START', 'Open ticket refresh started');
 
   try {
-    const result = runOpenTicketRefresh(sheet);
-    const skippedInfo = result.skippedCount ? `, skipped ${result.skippedCount}` : '';
-    logOperation('Trigger', 'OPEN_REFRESH',
-      `Updated ${result.updatedCount}, appended ${result.appendedCount}${skippedInfo}, ` +
-      `${result.ticketCount} total tickets, ${result.batchCount} batches, ` +
-      `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
-  } catch (error) {
-    logOperation('Trigger', 'ERROR', `Open ticket refresh failed: ${error.message}`);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('TicketData');
+    const config = getConfig();
+    const reloadInProgress = getCurrentYearReloadInProgress();
+
+    if (!sheet) {
+      logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
+      return;
+    }
+
+    // For historical school years, only run if there are still open tickets
+    if (!isSchoolYearCurrent(config)) {
+      const openCount = countOpenTickets(sheet);
+      if (openCount === 0) {
+        logOperation('Trigger', 'SKIP',
+          `Open ticket refresh skipped - school year ${config.schoolYear} is historical and all tickets are closed`);
+        return;
+      }
+      logOperation('Trigger', 'INFO',
+        `Historical school year ${config.schoolYear} still has ${openCount} open tickets - refreshing`);
+    }
+
+    if (reloadInProgress) {
+      logOperation('Trigger', 'SKIP', 'Open ticket refresh skipped - current year reload in progress');
+      return;
+    }
+
+    // Only run if initial load is complete
+    if (!isTicketLoadingComplete(config)) {
+      logOperation('Trigger', 'SKIP', 'Open ticket refresh skipped - initial load not complete. Run triggerDataContinue to complete initial load.');
+      return;
+    }
+
+    // Reset progress to start a new cycle (each trigger run = new cycle)
+    // This fetches tickets modified since the last successful run
+    resetOpenRefreshProgress();
+
+    logOperation('Trigger', 'START', 'Open ticket refresh started');
+
+    try {
+      const result = runOpenTicketRefresh(sheet);
+      const skippedInfo = result.skippedCount ? `, skipped ${result.skippedCount}` : '';
+      logOperation('Trigger', 'OPEN_REFRESH',
+        `Updated ${result.updatedCount}, appended ${result.appendedCount}${skippedInfo}, ` +
+        `${result.ticketCount} total tickets, ${result.batchCount} batches, ` +
+        `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
+    } catch (error) {
+      logOperation('Trigger', 'ERROR', `Open ticket refresh failed: ${error.message}`);
+    }
+
+  } finally {
+    releaseScriptLock(lock);
   }
 }
 
@@ -167,45 +179,57 @@ function triggerOpenRefreshContinue() {
  * Only runs for current school year (historical school years don't need incremental updates).
  */
 function triggerNewTickets() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('TicketData');
-  const config = getConfig();
-  const reloadInProgress = getCurrentYearReloadInProgress();
-
-  if (!sheet) {
-    logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
+  // SAFETY: Try to acquire lock - skip if another operation is running
+  const lock = tryAcquireScriptLock();
+  if (!lock) {
+    logOperation('Trigger', 'SKIP', 'New tickets check skipped - another operation is in progress');
     return;
   }
-
-  if (reloadInProgress) {
-    logOperation('Trigger', 'SKIP', 'New tickets check skipped - school year reload in progress');
-    return;
-  }
-
-  // Only run if initial load is complete
-  if (!isTicketLoadingComplete(config)) {
-    logOperation('Trigger', 'SKIP', 'New tickets check skipped - initial load not complete');
-    return;
-  }
-
-  // Only run for current school year
-  if (!isSchoolYearCurrent(config)) {
-    logOperation('Trigger', 'SKIP', 'New tickets check skipped - school year is historical');
-    return;
-  }
-
-  logOperation('Trigger', 'START', 'New tickets check started');
 
   try {
-    const result = runNewTicketsCheck(sheet, config);
-    if (result.count > 0) {
-      logOperation('Trigger', 'NEW_TICKETS',
-        `Found and added ${result.count} new tickets, runtime=${(result.runtime/1000).toFixed(1)}s`);
-    } else {
-      logOperation('Trigger', 'NEW_TICKETS', 'No new tickets found');
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('TicketData');
+    const config = getConfig();
+    const reloadInProgress = getCurrentYearReloadInProgress();
+
+    if (!sheet) {
+      logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
+      return;
     }
-  } catch (error) {
-    logOperation('Trigger', 'ERROR', `New tickets check failed: ${error.message}`);
+
+    if (reloadInProgress) {
+      logOperation('Trigger', 'SKIP', 'New tickets check skipped - school year reload in progress');
+      return;
+    }
+
+    // Only run if initial load is complete
+    if (!isTicketLoadingComplete(config)) {
+      logOperation('Trigger', 'SKIP', 'New tickets check skipped - initial load not complete');
+      return;
+    }
+
+    // Only run for current school year
+    if (!isSchoolYearCurrent(config)) {
+      logOperation('Trigger', 'SKIP', 'New tickets check skipped - school year is historical');
+      return;
+    }
+
+    logOperation('Trigger', 'START', 'New tickets check started');
+
+    try {
+      const result = runNewTicketsCheck(sheet, config);
+      if (result.count > 0) {
+        logOperation('Trigger', 'NEW_TICKETS',
+          `Found and added ${result.count} new tickets, runtime=${(result.runtime/1000).toFixed(1)}s`);
+      } else {
+        logOperation('Trigger', 'NEW_TICKETS', 'No new tickets found');
+      }
+    } catch (error) {
+      logOperation('Trigger', 'ERROR', `New tickets check failed: ${error.message}`);
+    }
+
+  } finally {
+    releaseScriptLock(lock);
   }
 }
 
@@ -222,63 +246,75 @@ function triggerNewTickets() {
  * - Any sync issues
  */
 function triggerWeeklyFullRefresh() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const config = getConfig();
-  const ticketSheet = ss.getSheetByName('TicketData');
-
-  if (!config.schoolYear) {
-    logOperation('Trigger', 'ERROR', 'No SCHOOL_YEAR configured');
+  // SAFETY: Try to acquire lock - skip if another operation is running
+  const lock = tryAcquireScriptLock();
+  if (!lock) {
+    logOperation('Trigger', 'SKIP', 'Weekly full refresh skipped - another operation is in progress');
     return;
   }
-
-  // Skip for historical school years - their data is static
-  if (!isSchoolYearCurrent(config)) {
-    logOperation('Trigger', 'SKIP',
-      `Weekly refresh skipped - school year ${config.schoolYear} is historical (data is static)`);
-    return;
-  }
-
-  logOperation('Trigger', 'START',
-    `Weekly full refresh triggered for current school year ${config.schoolYear}.`);
 
   try {
-    // Step 1: Clear all ticket data for this school year
-    if (ticketSheet) {
-      const lastRow = ticketSheet.getLastRow();
-      if (lastRow > 1) {
-        ticketSheet.getRange(2, 1, lastRow - 1, 36).clear();
-        logOperation('Trigger', 'WEEKLY_RESET', `Cleared ${lastRow - 1} ticket rows`);
-      }
-    }
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const config = getConfig();
+    const ticketSheet = ss.getSheetByName('TicketData');
 
-    // Step 2: Reset school year progress
-    resetSchoolYearProgress();
-    logOperation('Trigger', 'PROGRESS_RESET', `Reset ticket progress for ${config.schoolYear}`);
-
-    // Step 3: Reset open refresh progress
-    resetOpenRefreshProgress();
-
-    // Step 4: Flag reload in progress
-    setCurrentYearReloadInProgress(true);
-
-    logOperation('Trigger', 'WEEKLY_RESET',
-      `Reset complete. Reloading school year ${config.schoolYear}.`);
-
-    // Step 5: Start reloading immediately
-    if (!ticketSheet) {
-      logOperation('Trigger', 'ERROR', 'TicketData sheet not found - cannot reload');
+    if (!config.schoolYear) {
+      logOperation('Trigger', 'ERROR', 'No SCHOOL_YEAR configured');
       return;
     }
-    const result = runTicketDataLoader(ticketSheet);
-    logOperation('Trigger', 'WEEKLY_RELOAD',
-      `Initial reload: ${result.batchCount} batches, ${result.ticketCount} tickets, ` +
-      `complete=${result.complete}`);
-    if (result.complete) {
-      setCurrentYearReloadInProgress(false);
+
+    // Skip for historical school years - their data is static
+    if (!isSchoolYearCurrent(config)) {
+      logOperation('Trigger', 'SKIP',
+        `Weekly refresh skipped - school year ${config.schoolYear} is historical (data is static)`);
+      return;
     }
 
-  } catch (error) {
-    logOperation('Trigger', 'ERROR', `Weekly full refresh failed: ${error.message}`);
+    logOperation('Trigger', 'START',
+      `Weekly full refresh triggered for current school year ${config.schoolYear}.`);
+
+    try {
+      // Step 1: Clear all ticket data for this school year
+      if (ticketSheet) {
+        const lastRow = ticketSheet.getLastRow();
+        if (lastRow > 1) {
+          ticketSheet.getRange(2, 1, lastRow - 1, 36).clear();
+          logOperation('Trigger', 'WEEKLY_RESET', `Cleared ${lastRow - 1} ticket rows`);
+        }
+      }
+
+      // Step 2: Reset school year progress
+      resetSchoolYearProgress();
+      logOperation('Trigger', 'PROGRESS_RESET', `Reset ticket progress for ${config.schoolYear}`);
+
+      // Step 3: Reset open refresh progress
+      resetOpenRefreshProgress();
+
+      // Step 4: Flag reload in progress
+      setCurrentYearReloadInProgress(true);
+
+      logOperation('Trigger', 'WEEKLY_RESET',
+        `Reset complete. Reloading school year ${config.schoolYear}.`);
+
+      // Step 5: Start reloading immediately
+      if (!ticketSheet) {
+        logOperation('Trigger', 'ERROR', 'TicketData sheet not found - cannot reload');
+        return;
+      }
+      const result = runTicketDataLoader(ticketSheet);
+      logOperation('Trigger', 'WEEKLY_RELOAD',
+        `Initial reload: ${result.batchCount} batches, ${result.ticketCount} tickets, ` +
+        `complete=${result.complete}`);
+      if (result.complete) {
+        setCurrentYearReloadInProgress(false);
+      }
+
+    } catch (error) {
+      logOperation('Trigger', 'ERROR', `Weekly full refresh failed: ${error.message}`);
+    }
+
+  } finally {
+    releaseScriptLock(lock);
   }
 }
 
@@ -306,73 +342,85 @@ function triggerWeeklyFullRefresh() {
  * You can leave this trigger enabled permanently - it only runs when needed.
  */
 function triggerDataContinue() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const config = getConfig();
-
-  // Priority 1: Check if initial ticket load needs continuing
-  const reloadInProgress = getCurrentYearReloadInProgress();
-  const ticketsComplete = reloadInProgress ? false : isTicketLoadingComplete(config);
-  if (!ticketsComplete) {
-    let sheet = ss.getSheetByName('TicketData');
-    if (!sheet) {
-      sheet = createTicketSheet(ss);
-    }
-
-    logOperation('Trigger', 'START', 'Continuing ticket data loading (with SLA)');
-
-    try {
-      const result = runTicketDataLoader(sheet);
-      logOperation('Trigger', 'TICKET_DATA',
-        `${result.batchCount} batches, ${result.ticketCount} tickets, ` +
-        `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
-      if (reloadInProgress && result.complete) {
-        setCurrentYearReloadInProgress(false);
-      }
-    } catch (error) {
-      logOperation('Trigger', 'ERROR', `Ticket data continue failed: ${error.message}`);
-    }
+  // SAFETY: Try to acquire lock - skip if another operation is running
+  const lock = tryAcquireScriptLock();
+  if (!lock) {
+    logOperation('Trigger', 'SKIP', 'Data continue skipped - another operation is in progress');
     return;
   }
 
-  // Priority 2: Check if open ticket refresh needs continuing
-  const progress = getOpenRefreshProgress();
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const config = getConfig();
 
-  // Log diagnostic info about the state we found
-  logOperation('Trigger', 'CHECK',
-    `Open refresh state: page=${progress.page}, complete=${progress.complete}, lastRun=${progress.lastRun || 'never'}`);
+    // Priority 1: Check if initial ticket load needs continuing
+    const reloadInProgress = getCurrentYearReloadInProgress();
+    const ticketsComplete = reloadInProgress ? false : isTicketLoadingComplete(config);
+    if (!ticketsComplete) {
+      let sheet = ss.getSheetByName('TicketData');
+      if (!sheet) {
+        sheet = createTicketSheet(ss);
+      }
 
-  // Check if there's an incomplete refresh to continue (page >= 0 means it started but didn't finish)
-  const refreshInProgress = progress.page >= 0 && !progress.complete;
+      logOperation('Trigger', 'START', 'Continuing ticket data loading (with SLA)');
 
-  if (refreshInProgress) {
-    const sheet = ss.getSheetByName('TicketData');
-    if (!sheet) {
-      logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
+      try {
+        const result = runTicketDataLoader(sheet);
+        logOperation('Trigger', 'TICKET_DATA',
+          `${result.batchCount} batches, ${result.ticketCount} tickets, ` +
+          `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
+        if (reloadInProgress && result.complete) {
+          setCurrentYearReloadInProgress(false);
+        }
+      } catch (error) {
+        logOperation('Trigger', 'ERROR', `Ticket data continue failed: ${error.message}`);
+      }
       return;
     }
 
-    logOperation('Trigger', 'CONTINUE', 'Continuing open ticket refresh');
+    // Priority 2: Check if open ticket refresh needs continuing
+    const progress = getOpenRefreshProgress();
 
-    try {
-      const result = runOpenTicketRefresh(sheet);
-      const skippedInfo = result.skippedCount ? `, skipped ${result.skippedCount}` : '';
-      logOperation('Trigger', 'OPEN_REFRESH',
-        `Updated ${result.updatedCount}, appended ${result.appendedCount}${skippedInfo}, ` +
-        `${result.ticketCount} total tickets, ${result.batchCount} batches, ` +
-        `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
-    } catch (error) {
-      logOperation('Trigger', 'ERROR', `Open ticket refresh continue failed: ${error.message}`);
+    // Log diagnostic info about the state we found
+    logOperation('Trigger', 'CHECK',
+      `Open refresh state: page=${progress.page}, complete=${progress.complete}, lastRun=${progress.lastRun || 'never'}`);
+
+    // Check if there's an incomplete refresh to continue (page >= 0 means it started but didn't finish)
+    const refreshInProgress = progress.page >= 0 && !progress.complete;
+
+    if (refreshInProgress) {
+      const sheet = ss.getSheetByName('TicketData');
+      if (!sheet) {
+        logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
+        return;
+      }
+
+      logOperation('Trigger', 'CONTINUE', 'Continuing open ticket refresh');
+
+      try {
+        const result = runOpenTicketRefresh(sheet);
+        const skippedInfo = result.skippedCount ? `, skipped ${result.skippedCount}` : '';
+        logOperation('Trigger', 'OPEN_REFRESH',
+          `Updated ${result.updatedCount}, appended ${result.appendedCount}${skippedInfo}, ` +
+          `${result.ticketCount} total tickets, ${result.batchCount} batches, ` +
+          `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
+      } catch (error) {
+        logOperation('Trigger', 'ERROR', `Open ticket refresh continue failed: ${error.message}`);
+      }
+      return;
     }
-    return;
-  }
 
-  // Nothing to do
-  if (progress.complete) {
-    logOperation('Trigger', 'IDLE', `Open refresh complete, last run: ${progress.lastRun || 'never'}`);
-  } else if (!progress.lastRun && progress.page < 0) {
-    logOperation('Trigger', 'IDLE', 'No open refresh has been started yet (waiting for triggerOpenTicketRefresh)');
-  } else {
-    logOperation('Trigger', 'IDLE', `Idle - page=${progress.page}, complete=${progress.complete}`);
+    // Nothing to do
+    if (progress.complete) {
+      logOperation('Trigger', 'IDLE', `Open refresh complete, last run: ${progress.lastRun || 'never'}`);
+    } else if (!progress.lastRun && progress.page < 0) {
+      logOperation('Trigger', 'IDLE', 'No open refresh has been started yet (waiting for triggerOpenTicketRefresh)');
+    } else {
+      logOperation('Trigger', 'IDLE', `Idle - page=${progress.page}, complete=${progress.complete}`);
+    }
+
+  } finally {
+    releaseScriptLock(lock);
   }
 }
 

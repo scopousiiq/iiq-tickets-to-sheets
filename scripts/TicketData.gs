@@ -35,38 +35,51 @@ let configRowCache_ = null;
  */
 function refreshTicketDataContinue() {
   const ui = SpreadsheetApp.getUi();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('TicketData');
 
-  if (!sheet) {
-    ui.alert('Error', 'TicketData sheet not found. Please create it first.', ui.ButtonSet.OK);
+  // SAFETY: Acquire lock to prevent concurrent operations
+  const lock = acquireScriptLock();
+  if (!lock) {
+    showOperationBusyMessage('Continue Loading');
     return;
   }
 
-  const status = getTicketDataStatus();
-  const response = ui.alert(
-    'Continue Loading Ticket Data',
-    `Current Status:\n${status.statusText}\n\n` +
-    `This will run until timeout (~5.5 min) or completion.\n` +
-    `Progress is saved after each batch.\n\n` +
-    'Continue?',
-    ui.ButtonSet.YES_NO
-  );
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('TicketData');
 
-  if (response !== ui.Button.YES) return;
+    if (!sheet) {
+      ui.alert('Error', 'TicketData sheet not found. Please create it first.', ui.ButtonSet.OK);
+      return;
+    }
 
-  const result = runTicketDataLoader(sheet);
+    const status = getTicketDataStatus();
+    const response = ui.alert(
+      'Continue Loading Ticket Data',
+      `Current Status:\n${status.statusText}\n\n` +
+      `This will run until timeout (~5.5 min) or completion.\n` +
+      `Progress is saved after each batch.\n\n` +
+      'Continue?',
+      ui.ButtonSet.YES_NO
+    );
 
-  ui.alert(
-    result.complete ? 'Complete' : 'Paused',
-    `Processed ${result.batchCount} batches, ${result.ticketCount} tickets.\n` +
-    `${result.complete ? 'All data loaded!' : 'Run again to continue.'}\n\n` +
-    `Runtime: ${(result.runtime / 1000).toFixed(1)} seconds`,
-    ui.ButtonSet.OK
-  );
+    if (response !== ui.Button.YES) return;
 
-  if (result.complete) {
-    setCurrentYearReloadInProgress(false);
+    const result = runTicketDataLoader(sheet);
+
+    ui.alert(
+      result.complete ? 'Complete' : 'Paused',
+      `Processed ${result.batchCount} batches, ${result.ticketCount} tickets.\n` +
+      `${result.complete ? 'All data loaded!' : 'Run again to continue.'}\n\n` +
+      `Runtime: ${(result.runtime / 1000).toFixed(1)} seconds`,
+      ui.ButtonSet.OK
+    );
+
+    if (result.complete) {
+      setCurrentYearReloadInProgress(false);
+    }
+
+  } finally {
+    releaseScriptLock(lock);
   }
 }
 
@@ -75,43 +88,61 @@ function refreshTicketDataContinue() {
  */
 function refreshTicketDataFull() {
   const ui = SpreadsheetApp.getUi();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('TicketData');
 
-  if (!sheet) {
-    ui.alert('Error', 'TicketData sheet not found.', ui.ButtonSet.OK);
+  // SAFETY: Require no triggers before destructive operation
+  if (!requireNoTriggers('Full Reload')) {
     return;
   }
 
-  const config = getConfig();
-  if (!config.schoolYear) {
-    ui.alert('Error', 'No SCHOOL_YEAR configured in Config sheet.', ui.ButtonSet.OK);
+  // SAFETY: Acquire lock to prevent concurrent operations
+  const lock = acquireScriptLock();
+  if (!lock) {
+    showOperationBusyMessage('Full Reload');
     return;
   }
 
-  const response = ui.alert(
-    'Full Reload',
-    'This will:\n' +
-    '1. Clear ALL ticket data\n' +
-    `2. Reset progress for school year ${config.schoolYear}\n\n` +
-    'This cannot be undone. Continue?',
-    ui.ButtonSet.YES_NO
-  );
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('TicketData');
 
-  if (response !== ui.Button.YES) return;
+    if (!sheet) {
+      ui.alert('Error', 'TicketData sheet not found.', ui.ButtonSet.OK);
+      return;
+    }
 
-  // Clear all data (keep header row)
-  const lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, 36).clear();
+    const config = getConfig();
+    if (!config.schoolYear) {
+      ui.alert('Error', 'No SCHOOL_YEAR configured in Config sheet.', ui.ButtonSet.OK);
+      return;
+    }
+
+    const response = ui.alert(
+      'Full Reload',
+      'This will:\n' +
+      '1. Clear ALL ticket data\n' +
+      `2. Reset progress for school year ${config.schoolYear}\n\n` +
+      'This cannot be undone. Continue?',
+      ui.ButtonSet.YES_NO
+    );
+
+    if (response !== ui.Button.YES) return;
+
+    // Clear all data (keep header row)
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      sheet.getRange(2, 1, lastRow - 1, 36).clear();
+    }
+
+    // Reset school year progress
+    resetSchoolYearProgress();
+    setCurrentYearReloadInProgress(true);
+
+    logOperation('Ticket Data', 'FULL_RESET', `Cleared all data and reset progress for ${config.schoolYear}`);
+    ui.alert('Reset Complete', 'All data cleared. Use "Continue Loading" to start fresh.', ui.ButtonSet.OK);
+
+  } finally {
+    releaseScriptLock(lock);
   }
-
-  // Reset school year progress
-  resetSchoolYearProgress();
-  setCurrentYearReloadInProgress(true);
-
-  logOperation('Ticket Data', 'FULL_RESET', `Cleared all data and reset progress for ${config.schoolYear}`);
-  ui.alert('Reset Complete', 'All data cleared. Use "Continue Loading" to start fresh.', ui.ButtonSet.OK);
 }
 
 /**
@@ -309,11 +340,13 @@ function runTicketDataLoader(sheet) {
           break;
         }
 
-        // For current school year, set TICKET_LAST_FETCH to now so incremental
-        // mode doesn't re-fetch everything from the school year start
-        ticketLastFetch = new Date().toISOString();
-        writeConfigValueDirect('TICKET_LAST_FETCH', ticketLastFetch);
-        logOperation('Ticket Data', 'INFO', `Set incremental baseline to ${ticketLastFetch}`);
+        // For current school year, set TICKET_LAST_FETCH to last ticket's CreatedDate
+        // so incremental mode starts from where pagination left off
+        if (result.lastTicketCreatedDate) {
+          ticketLastFetch = result.lastTicketCreatedDate;
+          writeConfigValueDirect('TICKET_LAST_FETCH', ticketLastFetch);
+          logOperation('Ticket Data', 'INFO', `Set incremental baseline to ${ticketLastFetch}`);
+        }
       }
 
       // Flush once per batch - this is when recalculation happens
@@ -585,12 +618,17 @@ function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages) {
   }
   const isComplete = nextPage >= lastPageIndex;
 
+  // Get the last ticket's CreatedDate for setting TICKET_LAST_FETCH when pagination completes
+  const lastTicket = response.Items[response.Items.length - 1];
+  const lastTicketCreatedDate = lastTicket ? lastTicket.CreatedDate : null;
+
   logOperation('Ticket Data', 'BATCH', `School year ${config.schoolYear} page ${nextPage}: wrote ${rows.length} tickets`);
   return {
     count: rows.length,
     complete: isComplete,
     lastPage: nextPage,
-    totalPages: newTotalPages !== totalPages ? newTotalPages : undefined
+    totalPages: newTotalPages !== totalPages ? newTotalPages : undefined,
+    lastTicketCreatedDate: lastTicketCreatedDate
   };
 }
 
@@ -1159,73 +1197,86 @@ function deleteRowsByYear(sheet, year) {
  */
 function refreshOpenTicketsStart() {
   const ui = SpreadsheetApp.getUi();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('TicketData');
 
-  if (!sheet) {
-    ui.alert('Error', 'TicketData sheet not found.', ui.ButtonSet.OK);
+  // SAFETY: Acquire lock to prevent concurrent operations
+  const lock = acquireScriptLock();
+  if (!lock) {
+    showOperationBusyMessage('Open Ticket Refresh (Start)');
     return;
   }
 
-  const config = getConfig();
-  const isHistorical = !isSchoolYearCurrent(config);
-  const staleDays = config.staleDays || 7;
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('TicketData');
 
-  // Warning for historical school years
-  if (isHistorical) {
-    const openCount = countOpenTickets(sheet);
-    if (openCount === 0) {
-      ui.alert(
-        'Historical School Year - No Open Tickets',
-        `School year ${config.schoolYear} is historical and has no open tickets.\n\n` +
-        `There is nothing to refresh. The data is static.`,
-        ui.ButtonSet.OK
-      );
+    if (!sheet) {
+      ui.alert('Error', 'TicketData sheet not found.', ui.ButtonSet.OK);
       return;
     }
 
-    const response = ui.alert(
-      'Historical School Year Warning',
-      `School year ${config.schoolYear} is historical.\n\n` +
-      `This sheet still has ${openCount} open ticket(s) that may need updates.\n\n` +
-      `The refresh will:\n` +
-      `• UPDATE existing tickets with status/SLA changes\n` +
-      `• NOT add any new tickets (they belong to a different school year)\n\n` +
-      `Continue?`,
-      ui.ButtonSet.YES_NO
+    const config = getConfig();
+    const isHistorical = !isSchoolYearCurrent(config);
+    const staleDays = config.staleDays || 7;
+
+    // Warning for historical school years
+    if (isHistorical) {
+      const openCount = countOpenTickets(sheet);
+      if (openCount === 0) {
+        ui.alert(
+          'Historical School Year - No Open Tickets',
+          `School year ${config.schoolYear} is historical and has no open tickets.\n\n` +
+          `There is nothing to refresh. The data is static.`,
+          ui.ButtonSet.OK
+        );
+        return;
+      }
+
+      const response = ui.alert(
+        'Historical School Year Warning',
+        `School year ${config.schoolYear} is historical.\n\n` +
+        `This sheet still has ${openCount} open ticket(s) that may need updates.\n\n` +
+        `The refresh will:\n` +
+        `• UPDATE existing tickets with status/SLA changes\n` +
+        `• NOT add any new tickets (they belong to a different school year)\n\n` +
+        `Continue?`,
+        ui.ButtonSet.YES_NO
+      );
+      if (response !== ui.Button.YES) return;
+    } else {
+      const response = ui.alert(
+        'Start Open Ticket Refresh',
+        `This will fetch tickets modified since last refresh:\n\n` +
+        `• Update existing tickets with status/SLA changes\n` +
+        `• Add any new tickets not yet in the sheet\n\n` +
+        `Progress is saved after each batch.\n` +
+        `Use "Continue" if this times out.\n\n` +
+        'Start fresh?',
+        ui.ButtonSet.YES_NO
+      );
+      if (response !== ui.Button.YES) return;
+    }
+
+    // Reset progress to start fresh
+    resetOpenRefreshProgress();
+
+    logOperation('Ticket Data', 'START', `Open ticket refresh started fresh (historical=${isHistorical})`);
+
+    const result = runOpenTicketRefresh(sheet);
+
+    const skippedInfo = result.skippedCount ? `\nSkipped ${result.skippedCount} tickets (different school year).` : '';
+    ui.alert(
+      result.complete ? 'Complete' : 'Paused',
+      `Updated ${result.updatedCount} existing rows.\n` +
+      `Appended ${result.appendedCount} new tickets.${skippedInfo}\n` +
+      `Processed ${result.ticketCount} tickets in ${result.batchCount} batches.\n` +
+      `${result.complete ? 'Refresh complete!' : 'Use "Continue" to resume.'}\n\n` +
+      `Runtime: ${(result.runtime / 1000).toFixed(1)} seconds`,
+      ui.ButtonSet.OK
     );
-    if (response !== ui.Button.YES) return;
-  } else {
-    const response = ui.alert(
-      'Start Open Ticket Refresh',
-      `This will fetch tickets modified since last refresh:\n\n` +
-      `• Update existing tickets with status/SLA changes\n` +
-      `• Add any new tickets not yet in the sheet\n\n` +
-      `Progress is saved after each batch.\n` +
-      `Use "Continue" if this times out.\n\n` +
-      'Start fresh?',
-      ui.ButtonSet.YES_NO
-    );
-    if (response !== ui.Button.YES) return;
+
+  } finally {
+    releaseScriptLock(lock);
   }
-
-  // Reset progress to start fresh
-  resetOpenRefreshProgress();
-
-  logOperation('Ticket Data', 'START', `Open ticket refresh started fresh (historical=${isHistorical})`);
-
-  const result = runOpenTicketRefresh(sheet);
-
-  const skippedInfo = result.skippedCount ? `\nSkipped ${result.skippedCount} tickets (different school year).` : '';
-  ui.alert(
-    result.complete ? 'Complete' : 'Paused',
-    `Updated ${result.updatedCount} existing rows.\n` +
-    `Appended ${result.appendedCount} new tickets.${skippedInfo}\n` +
-    `Processed ${result.ticketCount} tickets in ${result.batchCount} batches.\n` +
-    `${result.complete ? 'Refresh complete!' : 'Use "Continue" to resume.'}\n\n` +
-    `Runtime: ${(result.runtime / 1000).toFixed(1)} seconds`,
-    ui.ButtonSet.OK
-  );
 }
 
 /**
@@ -1233,48 +1284,61 @@ function refreshOpenTicketsStart() {
  */
 function refreshOpenTicketsContinue() {
   const ui = SpreadsheetApp.getUi();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('TicketData');
 
-  if (!sheet) {
-    ui.alert('Error', 'TicketData sheet not found.', ui.ButtonSet.OK);
+  // SAFETY: Acquire lock to prevent concurrent operations
+  const lock = acquireScriptLock();
+  if (!lock) {
+    showOperationBusyMessage('Open Ticket Refresh (Continue)');
     return;
   }
 
-  const config = getConfig();
-  const isHistorical = !isSchoolYearCurrent(config);
-  const status = getOpenRefreshStatusText();
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('TicketData');
 
-  // Info message for historical school years
-  let historicalNote = '';
-  if (isHistorical) {
-    historicalNote = `\n\nNote: Historical school year - only updating existing tickets.`;
+    if (!sheet) {
+      ui.alert('Error', 'TicketData sheet not found.', ui.ButtonSet.OK);
+      return;
+    }
+
+    const config = getConfig();
+    const isHistorical = !isSchoolYearCurrent(config);
+    const status = getOpenRefreshStatusText();
+
+    // Info message for historical school years
+    let historicalNote = '';
+    if (isHistorical) {
+      historicalNote = `\n\nNote: Historical school year - only updating existing tickets.`;
+    }
+
+    const response = ui.alert(
+      'Continue Open Ticket Refresh',
+      `Current Status:\n${status}${historicalNote}\n\n` +
+      `This will continue from where it left off.\n\n` +
+      'Continue?',
+      ui.ButtonSet.YES_NO
+    );
+
+    if (response !== ui.Button.YES) return;
+
+    logOperation('Ticket Data', 'CONTINUE', `Open ticket refresh continued (historical=${isHistorical})`);
+
+    const result = runOpenTicketRefresh(sheet);
+
+    const skippedInfo = result.skippedCount ? `\nSkipped ${result.skippedCount} tickets (different school year).` : '';
+    ui.alert(
+      result.complete ? 'Complete' : 'Paused',
+      `Updated ${result.updatedCount} existing rows.\n` +
+      `Appended ${result.appendedCount} new tickets.${skippedInfo}\n` +
+      `Processed ${result.ticketCount} tickets in ${result.batchCount} batches.\n` +
+      `${result.complete ? 'Refresh complete!' : 'Run again to continue.'}\n\n` +
+      `Runtime: ${(result.runtime / 1000).toFixed(1)} seconds`,
+      ui.ButtonSet.OK
+    );
+
+  } finally {
+    releaseScriptLock(lock);
   }
-
-  const response = ui.alert(
-    'Continue Open Ticket Refresh',
-    `Current Status:\n${status}${historicalNote}\n\n` +
-    `This will continue from where it left off.\n\n` +
-    'Continue?',
-    ui.ButtonSet.YES_NO
-  );
-
-  if (response !== ui.Button.YES) return;
-
-  logOperation('Ticket Data', 'CONTINUE', `Open ticket refresh continued (historical=${isHistorical})`);
-
-  const result = runOpenTicketRefresh(sheet);
-
-  const skippedInfo = result.skippedCount ? `\nSkipped ${result.skippedCount} tickets (different school year).` : '';
-  ui.alert(
-    result.complete ? 'Complete' : 'Paused',
-    `Updated ${result.updatedCount} existing rows.\n` +
-    `Appended ${result.appendedCount} new tickets.${skippedInfo}\n` +
-    `Processed ${result.ticketCount} tickets in ${result.batchCount} batches.\n` +
-    `${result.complete ? 'Refresh complete!' : 'Run again to continue.'}\n\n` +
-    `Runtime: ${(result.runtime / 1000).toFixed(1)} seconds`,
-    ui.ButtonSet.OK
-  );
 }
 
 /**
@@ -1330,57 +1394,75 @@ function refreshOpenTickets() {
  */
 function clearYearDataAndResetProgress() {
   const ui = SpreadsheetApp.getUi();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('TicketData');
 
-  if (!sheet) {
-    ui.alert('Error', 'TicketData sheet not found.', ui.ButtonSet.OK);
+  // SAFETY: Require no triggers before destructive operation
+  if (!requireNoTriggers('Clear Data + Reset Progress')) {
     return;
   }
 
-  const config = getConfig();
-  if (!config.schoolYear) {
-    ui.alert('No School Year Configured', 'No SCHOOL_YEAR found in Config sheet.', ui.ButtonSet.OK);
+  // SAFETY: Acquire lock to prevent concurrent operations
+  const lock = acquireScriptLock();
+  if (!lock) {
+    showOperationBusyMessage('Clear Data + Reset Progress');
     return;
   }
 
-  const lockStatus = checkConfigLock(config);
-  let lockWarning = '';
-  if (lockStatus.locked) {
-    lockWarning = `\n3. UNLOCK configuration (currently locked):\n` +
-      `   - SCHOOL_YEAR: ${config.schoolYearLoaded}\n` +
-      `   - PAGE_SIZE: ${config.pageSizeLoaded}\n` +
-      `   - BATCH_SIZE: ${config.batchSizeLoaded}\n` +
-      `   After clearing, you can change these values in Config sheet.\n`;
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('TicketData');
+
+    if (!sheet) {
+      ui.alert('Error', 'TicketData sheet not found.', ui.ButtonSet.OK);
+      return;
+    }
+
+    const config = getConfig();
+    if (!config.schoolYear) {
+      ui.alert('No School Year Configured', 'No SCHOOL_YEAR found in Config sheet.', ui.ButtonSet.OK);
+      return;
+    }
+
+    const configLockStatus = checkConfigLock(config);
+    let lockWarning = '';
+    if (configLockStatus.locked) {
+      lockWarning = `\n3. UNLOCK configuration (currently locked):\n` +
+        `   - SCHOOL_YEAR: ${config.schoolYearLoaded}\n` +
+        `   - PAGE_SIZE: ${config.pageSizeLoaded}\n` +
+        `   - BATCH_SIZE: ${config.batchSizeLoaded}\n` +
+        `   After clearing, you can change these values in Config sheet.\n`;
+    }
+
+    const response = ui.alert(
+      `Clear School Year Data`,
+      `This will:\n` +
+        `1. Delete all TicketData rows for ${config.schoolYear}\n` +
+        `2. Reset progress keys in Config` +
+        lockWarning + `\n\n` +
+        `Continue?`,
+      ui.ButtonSet.YES_NO
+    );
+
+    if (response !== ui.Button.YES) return;
+
+    const deleted = deleteRowsBySchoolYear(sheet, config.schoolYear);
+    resetSchoolYearProgress();
+    unlockConfig();  // Unlock so config values can be changed
+    setCurrentYearReloadInProgress(true);
+
+    logOperation('Ticket Data', 'CLEAR_SCHOOL_YEAR', `Cleared ${deleted} rows for ${config.schoolYear}, reset progress, and unlocked configuration`);
+
+    ui.alert(
+      'Clear Complete',
+      `Deleted ${deleted} rows for ${config.schoolYear}.\n` +
+        `Progress reset and configuration unlocked.\n\n` +
+        `You can now change SCHOOL_YEAR, PAGE_SIZE, or BATCH_SIZE in Config if needed.\n` +
+        `Run "Continue Loading" to reload.`,
+      ui.ButtonSet.OK
+    );
+
+  } finally {
+    releaseScriptLock(lock);
   }
-
-  const response = ui.alert(
-    `Clear School Year Data`,
-    `This will:\n` +
-      `1. Delete all TicketData rows for ${config.schoolYear}\n` +
-      `2. Reset progress keys in Config` +
-      lockWarning + `\n\n` +
-      `Continue?`,
-    ui.ButtonSet.YES_NO
-  );
-
-  if (response !== ui.Button.YES) return;
-
-  const deleted = deleteRowsBySchoolYear(sheet, config.schoolYear);
-  resetSchoolYearProgress();
-  unlockConfig();  // Unlock so config values can be changed
-  setCurrentYearReloadInProgress(true);
-
-  logOperation('Ticket Data', 'CLEAR_SCHOOL_YEAR', `Cleared ${deleted} rows for ${config.schoolYear}, reset progress, and unlocked configuration`);
-
-  ui.alert(
-    'Clear Complete',
-    `Deleted ${deleted} rows for ${config.schoolYear}.\n` +
-      `Progress reset and configuration unlocked.\n\n` +
-      `You can now change SCHOOL_YEAR, PAGE_SIZE, or BATCH_SIZE in Config if needed.\n` +
-      `Run "Continue Loading" to reload.`,
-    ui.ButtonSet.OK
-  );
 }
 
 /**
