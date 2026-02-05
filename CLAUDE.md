@@ -118,6 +118,8 @@ const rows = tickets.map(t => extractTicketRow(t, now, config.schoolYear, slaMap
 
 All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet** menu. Each is formula-based and auto-calculates from TicketData. Default sheets marked with ★.
 
+**School Year Optimization:** Monthly-based sheets (MonthlyVolume, SLACompliance, PerformanceTrends, FirstContactResolution, ResponseTrends, SeasonalComparison) use the configured `SCHOOL_YEAR` to determine month ranges. Use **iiQ Data > Add Analytics Sheet > Regenerate All Monthly Sheets** to rebuild these sheets if the school year config changes.
+
 ### Volume & Trends
 | Sheet | Question Answered | Key Metrics |
 |-------|-------------------|-------------|

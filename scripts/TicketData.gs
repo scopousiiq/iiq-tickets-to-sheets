@@ -308,6 +308,12 @@ function runTicketDataLoader(sheet) {
           flushWrites();
           break;
         }
+
+        // For current school year, set TICKET_LAST_FETCH to now so incremental
+        // mode doesn't re-fetch everything from the school year start
+        ticketLastFetch = new Date().toISOString();
+        writeConfigValueDirect('TICKET_LAST_FETCH', ticketLastFetch);
+        logOperation('Ticket Data', 'INFO', `Set incremental baseline to ${ticketLastFetch}`);
       }
 
       // Flush once per batch - this is when recalculation happens

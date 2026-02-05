@@ -284,7 +284,16 @@ function getMonthRangeFromData(ss, dateColumn) {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
                       'July', 'August', 'September', 'October', 'November', 'December'];
 
-  // Try to get date range from TicketData
+  // Priority 1: Use school year dates from Config (authoritative for single-year spreadsheets)
+  const config = getConfig();
+  if (config.schoolYear) {
+    const dates = getSchoolYearDates(config);
+    if (dates) {
+      return generateMonthRange(dates.startDate, dates.endDate, monthNames);
+    }
+  }
+
+  // Priority 2: Fall back to date range from TicketData (if no school year configured)
   const ticketSheet = ss.getSheetByName('TicketData');
   if (ticketSheet && ticketSheet.getLastRow() > 1) {
     const colIndex = dateColumn.charCodeAt(0) - 64; // A=1, B=2, etc.
@@ -312,15 +321,6 @@ function getMonthRangeFromData(ss, dateColumn) {
 
     if (minDate && maxDate) {
       return generateMonthRange(minDate, maxDate, monthNames);
-    }
-  }
-
-  // Try to get school year dates from Config
-  const config = getConfig();
-  if (config.schoolYear) {
-    const dates = getSchoolYearDates(config);
-    if (dates) {
-      return generateMonthRange(dates.startDate, dates.endDate, monthNames);
     }
   }
 
@@ -1842,4 +1842,115 @@ function setupQueueTimeTrendSheet(ss) {
   );
 
   return true;
+}
+
+// ============================================================================
+// REGENERATE MONTHLY ANALYTICS SHEETS
+// ============================================================================
+
+/**
+ * Regenerate all monthly-based analytics sheets using current school year config.
+ *
+ * This is useful when:
+ * - School year config has changed
+ * - You want all monthly sheets to show the full school year range
+ * - Analytics sheets were created before data was loaded
+ *
+ * Regenerates the following sheets (if they exist):
+ * - MonthlyVolume
+ * - SLACompliance
+ * - PerformanceTrends
+ * - FirstContactResolution
+ * - ResponseTrends
+ * - SeasonalComparison
+ */
+function regenerateMonthlyAnalyticsSheets() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Verify school year is configured
+  const config = getConfig();
+  if (!config.schoolYear) {
+    ui.alert('Configuration Missing',
+      'No SCHOOL_YEAR configured.\n\n' +
+      'Please set SCHOOL_YEAR in the Config sheet first (e.g., "2025-2026").',
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  const dates = getSchoolYearDates(config);
+  if (!dates) {
+    ui.alert('Invalid Configuration',
+      'Could not parse school year dates.\n\n' +
+      'Please verify SCHOOL_YEAR format is "YYYY-YYYY" (e.g., "2025-2026").',
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  // Format the date range for display
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                      'July', 'August', 'September', 'October', 'November', 'December'];
+  const startMonthName = monthNames[dates.startDate.getMonth()];
+  const endMonthName = monthNames[dates.endDate.getMonth()];
+  const dateRangeStr = `${startMonthName} ${dates.startYear} - ${endMonthName} ${dates.endYear}`;
+
+  // List of monthly sheets and their setup functions
+  const monthlySheets = [
+    { name: 'MonthlyVolume', setup: setupMonthlyVolumeSheet },
+    { name: 'SLACompliance', setup: setupSLAComplianceSheet },
+    { name: 'PerformanceTrends', setup: setupPerformanceTrendsSheet },
+    { name: 'FirstContactResolution', setup: setupFirstContactResolutionSheet },
+    { name: 'ResponseTrends', setup: setupResponseTrendsSheet },
+    { name: 'SeasonalComparison', setup: setupSeasonalComparisonSheet }
+  ];
+
+  // Find which sheets exist
+  const existingSheets = monthlySheets.filter(s => ss.getSheetByName(s.name));
+
+  if (existingSheets.length === 0) {
+    ui.alert('No Monthly Sheets Found',
+      'No monthly analytics sheets exist to regenerate.\n\n' +
+      'Use "Add Analytics Sheet" menu to create them first.',
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  // Confirm with user
+  const sheetList = existingSheets.map(s => '• ' + s.name).join('\n');
+  const response = ui.alert('Regenerate Monthly Analytics Sheets',
+    `This will recreate the following ${existingSheets.length} sheet(s) using school year ${config.schoolYear}:\n\n` +
+    sheetList + '\n\n' +
+    `Date range: ${dateRangeStr}\n\n` +
+    'Continue?',
+    ui.ButtonSet.YES_NO);
+
+  if (response !== ui.Button.YES) {
+    return;
+  }
+
+  // Regenerate each existing sheet
+  let regenerated = 0;
+  let errors = [];
+
+  for (const sheet of existingSheets) {
+    try {
+      sheet.setup(ss);
+      regenerated++;
+    } catch (e) {
+      errors.push(`${sheet.name}: ${e.message}`);
+    }
+  }
+
+  // Report results
+  if (errors.length === 0) {
+    ui.alert('Regeneration Complete',
+      `Successfully regenerated ${regenerated} monthly analytics sheet(s).\n\n` +
+      `Date range: ${dateRangeStr}`,
+      ui.ButtonSet.OK);
+  } else {
+    ui.alert('Regeneration Complete with Errors',
+      `Regenerated: ${regenerated}\nErrors: ${errors.length}\n\n` +
+      errors.join('\n'),
+      ui.ButtonSet.OK);
+  }
 }
