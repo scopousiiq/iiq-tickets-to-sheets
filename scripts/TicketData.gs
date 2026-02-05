@@ -321,8 +321,8 @@ function runTicketDataLoader(sheet) {
         ticketTotalPages = result.totalPages;
       }
 
-      // Write progress using direct writes (no reads)
-      writeConfigValueDirect('TICKET_LAST_PAGE', ticketLastPage);
+      // Write progress using direct writes (no reads) - use String() to prevent Sheets date formatting
+      writeConfigValueDirect('TICKET_LAST_PAGE', String(ticketLastPage));
       if (result.totalPages !== undefined) {
         writeConfigValueDirect('TICKET_TOTAL_PAGES', String(ticketTotalPages));
       }
@@ -1119,7 +1119,7 @@ function findOpenRefreshInsertPosition(key, data) {
  */
 function resetSchoolYearProgress() {
   updateConfigValue('TICKET_TOTAL_PAGES', '');
-  updateConfigValue('TICKET_LAST_PAGE', -1);
+  updateConfigValue('TICKET_LAST_PAGE', '-1');  // String to prevent Sheets date formatting
   updateConfigValue('TICKET_COMPLETE', 'FALSE');
   updateConfigValue('TICKET_LAST_FETCH', '');
 }
@@ -1565,8 +1565,8 @@ function runOpenTicketRefresh(sheet) {
     skippedCount += result.skipped || 0;
     ticketCount += response.Items.length;
 
-    // Save progress after each batch
-    updateConfigValue('OPEN_REFRESH_PAGE', page);
+    // Save progress after each batch (string to prevent Sheets date formatting)
+    updateConfigValue('OPEN_REFRESH_PAGE', String(page));
 
     const skipInfo = result.skipped ? `, ${result.skipped} skipped` : '';
     logOperation('Ticket Data', 'REFRESH_MODIFIED',
@@ -1586,7 +1586,7 @@ function runOpenTicketRefresh(sheet) {
   if (complete) {
     updateConfigValue('OPEN_REFRESH_LAST_RUN', thisRefreshTime);
     updateConfigValue('OPEN_REFRESH_COMPLETE', 'TRUE');
-    updateConfigValue('OPEN_REFRESH_PAGE', -1);
+    updateConfigValue('OPEN_REFRESH_PAGE', '-1');  // String to prevent Sheets date formatting
   }
 
   const runtime = Date.now() - startTime;
@@ -1618,7 +1618,7 @@ function getOpenRefreshProgress() {
  * Reset open refresh progress (for next cycle)
  */
 function resetOpenRefreshProgress() {
-  updateConfigValue('OPEN_REFRESH_PAGE', -1);
+  updateConfigValue('OPEN_REFRESH_PAGE', '-1');  // String to prevent Sheets date formatting
   updateConfigValue('OPEN_REFRESH_COMPLETE', 'FALSE');
   // Note: Don't reset OPEN_REFRESH_LAST_RUN - we need it for the next cycle's date filter
 }
