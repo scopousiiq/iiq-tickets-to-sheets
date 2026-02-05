@@ -48,12 +48,14 @@ function makeApiRequest(endpoint, method, payload, retryCount) {
   }
 
   try {
+    const startTime = Date.now();
     const response = UrlFetchApp.fetch(url, options);
+    const elapsedMs = Date.now() - startTime;
     const responseCode = response.getResponseCode();
     const responseText = response.getContentText();
 
     if (responseCode >= 200 && responseCode < 300) {
-      logOperation('API Request', 'SUCCESS', endpoint);
+      logOperation('API Request', 'SUCCESS', `${endpoint} (${elapsedMs}ms)`);
       // Throttle after successful request to avoid hitting limits
       Utilities.sleep(Math.floor(getThrottleMs() * 0.5));
       return JSON.parse(responseText);

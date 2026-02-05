@@ -2,7 +2,7 @@
  * Analytics Sheets - All Available Metric Sheets
  *
  * All analytics sheets can be added individually via the iiQ Data > Add Analytics Sheet menu.
- * This allows districts to customize which metrics they use and recreate sheets if deleted.
+ * Adding a sheet will DELETE and RECREATE it if it already exists (clean slate).
  *
  * DEFAULT SHEETS (created by Setup Spreadsheet):
  * - MonthlyVolume: Ticket creation/closure by month
@@ -38,301 +38,229 @@
 // --- Volume & Trends ---
 
 /**
- * Add Monthly Volume sheet (default sheet - can recreate if deleted)
+ * Add Monthly Volume sheet (deletes and recreates if exists)
  */
 function addMonthlyVolumeSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupMonthlyVolumeSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'MonthlyVolume sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'MonthlyVolume sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupMonthlyVolumeSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'MonthlyVolume sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Performance Trends sheet (default sheet - can recreate if deleted)
+ * Add Performance Trends sheet (deletes and recreates if exists)
  */
 function addPerformanceTrendsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupPerformanceTrendsSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'PerformanceTrends sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'PerformanceTrends sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupPerformanceTrendsSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'PerformanceTrends sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 // --- Backlog & Quality ---
 
 /**
- * Add Backlog Aging sheet (default sheet - can recreate if deleted)
+ * Add Backlog Aging sheet (deletes and recreates if exists)
  */
 function addBacklogAgingSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupBacklogAgingSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'BacklogAging sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'BacklogAging sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupBacklogAgingSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'BacklogAging sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Stale Tickets sheet
+ * Add Stale Tickets sheet (deletes and recreates if exists)
  */
 function addStaleTicketsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupStaleTicketsSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'StaleTickets sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'StaleTickets sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupStaleTicketsSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'StaleTickets sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 // --- SLA & Response ---
 
 /**
- * Add SLA Compliance sheet (default sheet - can recreate if deleted)
+ * Add SLA Compliance sheet (deletes and recreates if exists)
  */
 function addSLAComplianceSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupSLAComplianceSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'SLACompliance sheet has been created.\n\nData calculates automatically from TicketData via formulas.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'SLACompliance sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupSLAComplianceSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'SLACompliance sheet has been created.\n\nData calculates automatically from TicketData via formulas.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add At-Risk Response sheet (default sheet - can recreate if deleted)
+ * Add At-Risk Response sheet (deletes and recreates if exists)
  */
 function addAtRiskResponseSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupAtRiskResponseSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'AtRiskResponse sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'AtRiskResponse sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupAtRiskResponseSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'AtRiskResponse sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add At-Risk Resolution sheet (default sheet - can recreate if deleted)
+ * Add At-Risk Resolution sheet (deletes and recreates if exists)
  */
 function addAtRiskResolutionSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupAtRiskResolutionSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'AtRiskResolution sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'AtRiskResolution sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupAtRiskResolutionSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'AtRiskResolution sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 // --- Team & Staff ---
 
 /**
- * Add Team Workload sheet (default sheet - can recreate if deleted)
+ * Add Team Workload sheet (deletes and recreates if exists)
  */
 function addTeamWorkloadSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupTeamWorkloadSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'TeamWorkload sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'TeamWorkload sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupTeamWorkloadSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'TeamWorkload sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Functional Area Summary sheet
+ * Add Functional Area Summary sheet (deletes and recreates if exists)
  */
 function addFunctionalAreaSummarySheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupFunctionalAreaSummarySheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'FunctionalAreaSummary sheet has been created.\n\nNote: Requires TeamWorkload sheet and FunctionalArea column in Teams sheet.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'FunctionalAreaSummary sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupFunctionalAreaSummarySheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'FunctionalAreaSummary sheet has been created.\n\nNote: Requires TeamWorkload sheet and FunctionalArea column in Teams sheet.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 // --- Location ---
 
 /**
- * Add Location Breakdown sheet
+ * Add Location Breakdown sheet (deletes and recreates if exists)
  */
 function addLocationBreakdownSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupLocationBreakdownSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'LocationBreakdown sheet has been created.\n\nNote: Drag formulas in columns B-F down to cover all location rows.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'LocationBreakdown sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupLocationBreakdownSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'LocationBreakdown sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 // --- Additional Metrics (defined below) ---
 
 /**
- * Add Issue Category Volume sheet
+ * Add Issue Category Volume sheet (deletes and recreates if exists)
  */
 function addIssueCategoryVolumeSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupIssueCategoryVolumeSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'IssueCategoryVolume sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'IssueCategoryVolume sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupIssueCategoryVolumeSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'IssueCategoryVolume sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Priority Analysis sheet
+ * Add Priority Analysis sheet (deletes and recreates if exists)
  */
 function addPriorityAnalysisSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupPriorityAnalysisSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'PriorityAnalysis sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'PriorityAnalysis sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupPriorityAnalysisSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'PriorityAnalysis sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add First Contact Resolution sheet
+ * Add First Contact Resolution sheet (deletes and recreates if exists)
  */
 function addFirstContactResolutionSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupFirstContactResolutionSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'FirstContactResolution sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'FirstContactResolution sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupFirstContactResolutionSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'FirstContactResolution sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Technician Performance sheet
+ * Add Technician Performance sheet (deletes and recreates if exists)
  */
 function addTechnicianPerformanceSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupTechnicianPerformanceSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'TechnicianPerformance sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'TechnicianPerformance sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupTechnicianPerformanceSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'TechnicianPerformance sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Seasonal Comparison sheet
+ * Add Seasonal Comparison sheet (deletes and recreates if exists)
  */
 function addSeasonalComparisonSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupSeasonalComparisonSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'SeasonalComparison sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'SeasonalComparison sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupSeasonalComparisonSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'SeasonalComparison sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Location Type Comparison sheet
+ * Add Location Type Comparison sheet (deletes and recreates if exists)
  */
 function addLocationTypeComparisonSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupLocationTypeComparisonSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'LocationTypeComparison sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'LocationTypeComparison sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupLocationTypeComparisonSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'LocationTypeComparison sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Reopen Rate sheet
+ * Add Reopen Rate sheet (deletes and recreates if exists)
  */
 function addReopenRateSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupReopenRateSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'ReopenRate sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'ReopenRate sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupReopenRateSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'ReopenRate sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Frequent Requesters sheet
+ * Add Frequent Requesters sheet (deletes and recreates if exists)
  */
 function addFrequentRequestersSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupFrequentRequestersSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'FrequentRequesters sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'FrequentRequesters sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupFrequentRequestersSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'FrequentRequesters sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Response Distribution sheet
+ * Add Response Distribution sheet (deletes and recreates if exists)
  */
 function addResponseDistributionSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupResponseDistributionSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'ResponseDistribution sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'ResponseDistribution sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupResponseDistributionSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'ResponseDistribution sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Response Trends sheet
+ * Add Response Trends sheet (deletes and recreates if exists)
  */
 function addResponseTrendsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupResponseTrendsSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'ResponseTrends sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'ResponseTrends sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupResponseTrendsSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'ResponseTrends sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Queue Time Analysis sheet
+ * Add Queue Time Analysis sheet (deletes and recreates if exists)
  */
 function addQueueTimeAnalysisSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupQueueTimeAnalysisSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'QueueTimeAnalysis sheet has been created.\n\nThis sheet analyzes the time tickets spend waiting before an agent starts working on them.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'QueueTimeAnalysis sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupQueueTimeAnalysisSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'QueueTimeAnalysis sheet has been created.\n\nThis sheet analyzes the time tickets spend waiting before an agent starts working on them.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Queue Time by Team sheet
+ * Add Queue Time by Team sheet (deletes and recreates if exists)
  */
 function addQueueTimeByTeamSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupQueueTimeByTeamSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'QueueTimeByTeam sheet has been created.\n\nThis sheet shows queue time metrics broken down by team.\nIncludes diagnostics to help debug any formula issues.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'QueueTimeByTeam sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupQueueTimeByTeamSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'QueueTimeByTeam sheet has been created.\n\nThis sheet shows queue time metrics broken down by team.\nIncludes diagnostics to help debug any formula issues.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Queue Time Trend sheet
+ * Add Queue Time Trend sheet (deletes and recreates if exists)
  */
 function addQueueTimeTrendSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupQueueTimeTrendSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'QueueTimeTrend sheet has been created.\n\nThis sheet shows monthly queue time trends with avg, median, and 90th percentile metrics.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'QueueTimeTrend sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupQueueTimeTrendSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'QueueTimeTrend sheet has been created.\n\nThis sheet shows monthly queue time trends with avg, median, and 90th percentile metrics.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
- * Add Temporal Patterns sheet
+ * Add Temporal Patterns sheet (deletes and recreates if exists)
  */
 function addTemporalPatternsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (setupTemporalPatternsSheet(ss)) {
-    SpreadsheetApp.getUi().alert('Created', 'TemporalPatterns sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
-  } else {
-    SpreadsheetApp.getUi().alert('Already Exists', 'TemporalPatterns sheet already exists.', SpreadsheetApp.getUi().ButtonSet.OK);
-  }
+  setupTemporalPatternsSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'TemporalPatterns sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 // ============================================================================
@@ -387,26 +315,12 @@ function getMonthRangeFromData(ss, dateColumn) {
     }
   }
 
-  // Try to get years from Config
-  const configSheet = ss.getSheetByName('Config');
-  if (configSheet) {
-    const configData = configSheet.getDataRange().getValues();
-    const years = [];
-    const yearRegex = /^TICKET_(\d{4})_/;
-
-    for (const row of configData) {
-      const match = String(row[0]).match(yearRegex);
-      if (match) {
-        const year = parseInt(match[1], 10);
-        if (!years.includes(year)) years.push(year);
-      }
-    }
-
-    if (years.length > 0) {
-      years.sort((a, b) => a - b);
-      const minDate = new Date(years[0], 0, 1);
-      const maxDate = new Date(years[years.length - 1], 11, 31);
-      return generateMonthRange(minDate, maxDate, monthNames);
+  // Try to get school year dates from Config
+  const config = getConfig();
+  if (config.schoolYear) {
+    const dates = getSchoolYearDates(config);
+    if (dates) {
+      return generateMonthRange(dates.startDate, dates.endDate, monthNames);
     }
   }
 
@@ -451,11 +365,10 @@ function generateMonthRange(minDate, maxDate, monthNames) {
 /**
  * Setup IssueCategoryVolume sheet
  * Question: "What types of problems are we spending the most time on?"
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupIssueCategoryVolumeSheet(ss) {
-  if (ss.getSheetByName('IssueCategoryVolume')) return false;
-
+  deleteSheetIfExists(ss, 'IssueCategoryVolume');
   const sheet = ss.insertSheet('IssueCategoryVolume');
 
   // Headers - includes sort controls
@@ -536,11 +449,10 @@ function setupIssueCategoryVolumeSheet(ss) {
 /**
  * Setup PriorityAnalysis sheet
  * Question: "Are high-priority tickets being handled faster?"
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupPriorityAnalysisSheet(ss) {
-  if (ss.getSheetByName('PriorityAnalysis')) return false;
-
+  deleteSheetIfExists(ss, 'PriorityAnalysis');
   const sheet = ss.insertSheet('PriorityAnalysis');
 
   // Headers
@@ -600,11 +512,10 @@ function setupPriorityAnalysisSheet(ss) {
 /**
  * Setup FirstContactResolution sheet
  * Question: "What percentage of tickets are resolved quickly?"
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupFirstContactResolutionSheet(ss) {
-  if (ss.getSheetByName('FirstContactResolution')) return false;
-
+  deleteSheetIfExists(ss, 'FirstContactResolution');
   const sheet = ss.insertSheet('FirstContactResolution');
 
   // Headers for summary section
@@ -718,11 +629,10 @@ function setupFirstContactResolutionSheet(ss) {
 /**
  * Setup TechnicianPerformance sheet
  * Question: "How is workload distributed among staff?"
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupTechnicianPerformanceSheet(ss) {
-  if (ss.getSheetByName('TechnicianPerformance')) return false;
-
+  deleteSheetIfExists(ss, 'TechnicianPerformance');
   const sheet = ss.insertSheet('TechnicianPerformance');
 
   // Headers - includes sort controls
@@ -807,41 +717,57 @@ function setupTechnicianPerformanceSheet(ss) {
 /**
  * Setup SeasonalComparison sheet
  * Question: "How does this month compare to the same month last year?"
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupSeasonalComparisonSheet(ss) {
-  if (ss.getSheetByName('SeasonalComparison')) return false;
-
+  deleteSheetIfExists(ss, 'SeasonalComparison');
   const sheet = ss.insertSheet('SeasonalComparison');
 
-  // Headers
-  const headers = ['Month', 'Created (This Year)', 'Created (Last Year)', 'YoY Change', 'YoY %', 'Closed (This Year)', 'Closed (Last Year)', 'Closed YoY %'];
+  // Get school year configuration
+  const config = getConfig();
+  const dates = getSchoolYearDates(config);
+
+  // Use school year dates if available, otherwise fall back to calendar years
+  let startYear, endYear;
+  if (dates) {
+    startYear = dates.startYear;
+    endYear = dates.endYear;
+  } else {
+    const currentYear = new Date().getFullYear();
+    startYear = currentYear - 1;
+    endYear = currentYear;
+  }
+
+  // Headers - compare first half vs second half of school year
+  const headers = ['Month', `Created (${startYear})`, `Created (${endYear})`, 'Change', 'Change %', `Closed (${startYear})`, `Closed (${endYear})`, 'Closed Change %'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  const currentYear = new Date().getFullYear();
-  const lastYear = currentYear - 1;
   const months = ['January', 'February', 'March', 'April', 'May', 'June',
                   'July', 'August', 'September', 'October', 'November', 'December'];
 
   const dataRows = [];
   for (let m = 0; m < 12; m++) {
     const rowNum = m + 2;
+    // Determine which year this month belongs to based on school year
+    // For a typical July-June school year: July-Dec = startYear, Jan-June = endYear
+    const monthYear = m >= 6 ? startYear : endYear; // July (6) through Dec (11) = startYear
+
     dataRows.push([
       months[m],
-      // Created this year
-      `=LET(m, ${m + 1}, COUNTIFS(TicketData!E:E, ">="&TEXT(DATE(${currentYear},m,1), "YYYY-MM-DD"), TicketData!E:E, "<"&TEXT(DATE(${currentYear},m+1,1), "YYYY-MM-DD")))`,
-      // Created last year
-      `=LET(m, ${m + 1}, COUNTIFS(TicketData!E:E, ">="&TEXT(DATE(${lastYear},m,1), "YYYY-MM-DD"), TicketData!E:E, "<"&TEXT(DATE(${lastYear},m+1,1), "YYYY-MM-DD")))`,
-      // YoY Change
+      // Created in startYear (only shows data if month is in startYear portion)
+      `=LET(m, ${m + 1}, COUNTIFS(TicketData!E:E, ">="&TEXT(DATE(${startYear},m,1), "YYYY-MM-DD"), TicketData!E:E, "<"&TEXT(DATE(${startYear},m+1,1), "YYYY-MM-DD")))`,
+      // Created in endYear (only shows data if month is in endYear portion)
+      `=LET(m, ${m + 1}, COUNTIFS(TicketData!E:E, ">="&TEXT(DATE(${endYear},m,1), "YYYY-MM-DD"), TicketData!E:E, "<"&TEXT(DATE(${endYear},m+1,1), "YYYY-MM-DD")))`,
+      // Change
       `=B${rowNum}-C${rowNum}`,
-      // YoY %
-      `=IF(C${rowNum}>0, (B${rowNum}-C${rowNum})/C${rowNum}, "N/A")`,
-      // Closed this year
-      `=LET(m, ${m + 1}, COUNTIFS(TicketData!H:H, ">="&TEXT(DATE(${currentYear},m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(${currentYear},m+1,1), "YYYY-MM-DD")))`,
-      // Closed last year
-      `=LET(m, ${m + 1}, COUNTIFS(TicketData!H:H, ">="&TEXT(DATE(${lastYear},m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(${lastYear},m+1,1), "YYYY-MM-DD")))`,
-      // Closed YoY %
-      `=IF(G${rowNum}>0, (F${rowNum}-G${rowNum})/G${rowNum}, "N/A")`
+      // Change %
+      `=IF(C${rowNum}>0, (B${rowNum}-C${rowNum})/C${rowNum}, IF(B${rowNum}>0, "N/A (prev=0)", "N/A"))`,
+      // Closed in startYear
+      `=LET(m, ${m + 1}, COUNTIFS(TicketData!H:H, ">="&TEXT(DATE(${startYear},m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(${startYear},m+1,1), "YYYY-MM-DD")))`,
+      // Closed in endYear
+      `=LET(m, ${m + 1}, COUNTIFS(TicketData!H:H, ">="&TEXT(DATE(${endYear},m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(${endYear},m+1,1), "YYYY-MM-DD")))`,
+      // Closed Change %
+      `=IF(G${rowNum}>0, (F${rowNum}-G${rowNum})/G${rowNum}, IF(F${rowNum}>0, "N/A (prev=0)", "N/A"))`
     ]);
   }
 
@@ -857,17 +783,17 @@ function setupSeasonalComparisonSheet(ss) {
   sheet.getRange('E:E').setNumberFormat('+0.0%;-0.0%');
   sheet.getRange('H:H').setNumberFormat('+0.0%;-0.0%');
 
-  // Conditional formatting for YoY Change
-  const yoyRange = sheet.getRange('D2:D13');
+  // Conditional formatting for Change
+  const changeRange = sheet.getRange('D2:D13');
   const positiveRule = SpreadsheetApp.newConditionalFormatRule()
     .whenNumberGreaterThan(0)
     .setBackground('#fce8e6')
-    .setRanges([yoyRange])
+    .setRanges([changeRange])
     .build();
   const negativeRule = SpreadsheetApp.newConditionalFormatRule()
     .whenNumberLessThan(0)
     .setBackground('#e6f4ea')
-    .setRanges([yoyRange])
+    .setRanges([changeRange])
     .build();
   sheet.setConditionalFormatRules([positiveRule, negativeRule]);
 
@@ -876,15 +802,16 @@ function setupSeasonalComparisonSheet(ss) {
 
   sheet.setFrozenRows(1);
 
-  // Add note
+  // Add note explaining the school year context
+  const schoolYearStr = config.schoolYear || `${startYear}-${endYear}`;
   sheet.getRange('A1').setNote(
-    `Seasonal Comparison (${currentYear} vs ${lastYear})\n\n` +
-    'Question: "How does this year compare to last year?"\n\n' +
-    'Use this to:\n' +
-    '- Predict back-to-school volume\n' +
-    '- Plan staffing for testing season\n' +
-    '- Show improvement year-over-year\n' +
-    '- Justify budget requests\n\n' +
+    `Seasonal Comparison for School Year ${schoolYearStr}\n\n` +
+    'NOTE: This sheet compares months within the school year.\n' +
+    `For a typical July-June school year:\n` +
+    `- Column B shows ${startYear} data (July-December)\n` +
+    `- Column C shows ${endYear} data (January-June)\n\n` +
+    'For true year-over-year comparison, open both school year\n' +
+    'spreadsheets and compare MonthlyVolume sheets manually.\n\n' +
     'K-12 peaks:\n' +
     '- August/September: Back-to-school\n' +
     '- March/April: State testing\n' +
@@ -899,11 +826,10 @@ function setupSeasonalComparisonSheet(ss) {
 /**
  * Setup LocationTypeComparison sheet
  * Question: "Do elementary schools generate more tickets than high schools?"
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupLocationTypeComparisonSheet(ss) {
-  if (ss.getSheetByName('LocationTypeComparison')) return false;
-
+  deleteSheetIfExists(ss, 'LocationTypeComparison');
   const sheet = ss.insertSheet('LocationTypeComparison');
 
   // Headers
@@ -964,11 +890,10 @@ function setupLocationTypeComparisonSheet(ss) {
 /**
  * Setup ReopenRate sheet
  * Question: "Are we truly resolving issues, or just closing tickets?"
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupReopenRateSheet(ss) {
-  if (ss.getSheetByName('ReopenRate')) return false;
-
+  deleteSheetIfExists(ss, 'ReopenRate');
   const sheet = ss.insertSheet('ReopenRate');
 
   // Headers
@@ -1060,11 +985,10 @@ function setupReopenRateSheet(ss) {
 /**
  * Setup FrequentRequesters sheet
  * Question: "Who generates the most tickets?"
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupFrequentRequestersSheet(ss) {
-  if (ss.getSheetByName('FrequentRequesters')) return false;
-
+  deleteSheetIfExists(ss, 'FrequentRequesters');
   const sheet = ss.insertSheet('FrequentRequesters');
 
   // Headers - includes sort controls
@@ -1143,11 +1067,10 @@ function setupFrequentRequestersSheet(ss) {
 /**
  * Setup ResponseDistribution sheet
  * Question: "How consistent is our response time?"
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupResponseDistributionSheet(ss) {
-  if (ss.getSheetByName('ResponseDistribution')) return false;
-
+  deleteSheetIfExists(ss, 'ResponseDistribution');
   const sheet = ss.insertSheet('ResponseDistribution');
 
   // Headers
@@ -1257,11 +1180,10 @@ function setupResponseDistributionSheet(ss) {
 /**
  * Setup TemporalPatterns sheet
  * Question: "When do tickets come in?"
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupTemporalPatternsSheet(ss) {
-  if (ss.getSheetByName('TemporalPatterns')) return false;
-
+  deleteSheetIfExists(ss, 'TemporalPatterns');
   const sheet = ss.insertSheet('TemporalPatterns');
 
   // Day of week section
@@ -1367,11 +1289,10 @@ function setupTemporalPatternsSheet(ss) {
 /**
  * Setup ResponseTrends sheet
  * Question: "Are our response times getting better and more consistent?"
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupResponseTrendsSheet(ss) {
-  if (ss.getSheetByName('ResponseTrends')) return false;
-
+  deleteSheetIfExists(ss, 'ResponseTrends');
   const sheet = ss.insertSheet('ResponseTrends');
 
   // Headers
@@ -1497,11 +1418,10 @@ function setupResponseTrendsSheet(ss) {
  *
  * Note: Queue Time by Team has been moved to its own sheet (QueueTimeByTeam)
  *
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupQueueTimeAnalysisSheet(ss) {
-  if (ss.getSheetByName('QueueTimeAnalysis')) return false;
-
+  deleteSheetIfExists(ss, 'QueueTimeAnalysis');
   const sheet = ss.insertSheet('QueueTimeAnalysis');
 
   // ============================================================
@@ -1663,11 +1583,10 @@ function setupQueueTimeAnalysisSheet(ss) {
  * Setup QueueTimeByTeam sheet
  * Question: "How does queue time vary by team?"
  * Shows queue time metrics broken down by team with diagnostic info
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupQueueTimeByTeamSheet(ss) {
-  if (ss.getSheetByName('QueueTimeByTeam')) return false;
-
+  deleteSheetIfExists(ss, 'QueueTimeByTeam');
   const sheet = ss.insertSheet('QueueTimeByTeam');
 
   // ============================================================
@@ -1788,11 +1707,10 @@ function setupQueueTimeByTeamSheet(ss) {
  * Setup QueueTimeTrend sheet
  * Question: "How is queue time trending over time?"
  * Shows monthly queue time trends with avg, median, and 90th percentile
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupQueueTimeTrendSheet(ss) {
-  if (ss.getSheetByName('QueueTimeTrend')) return false;
-
+  deleteSheetIfExists(ss, 'QueueTimeTrend');
   const sheet = ss.insertSheet('QueueTimeTrend');
 
   // ============================================================

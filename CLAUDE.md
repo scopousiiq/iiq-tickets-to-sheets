@@ -20,10 +20,13 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 3. Analytics sheets (`MonthlyVolume`, `BacklogAging`, `TeamWorkload`, etc.) calculate via Google Sheets formulas - no scripts needed
 4. Power BI connects to Google Sheets for dashboards
 
-**Year Discovery (Tickets):**
-- Years are auto-discovered from Config sheet keys (no code changes needed)
-- Historical years: `TICKET_{YEAR}_LAST_PAGE` rows → pagination-based loading
-- Current year: `TICKET_{YEAR}_LAST_FETCH` row → date windowing for incremental updates
+**School Year Model:**
+- Each spreadsheet contains ONE school year's data (e.g., 2025-2026)
+- Configured via `SCHOOL_YEAR` (e.g., "2025-2026") and `SCHOOL_YEAR_START` (MM-DD format, default "07-01")
+- Column D (Year) stores the school year string (e.g., "2025-2026") for all tickets
+- Progress tracking uses simplified keys without year suffix
+- Historical school years: Pagination-based loading only
+- Current school year: Pagination + date windowing for incremental updates
 
 **Consolidated SLA Data:**
 - SLA metrics are fetched per-batch during ticket loading (single API call per batch)
@@ -35,9 +38,9 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | File | Purpose |
 |------|---------|
 | `Setup.gs` | Initial spreadsheet setup - creates all sheets, headers, and formulas |
-| `Config.gs` | Reads settings from Config sheet, year discovery via regex, logging utilities |
+| `Config.gs` | Reads settings from Config sheet, school year date calculation, logging utilities |
 | `ApiClient.gs` | HTTP client with retry/exponential backoff (429, 503, network errors) |
-| `TicketData.gs` | Bulk ticket loader - 36 columns (28 ticket + 7 SLA), fetches SLA per-batch, year-based pagination, 5.5min timeout with resume |
+| `TicketData.gs` | Bulk ticket loader - 36 columns (28 ticket + 7 SLA), fetches SLA per-batch, school year pagination, 5.5min timeout with resume |
 | `Teams.gs` | Team directory loader, preserves Functional Area mappings |
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively). Skips if loading incomplete. |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
@@ -60,17 +63,28 @@ while (Date.now() - startTime < MAX_RUNTIME_MS) {
 }
 ```
 
-**Year-Based Loading (Tickets with SLA):**
-- Historical years: Standard pagination (`TICKET_{YEAR}_LAST_PAGE`)
-- Current year: Date windowing (`TICKET_{YEAR}_LAST_FETCH`) for incremental updates
+**School Year Loading (Tickets with SLA):**
+- Historical school years: Standard pagination (`TICKET_LAST_PAGE`, `TICKET_COMPLETE`)
+- Current school year: Pagination + date windowing (`TICKET_LAST_FETCH`) for incremental updates
 - Each batch: Fetch tickets → Fetch SLA for those ticket IDs → Merge → Write to sheet
+
+**School Year Date Calculation:**
+```javascript
+function getSchoolYearDates(config) {
+  const [startYear, endYear] = config.schoolYear.split('-').map(Number);
+  const [startMonth, startDay] = config.schoolYearStart.split('-').map(Number);
+  const startDate = new Date(startYear, startMonth - 1, startDay);
+  const endDate = new Date(endYear, startMonth - 1, startDay - 1);
+  return { startDate, endDate, startYear, endYear };
+}
+```
 
 **Per-Batch SLA Fetching:**
 ```javascript
 // After fetching ticket batch:
 const ticketIds = tickets.map(t => t.TicketId);
 const slaMap = fetchSlaForTicketIds(ticketIds); // Single API call
-const rows = tickets.map(t => extractTicketRow(t, now, year, slaMap));
+const rows = tickets.map(t => extractTicketRow(t, now, config.schoolYear, slaMap));
 ```
 
 **Rate Limiting:**
@@ -156,7 +170,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 
 | Columns | Description |
 |---------|-------------|
-| A-D | Core: TicketId, TicketNumber, Subject, Year |
+| A-D | Core: TicketId, TicketNumber, Subject, Year (school year string, e.g., "2025-2026") |
 | E-I | Dates: CreatedDate, StartedDate, ModifiedDate, ClosedDate, IsClosed |
 | J | Status (WorkflowStep) |
 | K-L | Team: TeamId, TeamName |
@@ -204,20 +218,21 @@ Example pattern for aggregating by team:
 
 ## Initial Setup (New Spreadsheet)
 
-1. Create a new Google Spreadsheet
+1. Create a new Google Spreadsheet (one per school year)
 2. Go to Extensions > Apps Script
 3. Copy all `.gs` files from the `scripts/` directory
 4. Save and refresh the spreadsheet
 5. Run **iiQ Data > Setup > Setup Spreadsheet** to create all sheets
-6. Fill in **Config** sheet with API credentials:
+6. Fill in **Config** sheet with API credentials and school year:
    - `API_BASE_URL`: Your iiQ instance URL
    - `BEARER_TOKEN`: JWT authentication token
    - `SITE_ID`: Optional site UUID
-7. Configure year tracking rows (e.g., `TICKET_2024_LAST_PAGE`, `TICKET_2025_LAST_FETCH`)
-8. Run **iiQ Data > Setup > Verify Configuration** to check settings
-9. Run **iiQ Data > Refresh Teams** to load team directory
-10. Run **iiQ Data > Ticket Data > Continue Loading** to start loading data
-11. Run **iiQ Data > Setup > Setup Automated Triggers** to enable automated refresh
+   - `SCHOOL_YEAR`: The school year (e.g., "2025-2026")
+   - `SCHOOL_YEAR_START`: Start date MM-DD (default "07-01" for July 1)
+7. Run **iiQ Data > Setup > Verify Configuration** to check settings
+8. Run **iiQ Data > Refresh Teams** to load team directory
+9. Run **iiQ Data > Ticket Data > Continue Loading** to start loading data
+10. Run **iiQ Data > Setup > Setup Automated Triggers** to enable automated refresh
 
 ## Testing Changes
 
@@ -231,17 +246,21 @@ Example pattern for aggregating by team:
 
 **Easy Setup:** Run **iiQ Data > Setup > Setup Automated Triggers** to create all triggers automatically.
 
+**Historical vs Current School Year:**
+- **Historical school years**: Data becomes STATIC once loaded. Only `triggerDataContinue` is needed to complete initial load. All other triggers skip automatically.
+- **Current school year**: All triggers are active to keep data fresh.
+
 **Manual Setup:** Use Extensions > Apps Script > Triggers to add these:
 
-| Function | Schedule | Purpose |
-|----------|----------|---------|
-| `triggerDataContinue` | Every 10 min | Continue any in-progress loading (initial OR open refresh) |
-| `triggerOpenTicketRefresh` | Every 2 hours | Start open ticket + SLA refresh |
-| `triggerNewTickets` | Every 30 min | Fetch newly created tickets (fast incremental check) |
-| `triggerDailySnapshot` | Daily 7:00 PM | Capture backlog metrics for trending |
-| `triggerWeeklyFullRefresh` | Weekly Sun 2 AM | Full reload to catch deletions/corrections |
+| Function | Schedule | Runs For | Purpose |
+|----------|----------|----------|---------|
+| `triggerDataContinue` | Every 10 min | All | Continue any in-progress loading |
+| `triggerOpenTicketRefresh` | Every 2 hours | Current + Historical with open tickets | Refresh open tickets + SLA |
+| `triggerNewTickets` | Every 30 min | Current only | Fetch newly created tickets |
+| `triggerDailySnapshot` | Daily 7:00 PM | Current only | Capture backlog metrics for trending |
+| `triggerWeeklyFullRefresh` | Weekly Sun 2 AM | Current only | Full reload to catch deletions |
 
-**Data Freshness:**
+**Data Freshness (Current School Year):**
 - Open ticket SLA data: max 2 hours stale
 - New tickets: appear within 30 minutes
 - Status changes: captured within 2 hours
@@ -249,39 +268,40 @@ Example pattern for aggregating by team:
 
 **The `triggerDataContinue` Trigger:**
 This is the "keep things moving" trigger. It serves two purposes:
-1. **Initial load not complete**: Continues loading historical ticket data
+1. **Initial load not complete**: Continues loading school year ticket data
 2. **Open refresh in progress**: Continues open ticket refresh if it timed out
 3. **Both complete**: Does nothing (safe to leave enabled permanently)
 
 **Ongoing Operations:**
 1. **Open Ticket Refresh** (every 2 hours): Primary refresh mechanism
-   - Fetches all open tickets with fresh SLA metrics
-   - Fetches tickets closed in last 7 days (STALE_DAYS config)
+   - Fetches tickets modified since last refresh (uses ModifiedDate filter)
+   - Much more efficient than fetching ALL open tickets
+   - Captures status changes, closures, assignments, and SLA updates
    - Updates existing rows IN PLACE (efficient, no delete/recreate)
    - If timeout occurs, `triggerDataContinue` continues it
+   - For historical school years: Continues until all tickets are closed (handles end-of-year stragglers)
 
-2. **New Tickets** (every 30 min): Fast incremental check
+2. **New Tickets** (every 30 min): Fast incremental check (current school year only)
    - Uses date windowing from last fetch timestamp
    - Very fast - typically 0-50 new tickets
+   - Only runs for current school year (historical school years skip)
 
-3. **Weekly Full Refresh** (Sunday 2 AM): Catch edge cases
-   - Preserves historical data (2+ years old)
-   - Clears and reloads recent years
+3. **Weekly Full Refresh** (Sunday 2 AM): Catch edge cases (current school year only)
+   - Clears all ticket data for the school year
+   - Reloads from scratch
    - Catches deleted tickets, data corrections
-
-**Historical Data Preservation:**
-- Weekly refresh preserves data from (currentYear - 2) and older
-- Example: In 2026, data from 2024 is preserved; only 2025-2026 reload
-- Uses efficient filter-and-rewrite (not row deletion)
+   - Skips automatically for historical school years (data is static)
 
 ## Config Sheet Keys
 
 Required:
 - `API_BASE_URL`: iiQ instance URL (e.g., `https://district.incidentiq.com`) — `/api` is added automatically
 - `BEARER_TOKEN`: JWT authentication token
-- `SITE_ID`: Site UUID (if required)
+- `SCHOOL_YEAR`: The school year for this spreadsheet (e.g., "2025-2026")
 
 Optional:
+- `SITE_ID`: Site UUID (if required for multi-site instances)
+- `SCHOOL_YEAR_START`: First day of school year in MM-DD format (default "07-01" for July 1)
 - `PAGE_SIZE`: Records per API call (default 100)
 - `THROTTLE_MS`: Delay between requests (default 1000)
 - `TICKET_BATCH_SIZE`: Tickets per page for bulk load (default 2000)
@@ -289,12 +309,18 @@ Optional:
 - `SLA_RISK_PERCENT`: Percentage threshold for SLA risk warnings (default 75)
 
 Progress Tracking (managed automatically):
-- `TICKET_{YEAR}_LAST_PAGE`: Last completed page index (0-indexed, -1 = not started)
-- `TICKET_{YEAR}_TOTAL_PAGES`: Last page index (0-indexed, -1 = unknown). Matches `LAST_PAGE` when complete.
-- `TICKET_{YEAR}_COMPLETE`: TRUE when year is fully loaded
-- `TICKET_{YEAR}_LAST_FETCH`: Current year incremental sync timestamp
-- `OPEN_REFRESH_DATE`: Date of current open ticket refresh
-- `OPEN_REFRESH_OPEN_PAGE`, `OPEN_REFRESH_OPEN_COMPLETE`: Open ticket refresh progress
-- `OPEN_REFRESH_CLOSED_PAGE`, `OPEN_REFRESH_CLOSED_COMPLETE`: Recently closed refresh progress
+- `TICKET_LAST_PAGE`: Last completed page index (0-indexed, -1 = not started)
+- `TICKET_TOTAL_PAGES`: Last page index (0-indexed, -1 = unknown). Matches `LAST_PAGE` when complete.
+- `TICKET_COMPLETE`: TRUE when pagination loading is fully loaded
+- `TICKET_LAST_FETCH`: Incremental sync timestamp (for current school year only)
+- `OPEN_REFRESH_LAST_RUN`: Timestamp of last successful refresh (used for ModifiedDate filter)
+- `OPEN_REFRESH_PAGE`, `OPEN_REFRESH_COMPLETE`: Current refresh cycle progress
 
-**Pagination Note:** All page tracking uses 0-indexed values. For a year with 6 pages of data, after completion both `LAST_PAGE` and `TOTAL_PAGES` will be `5`. The UI displays 1-indexed values ("Page 6 of 6").
+Config Lock (set when loading starts, cleared by "Clear Data + Reset"):
+- `SCHOOL_YEAR_LOADED`: Locks the school year value
+- `PAGE_SIZE_LOADED`: Locks the page size value
+- `BATCH_SIZE_LOADED`: Locks the batch size value
+
+**Configuration Lock:** Once data loading starts, critical configuration values are locked to prevent accidental changes that would cause data inconsistency. Locked values include `SCHOOL_YEAR`, `PAGE_SIZE`, and `TICKET_BATCH_SIZE`. To change these values, use "Clear Data + Reset Progress" which unlocks the configuration.
+
+**Pagination Note:** All page tracking uses 0-indexed values. For a school year with 6 pages of data, after completion both `LAST_PAGE` and `TOTAL_PAGES` will be `5`. The UI displays 1-indexed values ("Page 6 of 6").

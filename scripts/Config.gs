@@ -2,11 +2,11 @@
  * iiQ API Configuration
  * Reads settings from the Config sheet
  *
- * Year Discovery (Tickets):
- * - Historical years are auto-detected from TICKET_{YEAR}_LAST_PAGE rows
- * - Current year is auto-detected from TICKET_{YEAR}_LAST_FETCH row
- * - To add a year: add TICKET_{YEAR}_LAST_PAGE, TICKET_{YEAR}_COMPLETE rows
- * - To remove a year: delete those rows (and optionally clear data)
+ * School Year Model:
+ * - Each spreadsheet contains ONE school year's data (e.g., 2025-2026)
+ * - School year is configured via SCHOOL_YEAR (e.g., "2025-2026")
+ * - School year start date via SCHOOL_YEAR_START (MM-DD format, default "07-01")
+ * - Progress tracking uses simplified keys without year suffix
  *
  * SLA Data:
  * - SLA metrics are consolidated into TicketData (columns 30-36)
@@ -71,8 +71,29 @@ function getConfig() {
     return '';
   }
 
-  // Auto-discover years from config keys for tickets
-  const ticketYears = discoverYearsFromConfig(rawConfig, 'TICKET');
+  // Helper to get MM-DD string (handles Date objects from Sheets for SCHOOL_YEAR_START)
+  function getMonthDayString(val, defaultVal) {
+    if (!val || val === '') return defaultVal;
+    if (val instanceof Date) {
+      // Format Date object as MM-DD (ignore year)
+      const month = String(val.getMonth() + 1).padStart(2, '0');
+      const day = String(val.getDate()).padStart(2, '0');
+      return `${month}-${day}`;
+    }
+    // If it's already a string in MM-DD format, return as-is
+    const str = String(val).trim();
+    if (/^\d{2}-\d{2}$/.test(str)) {
+      return str;
+    }
+    // Try to parse as a date string and extract MM-DD
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      const month = String(parsed.getMonth() + 1).padStart(2, '0');
+      const day = String(parsed.getDate()).padStart(2, '0');
+      return `${month}-${day}`;
+    }
+    return defaultVal;
+  }
 
   // Normalize base URL: strip trailing slash, ensure /api suffix
   let baseUrl = rawConfig['API_BASE_URL'] || '';
@@ -82,6 +103,15 @@ function getConfig() {
       baseUrl = baseUrl + '/api';
     }
   }
+
+  // Parse school year configuration
+  const schoolYear = getStringValue(rawConfig['SCHOOL_YEAR']) || '';
+  const schoolYearStart = getMonthDayString(rawConfig['SCHOOL_YEAR_START'], '07-01');
+
+  // Locked configuration values (set when loading starts)
+  const schoolYearLoaded = getStringValue(rawConfig['SCHOOL_YEAR_LOADED']) || '';
+  const pageSizeLoaded = getIntValue(rawConfig['PAGE_SIZE_LOADED'], 0) || null;
+  const batchSizeLoaded = getIntValue(rawConfig['BATCH_SIZE_LOADED'], 0) || null;
 
   // Build the config object with base settings
   const config = {
@@ -93,98 +123,267 @@ function getConfig() {
     staleDays: getIntValue(rawConfig['STALE_DAYS'], 7),
     slaRiskPercent: getIntValue(rawConfig['SLA_RISK_PERCENT'], 75),
     ticketBatchSize: getIntValue(rawConfig['TICKET_BATCH_SIZE'], 2000),
-    // Discovered years for tickets
-    historicalYears: ticketYears.historical,
-    currentYear: ticketYears.current
+    // School year configuration
+    schoolYear: schoolYear,
+    schoolYearStart: schoolYearStart,
+    // Locked values (set when data loading starts, cleared by "Clear Data + Reset")
+    schoolYearLoaded: schoolYearLoaded,
+    pageSizeLoaded: pageSizeLoaded,
+    batchSizeLoaded: batchSizeLoaded
   };
 
-  // Dynamically add ticket tracking properties for each historical year
-  ticketYears.historical.forEach(year => {
-    config[`ticket${year}TotalPages`] = getIntValue(rawConfig[`TICKET_${year}_TOTAL_PAGES`], -1);
-    config[`ticket${year}LastPage`] = getIntValue(rawConfig[`TICKET_${year}_LAST_PAGE`], -1);
-    config[`ticket${year}Complete`] = getBoolValue(rawConfig[`TICKET_${year}_COMPLETE`]);
-  });
+  // Simplified progress tracking (no year suffix)
+  config.ticketTotalPages = getIntValue(rawConfig['TICKET_TOTAL_PAGES'], -1);
+  config.ticketLastPage = getIntValue(rawConfig['TICKET_LAST_PAGE'], -1);
+  config.ticketComplete = getBoolValue(rawConfig['TICKET_COMPLETE']);
+  config.ticketLastFetch = getStringValue(rawConfig['TICKET_LAST_FETCH']);
 
-  // Add current year ticket tracking (date windowing)
-  if (ticketYears.current) {
-    config[`ticket${ticketYears.current}LastFetch`] = getStringValue(rawConfig[`TICKET_${ticketYears.current}_LAST_FETCH`]);
-  }
-
-  // Open refresh progress tracking
-  config.openRefreshDate = getDateString(rawConfig['OPEN_REFRESH_DATE']);
-  config.openRefreshOpenPage = getIntValue(rawConfig['OPEN_REFRESH_OPEN_PAGE'], -1);
-  config.openRefreshOpenComplete = getBoolValue(rawConfig['OPEN_REFRESH_OPEN_COMPLETE']);
-  config.openRefreshClosedPage = getIntValue(rawConfig['OPEN_REFRESH_CLOSED_PAGE'], -1);
-  config.openRefreshClosedComplete = getBoolValue(rawConfig['OPEN_REFRESH_CLOSED_COMPLETE']);
+  // Open refresh progress tracking (simplified - uses ModifiedDate filter)
+  config.openRefreshLastRun = getStringValue(rawConfig['OPEN_REFRESH_LAST_RUN']);
+  config.openRefreshPage = getIntValue(rawConfig['OPEN_REFRESH_PAGE'], -1);
+  config.openRefreshComplete = getBoolValue(rawConfig['OPEN_REFRESH_COMPLETE']);
 
   return config;
 }
 
 /**
- * @deprecated SLA loading now uses open/closed priority instead of years
+ * Calculate school year start and end dates from config
+ *
+ * @param {Object} config - Config object with schoolYear and schoolYearStart
+ * @returns {Object} - { startDate, endDate, startYear, endYear } or null if invalid
+ */
+function getSchoolYearDates(config) {
+  if (!config.schoolYear) return null;
+
+  // Parse school year (e.g., "2025-2026")
+  const yearMatch = config.schoolYear.match(/^(\d{4})-(\d{4})$/);
+  if (!yearMatch) return null;
+
+  const startYear = parseInt(yearMatch[1], 10);
+  const endYear = parseInt(yearMatch[2], 10);
+
+  // Validate consecutive years
+  if (endYear !== startYear + 1) return null;
+
+  // Parse start date (MM-DD format, default "07-01")
+  const startParts = (config.schoolYearStart || '07-01').split('-');
+  const startMonth = parseInt(startParts[0], 10) - 1; // 0-indexed for Date constructor
+  const startDay = parseInt(startParts[1], 10);
+
+  // School year starts on startYear and ends day before next start
+  // Note: new Date(year, month, 0) gives last day of previous month
+  // So for startDay=1 (July 1), new Date(2026, 6, 0) = June 30, 2026
+  const startDate = new Date(startYear, startMonth, startDay);
+  const endDate = new Date(endYear, startMonth, startDay - 1);
+
+  return { startDate, endDate, startYear, endYear };
+}
+
+/**
+ * Check if the configured school year is currently in progress
+ * (i.e., today falls within the school year date range)
+ *
+ * @param {Object} config - Config object with schoolYear
+ * @returns {boolean} - true if school year is current, false if historical or invalid
+ */
+function isSchoolYearCurrent(config) {
+  const dates = getSchoolYearDates(config);
+  if (!dates) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return today >= dates.startDate && today <= dates.endDate;
+}
+
+/**
+ * Check if the configuration is locked
+ * Config is locked when data loading has started (SCHOOL_YEAR_LOADED is set)
+ *
+ * @param {Object} config - Config object
+ * @returns {boolean} - true if locked, false if can be changed
+ */
+function isConfigLocked(config) {
+  return config.schoolYearLoaded && config.schoolYearLoaded !== '';
+}
+
+/**
+ * @deprecated Use isConfigLocked instead
+ */
+function isSchoolYearLocked(config) {
+  return isConfigLocked(config);
+}
+
+/**
+ * Check if the current config matches the locked config values
+ *
+ * @param {Object} config - Config object
+ * @returns {Object} - { locked, matches, mismatches[] } or { locked: false } if not locked
+ */
+function checkConfigLock(config) {
+  if (!isConfigLocked(config)) {
+    return { locked: false, matches: true, mismatches: [] };
+  }
+
+  const mismatches = [];
+
+  // Check school year
+  if (config.schoolYear !== config.schoolYearLoaded) {
+    mismatches.push({
+      key: 'SCHOOL_YEAR',
+      current: config.schoolYear,
+      locked: config.schoolYearLoaded
+    });
+  }
+
+  // Check page size
+  if (config.pageSizeLoaded && config.pageSize !== config.pageSizeLoaded) {
+    mismatches.push({
+      key: 'PAGE_SIZE',
+      current: config.pageSize,
+      locked: config.pageSizeLoaded
+    });
+  }
+
+  // Check batch size
+  if (config.batchSizeLoaded && config.ticketBatchSize !== config.batchSizeLoaded) {
+    mismatches.push({
+      key: 'TICKET_BATCH_SIZE',
+      current: config.ticketBatchSize,
+      locked: config.batchSizeLoaded
+    });
+  }
+
+  return {
+    locked: true,
+    matches: mismatches.length === 0,
+    mismatches: mismatches,
+    loadedYear: config.schoolYearLoaded  // For backward compatibility
+  };
+}
+
+/**
+ * @deprecated Use checkConfigLock instead
+ */
+function checkSchoolYearLock(config) {
+  const result = checkConfigLock(config);
+  return {
+    locked: result.locked,
+    matches: result.matches,
+    loadedYear: result.loadedYear
+  };
+}
+
+/**
+ * Lock the configuration by storing current values
+ * Called when data loading starts
+ * Locks: SCHOOL_YEAR, PAGE_SIZE, TICKET_BATCH_SIZE
+ */
+function lockConfig() {
+  const config = getConfig();
+  if (!config.schoolYear) {
+    throw new Error('Cannot lock config: SCHOOL_YEAR not configured');
+  }
+
+  // Check for mismatches if already locked
+  const lockStatus = checkConfigLock(config);
+  if (lockStatus.locked && !lockStatus.matches) {
+    const mismatchDetails = lockStatus.mismatches.map(m =>
+      `${m.key}: config has "${m.current}" but was locked to "${m.locked}"`
+    ).join('\n');
+    throw new Error(
+      `Configuration mismatch detected!\n${mismatchDetails}\n\n` +
+      `Use "Clear Data + Reset Progress" to unlock and change these values.`
+    );
+  }
+
+  // If already locked with same values, nothing to do
+  if (lockStatus.locked && lockStatus.matches) {
+    return;
+  }
+
+  // Lock all values
+  setConfigValue('SCHOOL_YEAR_LOADED', config.schoolYear);
+  setConfigValue('PAGE_SIZE_LOADED', config.pageSize);
+  setConfigValue('BATCH_SIZE_LOADED', config.ticketBatchSize);
+  logOperation('Config', 'LOCKED',
+    `Configuration locked: SCHOOL_YEAR=${config.schoolYear}, PAGE_SIZE=${config.pageSize}, BATCH_SIZE=${config.ticketBatchSize}`);
+}
+
+/**
+ * @deprecated Use lockConfig instead
+ */
+function lockSchoolYear() {
+  lockConfig();
+}
+
+/**
+ * Unlock the configuration
+ * Called when data is cleared for a full reload
+ */
+function unlockConfig() {
+  setConfigValue('SCHOOL_YEAR_LOADED', '');
+  setConfigValue('PAGE_SIZE_LOADED', '');
+  setConfigValue('BATCH_SIZE_LOADED', '');
+  logOperation('Config', 'UNLOCKED', 'Configuration unlocked (SCHOOL_YEAR, PAGE_SIZE, BATCH_SIZE)');
+}
+
+/**
+ * @deprecated Use unlockConfig instead
+ */
+function unlockSchoolYear() {
+  unlockConfig();
+}
+
+/**
+ * Set a config value by key
+ *
+ * @param {string} key - Config key to set
+ * @param {any} value - Value to set
+ */
+function setConfigValue(key, value) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
+  if (!sheet) return;
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][0] === key) {
+      sheet.getRange(i + 1, 2).setValue(value);
+      return;
+    }
+  }
+
+  // If not found, append it
+  const lastRow = sheet.getLastRow();
+  sheet.getRange(lastRow + 1, 1, 1, 2).setValues([[key, value]]);
+}
+
+/**
+ * @deprecated School year model uses SCHOOL_YEAR config instead
  */
 function discoverSlaYearsFromConfig(rawConfig) {
   return [];
 }
 
 /**
- * Discover configured years by scanning config keys (for tickets)
- * - {PREFIX}_{YEAR}_LAST_PAGE → historical year (pagination-based)
- * - {PREFIX}_{YEAR}_LAST_FETCH → current year (date windowing)
- *
- * @param {Object} rawConfig - Raw config key-value pairs
- * @param {string} prefix - Key prefix ('TICKET')
- * @returns {Object} - { historical: [2023, 2024, ...], current: 2026 }
+ * @deprecated School year model uses single SCHOOL_YEAR config instead of year-based keys
  */
 function discoverYearsFromConfig(rawConfig, prefix) {
-  const historicalYears = [];
-  let currentYear = null;
-
-  // Regex patterns to extract years (dynamic prefix)
-  const lastPagePattern = new RegExp(`^${prefix}_(\\d{4})_LAST_PAGE$`);
-  const lastFetchPattern = new RegExp(`^${prefix}_(\\d{4})_LAST_FETCH$`);
-
-  Object.keys(rawConfig).forEach(key => {
-    // Check for historical year (pagination)
-    const pageMatch = key.match(lastPagePattern);
-    if (pageMatch) {
-      historicalYears.push(parseInt(pageMatch[1]));
-      return;
-    }
-
-    // Check for current year (date windowing)
-    const fetchMatch = key.match(lastFetchPattern);
-    if (fetchMatch) {
-      currentYear = parseInt(fetchMatch[1]);
-    }
-  });
-
-  // Sort historical years ascending
-  historicalYears.sort((a, b) => a - b);
-
+  // Return empty for backward compatibility
   return {
-    historical: historicalYears,
-    current: currentYear
+    historical: [],
+    current: null
   };
 }
 
 /**
- * Get just the discovered years (useful for status display)
- * @param {string} prefix - Optional: 'TICKET' or 'SLA'. If omitted, returns ticket years for backward compatibility.
+ * @deprecated School year model uses single SCHOOL_YEAR config
  */
 function getConfiguredYears(prefix) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
-  const allData = sheet.getDataRange().getValues();
-  const data = allData.slice(1); // Skip header row
-
-  const rawConfig = {};
-  data.forEach(row => {
-    if (row[0]) {
-      rawConfig[row[0]] = row[1];
-    }
-  });
-
-  return discoverYearsFromConfig(rawConfig, prefix || 'TICKET');
+  return {
+    historical: [],
+    current: null
+  };
 }
 
 function updateLastRefresh() {

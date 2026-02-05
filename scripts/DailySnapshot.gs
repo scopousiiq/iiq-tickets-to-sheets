@@ -120,8 +120,20 @@ function appendDailySnapshot() {
 /**
  * Trigger-safe function for automated daily snapshots
  * Use this with a time-driven trigger (daily at 7 PM recommended)
+ *
+ * ONLY runs for CURRENT school year. Historical school years have no
+ * meaningful backlog to snapshot (all tickets are closed).
  */
 function triggerDailySnapshot() {
+  const config = getConfig();
+
+  // Skip for historical school years - no meaningful backlog to capture
+  if (!isSchoolYearCurrent(config)) {
+    logOperation('Trigger', 'SKIP',
+      `Daily snapshot skipped - school year ${config.schoolYear} is historical`);
+    return;
+  }
+
   logOperation('Trigger', 'START', 'Daily snapshot triggered');
 
   try {
@@ -138,9 +150,19 @@ function triggerDailySnapshot() {
  */
 function populateHistoricalSnapshots() {
   const ui = SpreadsheetApp.getUi();
+
+  const config = getConfig();
+  const dates = getSchoolYearDates(config);
+
+  if (!dates) {
+    ui.alert('Error', 'No valid SCHOOL_YEAR configured in Config sheet.', ui.ButtonSet.OK);
+    return;
+  }
+
   const response = ui.alert(
     'Populate Historical Estimates',
-    'This will create ESTIMATED snapshots for the last day of each past month.\n\n' +
+    `This will create ESTIMATED snapshots for the last day of each past month\n` +
+    `in school year ${config.schoolYear}.\n\n` +
     'These are approximations based on current data and may not reflect actual historical values.\n\n' +
     'Continue?',
     ui.ButtonSet.YES_NO
@@ -160,25 +182,16 @@ function populateHistoricalSnapshots() {
   const ticketData = ticketSheet.getDataRange().getValues();
   const today = new Date();
 
-  // Get min/max dates from ticket data
-  let minDate = today;
-  let maxDate = new Date(2020, 0, 1);
-
-  for (let i = 1; i < ticketData.length; i++) {
-    const createdDate = ticketData[i][4]; // Column E - CreatedDate
-    if (createdDate) {
-      const d = new Date(createdDate);
-      if (d < minDate) minDate = d;
-      if (d > maxDate) maxDate = d;
-    }
-  }
+  // Use school year dates as bounds
+  const minDate = dates.startDate;
+  const maxDate = today < dates.endDate ? today : dates.endDate;
 
   // Generate end-of-month dates from minDate to last month
   const snapshots = [];
   let current = new Date(minDate.getFullYear(), minDate.getMonth() + 1, 0); // End of min month
   const lastMonth = new Date(today.getFullYear(), today.getMonth(), 0); // End of last month
 
-  while (current <= lastMonth) {
+  while (current <= lastMonth && current <= maxDate) {
     // For each end-of-month date, estimate the backlog
     // This is approximate: count tickets created before this date that weren't closed before this date
     let openCount = 0;
@@ -187,8 +200,8 @@ function populateHistoricalSnapshots() {
 
     for (let i = 1; i < ticketData.length; i++) {
       const createdDate = new Date(ticketData[i][4]); // Column E
-      const closedDate = ticketData[i][6] ? new Date(ticketData[i][6]) : null; // Column G
-      const isClosed = ticketData[i][7]; // Column H
+      const closedDate = ticketData[i][7] ? new Date(ticketData[i][7]) : null; // Column H - ClosedDate
+      const isClosed = ticketData[i][8]; // Column I - IsClosed
 
       // Was this ticket open on this date?
       if (createdDate <= current) {
@@ -214,6 +227,6 @@ function populateHistoricalSnapshots() {
     snapshotSheet.getRange(lastRow + 1, 1, snapshots.length, 4).setValues(snapshots);
   }
 
-  logOperation('DailySnapshot', 'HISTORICAL', `Created ${snapshots.length} estimated historical snapshots`);
-  ui.alert('Complete', `Created ${snapshots.length} estimated historical snapshots.\n\nNote: These are estimates based on current data.`, ui.ButtonSet.OK);
+  logOperation('DailySnapshot', 'HISTORICAL', `Created ${snapshots.length} estimated historical snapshots for ${config.schoolYear}`);
+  ui.alert('Complete', `Created ${snapshots.length} estimated historical snapshots for ${config.schoolYear}.\n\nNote: These are estimates based on current data.`, ui.ButtonSet.OK);
 }

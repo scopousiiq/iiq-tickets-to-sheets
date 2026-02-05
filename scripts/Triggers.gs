@@ -5,16 +5,32 @@
  * They don't show UI dialogs (which fail in triggers) and log results instead.
  *
  * =============================================================================
- * RECOMMENDED TRIGGER SCHEDULE (Optimized for Freshness + Efficiency)
+ * SCHOOL YEAR MODEL
  * =============================================================================
  *
- * | Function                  | Schedule         | Purpose                           |
- * |---------------------------|------------------|-----------------------------------|
- * | triggerDataContinue       | Every 10 min     | Continue any in-progress loading  |
- * | triggerOpenTicketRefresh  | Every 2 hours    | Start open ticket + SLA refresh   |
- * | triggerNewTickets         | Every 30 min     | Fetch newly created tickets       |
- * | triggerDailySnapshot      | Daily 7:00 PM    | Capture backlog metrics           |
- * | triggerWeeklyFullRefresh  | Weekly Sun 2 AM  | Full reload (catch deletions)     |
+ * Each spreadsheet contains ONE school year's data (e.g., 2025-2026).
+ * The school year is configured via SCHOOL_YEAR and SCHOOL_YEAR_START in Config.
+ *
+ * IMPORTANT: Historical vs Current School Year
+ * - HISTORICAL school years (past): Data becomes STATIC once loaded completely.
+ *   No ongoing refreshes are needed or performed.
+ * - CURRENT school year (in progress): Data is actively refreshed to capture
+ *   new tickets, status changes, SLA updates, and deletions.
+ *
+ * =============================================================================
+ * RECOMMENDED TRIGGER SCHEDULE
+ * =============================================================================
+ *
+ * | Function                  | Schedule         | Runs For                | Purpose                    |
+ * |---------------------------|------------------|-------------------------|----------------------------|
+ * | triggerDataContinue       | Every 10 min     | All                     | Continue in-progress load  |
+ * | triggerOpenTicketRefresh  | Every 2 hours    | Current + hist w/ open  | Refresh open tickets + SLA |
+ * | triggerNewTickets         | Every 30 min     | Current                 | Fetch newly created tickets|
+ * | triggerDailySnapshot      | Daily 7:00 PM    | Current                 | Capture backlog metrics    |
+ * | triggerWeeklyFullRefresh  | Weekly Sun 2 AM  | Current                 | Full reload for deletions  |
+ *
+ * For HISTORICAL school years, only triggerDataContinue is needed (to complete
+ * initial load). Once loaded, no triggers do any work - they skip automatically.
  *
  * =============================================================================
  * THE "KEEP THINGS MOVING" TRIGGER (triggerDataContinue)
@@ -22,42 +38,33 @@
  *
  * This is the key trigger that ensures work gets completed:
  *
- * 1. If initial load is NOT complete → continues loading historical ticket data
+ * 1. If initial load is NOT complete → continues loading school year ticket data
  * 2. If initial load IS complete AND open refresh is in progress → continues it
- * 3. If both are complete → does nothing (no log noise)
+ * 3. If both are complete → does nothing (minimal logging)
  *
  * Safe to leave enabled permanently. It only does work when needed.
  *
  * =============================================================================
- * STRATEGY OVERVIEW
+ * STRATEGY BY SCHOOL YEAR TYPE
  * =============================================================================
  *
- * INITIAL LOAD:
- * - triggerDataContinue handles this automatically
- * - Loads historical years via pagination, current year via date windowing
+ * HISTORICAL SCHOOL YEAR:
+ * - Run triggerDataContinue until TICKET_COMPLETE = TRUE
+ * - Open ticket refresh continues until all tickets are closed
+ *   (handles tickets opened near end of school year)
+ * - Once all tickets closed, data becomes STATIC
+ * - Weekly refresh, new tickets, and daily snapshot skip automatically
  *
- * ONGOING OPERATIONS (after initial load):
- * 1. Open Ticket Refresh (triggered every 2 hours)
- *    - Fetches all open tickets from API
- *    - Fetches tickets closed in last 7 days
- *    - Updates existing rows IN PLACE (no delete/recreate)
- *    - If it times out, triggerDataContinue picks up where it left off
- *
- * 2. New Tickets (every 30 min)
- *    - Uses date windowing to fetch only new tickets since last check
- *    - Very fast - typically processes 0-50 tickets
- *
- * 3. Daily Snapshot (once per day)
- *    - Captures point-in-time backlog metrics
- *    - Used for trend analysis
- *
- * 4. Weekly Full Refresh (once per week)
- *    - Clears recent years and reloads from scratch
- *    - Catches: deleted tickets, data corrections, edge cases
- *    - Preserves old historical data (2+ years old)
+ * CURRENT SCHOOL YEAR:
+ * - Initial load via triggerDataContinue
+ * - Ongoing operations after initial load:
+ *   1. Open Ticket Refresh (every 2 hours) - updates open tickets + SLA
+ *   2. New Tickets (every 30 min) - catches newly created tickets
+ *   3. Daily Snapshot (7 PM) - captures backlog metrics for trending
+ *   4. Weekly Full Refresh (Sunday 2 AM) - catches deletions/corrections
  *
  * =============================================================================
- * DATA FRESHNESS
+ * DATA FRESHNESS (Current School Year Only)
  * =============================================================================
  *
  * With this schedule:
@@ -83,6 +90,10 @@
  * - Uses in-place updates for efficiency
  * - Appends new tickets not already in sheet
  *
+ * For HISTORICAL school years: Continues running until all tickets are closed.
+ * A ticket opened June 29th shouldn't be stuck "open" forever just because
+ * July 1st arrived. Once all tickets in the sheet are closed, skips.
+ *
  * NOTE: Skips if initial data load is not complete.
  * NOTE: For large districts, this may not complete in one run.
  * Use triggerDataContinue (every 10 min) to ensure completion.
@@ -98,6 +109,18 @@ function triggerOpenTicketRefresh() {
     return;
   }
 
+  // For historical school years, only run if there are still open tickets
+  if (!isSchoolYearCurrent(config)) {
+    const openCount = countOpenTickets(sheet);
+    if (openCount === 0) {
+      logOperation('Trigger', 'SKIP',
+        `Open ticket refresh skipped - school year ${config.schoolYear} is historical and all tickets are closed`);
+      return;
+    }
+    logOperation('Trigger', 'INFO',
+      `Historical school year ${config.schoolYear} still has ${openCount} open tickets - refreshing`);
+  }
+
   if (reloadInProgress) {
     logOperation('Trigger', 'SKIP', 'Open ticket refresh skipped - current year reload in progress');
     return;
@@ -109,12 +132,17 @@ function triggerOpenTicketRefresh() {
     return;
   }
 
+  // Reset progress to start a new cycle (each trigger run = new cycle)
+  // This fetches tickets modified since the last successful run
+  resetOpenRefreshProgress();
+
   logOperation('Trigger', 'START', 'Open ticket refresh started');
 
   try {
     const result = runOpenTicketRefresh(sheet);
+    const skippedInfo = result.skippedCount ? `, skipped ${result.skippedCount}` : '';
     logOperation('Trigger', 'OPEN_REFRESH',
-      `Updated ${result.updatedCount}, appended ${result.appendedCount}, ` +
+      `Updated ${result.updatedCount}, appended ${result.appendedCount}${skippedInfo}, ` +
       `${result.ticketCount} total tickets, ${result.batchCount} batches, ` +
       `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
   } catch (error) {
@@ -136,6 +164,7 @@ function triggerOpenRefreshContinue() {
  *
  * Uses date windowing to fetch only tickets created since last check.
  * Very efficient - typically processes only a handful of tickets.
+ * Only runs for current school year (historical school years don't need incremental updates).
  */
 function triggerNewTickets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -149,7 +178,7 @@ function triggerNewTickets() {
   }
 
   if (reloadInProgress) {
-    logOperation('Trigger', 'SKIP', 'New tickets check skipped - current year reload in progress');
+    logOperation('Trigger', 'SKIP', 'New tickets check skipped - school year reload in progress');
     return;
   }
 
@@ -159,8 +188,9 @@ function triggerNewTickets() {
     return;
   }
 
-  if (!config.currentYear) {
-    logOperation('Trigger', 'SKIP', 'No current year configured for incremental updates');
+  // Only run for current school year
+  if (!isSchoolYearCurrent(config)) {
+    logOperation('Trigger', 'SKIP', 'New tickets check skipped - school year is historical');
     return;
   }
 
@@ -180,62 +210,61 @@ function triggerNewTickets() {
 }
 
 /**
- * Weekly full refresh - clears recent data and reloads
+ * Weekly full refresh - clears school year data and reloads
  * Schedule: Weekly (Sunday 2:00 AM recommended)
+ *
+ * ONLY runs for CURRENT school year. Historical school years are static
+ * once loaded and should not be refreshed.
  *
  * This catches edge cases that incremental updates might miss:
  * - Deleted tickets
  * - Data corrections in iiQ
  * - Any sync issues
- *
- * Preserves historical data (2+ years old) to minimize reload time.
  */
 function triggerWeeklyFullRefresh() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const config = getConfig();
-  const currentYear = new Date().getFullYear();
   const ticketSheet = ss.getSheetByName('TicketData');
 
-  // Preserve data from 2 years ago and older
-  const historicalCutoff = currentYear - 2;
+  if (!config.schoolYear) {
+    logOperation('Trigger', 'ERROR', 'No SCHOOL_YEAR configured');
+    return;
+  }
+
+  // Skip for historical school years - their data is static
+  if (!isSchoolYearCurrent(config)) {
+    logOperation('Trigger', 'SKIP',
+      `Weekly refresh skipped - school year ${config.schoolYear} is historical (data is static)`);
+    return;
+  }
 
   logOperation('Trigger', 'START',
-    `Weekly full refresh triggered. Preserving data from ${historicalCutoff} and earlier.`);
+    `Weekly full refresh triggered for current school year ${config.schoolYear}.`);
 
   try {
-    // Step 1: Filter and rewrite TicketData (preserve historical years)
+    // Step 1: Clear all ticket data for this school year
     if (ticketSheet) {
-      const ticketResult = filterAndRewriteTicketData(ticketSheet, historicalCutoff);
-      logOperation('Trigger', 'WEEKLY_RESET',
-        `Preserved ${ticketResult.keptCount} historical rows, cleared ${ticketResult.clearedCount} recent rows`);
+      const lastRow = ticketSheet.getLastRow();
+      if (lastRow > 1) {
+        ticketSheet.getRange(2, 1, lastRow - 1, 36).clear();
+        logOperation('Trigger', 'WEEKLY_RESET', `Cleared ${lastRow - 1} ticket rows`);
+      }
     }
 
-    // Step 2: Reset progress only for recent ticket years
-    config.historicalYears.forEach(year => {
-      if (year > historicalCutoff) {
-        resetYearProgress(year);
-        logOperation('Trigger', 'PROGRESS_RESET', `Reset ticket progress for ${year}`);
-      }
-    });
-    if (config.currentYear && config.currentYear > historicalCutoff) {
-      resetCurrentYearProgress(config.currentYear);
-      logOperation('Trigger', 'PROGRESS_RESET', `Reset ticket progress for ${config.currentYear} (current year)`);
-    }
+    // Step 2: Reset school year progress
+    resetSchoolYearProgress();
+    logOperation('Trigger', 'PROGRESS_RESET', `Reset ticket progress for ${config.schoolYear}`);
 
     // Step 3: Reset open refresh progress
     resetOpenRefreshProgress();
 
-    // Step 3b: Flag current-year reload in progress (persistent across runs)
-    if (config.currentYear && config.currentYear > historicalCutoff) {
-      setCurrentYearReloadInProgress(true);
-    } else {
-      setCurrentYearReloadInProgress(false);
-    }
+    // Step 4: Flag reload in progress
+    setCurrentYearReloadInProgress(true);
 
     logOperation('Trigger', 'WEEKLY_RESET',
-      `Reset complete. Will reload years > ${historicalCutoff}. Run triggerDataContinue to reload.`);
+      `Reset complete. Reloading school year ${config.schoolYear}.`);
 
-    // Step 4: Start reloading immediately
+    // Step 5: Start reloading immediately
     if (!ticketSheet) {
       logOperation('Trigger', 'ERROR', 'TicketData sheet not found - cannot reload');
       return;
@@ -254,7 +283,7 @@ function triggerWeeklyFullRefresh() {
 }
 
 // =============================================================================
-// INITIAL LOAD TRIGGER (Use for first-time setup or after weekly reset)
+// INITIAL LOAD TRIGGER (Use for first-time setup or after a reset)
 // =============================================================================
 
 /**
@@ -306,37 +335,29 @@ function triggerDataContinue() {
   }
 
   // Priority 2: Check if open ticket refresh needs continuing
-  // Read progress directly from config sheet for most accurate state
   const progress = getOpenRefreshProgress();
-  const savedDate = config.openRefreshDate || '';
-  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
   // Log diagnostic info about the state we found
   logOperation('Trigger', 'CHECK',
-    `Open refresh state: date=${savedDate}, today=${today}, openPage=${progress.openPage}, ` +
-    `openComplete=${progress.openComplete}, closedPage=${progress.closedPage}, ` +
-    `closedComplete=${progress.closedComplete}`);
+    `Open refresh state: page=${progress.page}, complete=${progress.complete}, lastRun=${progress.lastRun || 'never'}`);
 
-  // Check if there's an incomplete refresh to continue
-  // Allow continuing yesterday's refresh if it didn't complete (handles day boundary edge case)
-  const refreshInProgress = progress.openPage >= 0 || progress.closedPage >= 0;
-  const refreshJustStarted = savedDate === today && progress.openPage < 0 && !progress.openComplete;
-  const refreshIncomplete = !progress.openComplete || !progress.closedComplete;
+  // Check if there's an incomplete refresh to continue (page >= 0 means it started but didn't finish)
+  const refreshInProgress = progress.page >= 0 && !progress.complete;
 
-  if ((refreshInProgress || refreshJustStarted) && refreshIncomplete) {
+  if (refreshInProgress) {
     const sheet = ss.getSheetByName('TicketData');
     if (!sheet) {
       logOperation('Trigger', 'ERROR', 'TicketData sheet not found');
       return;
     }
 
-    logOperation('Trigger', 'CONTINUE',
-      `Continuing open ticket refresh (savedDate=${savedDate}, today=${today})`);
+    logOperation('Trigger', 'CONTINUE', 'Continuing open ticket refresh');
 
     try {
       const result = runOpenTicketRefresh(sheet);
+      const skippedInfo = result.skippedCount ? `, skipped ${result.skippedCount}` : '';
       logOperation('Trigger', 'OPEN_REFRESH',
-        `Updated ${result.updatedCount}, appended ${result.appendedCount}, ` +
+        `Updated ${result.updatedCount}, appended ${result.appendedCount}${skippedInfo}, ` +
         `${result.ticketCount} total tickets, ${result.batchCount} batches, ` +
         `complete=${result.complete}, runtime=${(result.runtime/1000).toFixed(1)}s`);
     } catch (error) {
@@ -345,15 +366,13 @@ function triggerDataContinue() {
     return;
   }
 
-  // Nothing to do - log why for diagnostics
-  if (progress.openComplete && progress.closedComplete) {
-    logOperation('Trigger', 'IDLE', `Open refresh already complete for ${savedDate}`);
-  } else if (!savedDate) {
+  // Nothing to do
+  if (progress.complete) {
+    logOperation('Trigger', 'IDLE', `Open refresh complete, last run: ${progress.lastRun || 'never'}`);
+  } else if (!progress.lastRun && progress.page < 0) {
     logOperation('Trigger', 'IDLE', 'No open refresh has been started yet (waiting for triggerOpenTicketRefresh)');
   } else {
-    logOperation('Trigger', 'IDLE',
-      `Unexpected state - date=${savedDate}, inProgress=${refreshInProgress}, ` +
-      `justStarted=${refreshJustStarted}, incomplete=${refreshIncomplete}`);
+    logOperation('Trigger', 'IDLE', `Idle - page=${progress.page}, complete=${progress.complete}`);
   }
 }
 
@@ -362,20 +381,39 @@ function triggerDataContinue() {
 // =============================================================================
 
 /**
- * Check if all ticket loading is complete
+ * Check if school year ticket loading is complete
  */
 function isTicketLoadingComplete(config) {
-  // Check historical years
-  const historicalComplete = config.historicalYears.every(year => config[`ticket${year}Complete`]);
-  if (!historicalComplete) return false;
+  // Check if pagination loading is complete
+  if (!config.ticketComplete) return false;
 
-  // Check current year (has data if lastFetch is set)
-  if (config.currentYear) {
-    const lastFetch = config[`ticket${config.currentYear}LastFetch`];
-    if (!lastFetch) return false;
+  // For current school year, also need at least one lastFetch
+  if (isSchoolYearCurrent(config)) {
+    if (!config.ticketLastFetch) return false;
   }
 
   return true;
+}
+
+/**
+ * Count open tickets in the TicketData sheet
+ * Used to determine if historical school years still need refresh
+ */
+function countOpenTickets(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return 0;
+
+  // Column I is IsClosed (index 9, or column 9 in 1-indexed)
+  const isClosedData = sheet.getRange(2, 9, lastRow - 1, 1).getValues();
+
+  let openCount = 0;
+  for (let i = 0; i < isClosedData.length; i++) {
+    if (isClosedData[i][0] === 'No') {
+      openCount++;
+    }
+  }
+
+  return openCount;
 }
 
 /**
@@ -401,9 +439,15 @@ function setCurrentYearReloadInProgress(inProgress) {
  */
 function runNewTicketsCheck(sheet, config) {
   const startTime = Date.now();
-  const currentYear = config.currentYear;
-  const lastFetch = config[`ticket${currentYear}LastFetch`];
+  const lastFetch = config.ticketLastFetch;
   const batchSize = config.ticketBatchSize;
+
+  // Get school year dates
+  const dates = getSchoolYearDates(config);
+  if (!dates) {
+    logOperation('Trigger', 'ERROR', 'Invalid school year configuration');
+    return { count: 0, runtime: Date.now() - startTime };
+  }
 
   // Build date range from last fetch to now
   let startDate;
@@ -411,7 +455,7 @@ function runNewTicketsCheck(sheet, config) {
     const lastDate = new Date(lastFetch);
     startDate = formatDateForApi(lastDate);
   } else {
-    startDate = `01/01/${currentYear}`;
+    startDate = formatDateForApi(dates.startDate);
   }
 
   const endDate = formatDateForApi(new Date());
@@ -436,7 +480,7 @@ function runNewTicketsCheck(sheet, config) {
   if (tickets.length === 0) {
     // Update timestamp even if no new tickets
     const lastTicket = response.Items[response.Items.length - 1];
-    updateConfigValue(`TICKET_${currentYear}_LAST_FETCH`, lastTicket.CreatedDate);
+    updateConfigValue('TICKET_LAST_FETCH', lastTicket.CreatedDate);
     return { count: 0, runtime: Date.now() - startTime };
   }
 
@@ -444,52 +488,28 @@ function runNewTicketsCheck(sheet, config) {
   const ticketIds = tickets.map(t => t.TicketId).filter(id => id);
   const slaMap = fetchSlaForTicketIds(ticketIds);
 
-  // Write to sheet
+  // Write to sheet using school year string
   const now = new Date();
   tickets.sort((a, b) => new Date(a.CreatedDate) - new Date(b.CreatedDate));
-  const rows = tickets.map(ticket => extractTicketRow(ticket, now, currentYear, slaMap));
+  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap));
   const lastRow = sheet.getLastRow();
   sheet.getRange(lastRow + 1, 1, rows.length, 36).setValues(rows);
 
   // Update last fetch timestamp
   const lastTicket = tickets[tickets.length - 1];
-  updateConfigValue(`TICKET_${currentYear}_LAST_FETCH`, lastTicket.CreatedDate);
+  updateConfigValue('TICKET_LAST_FETCH', lastTicket.CreatedDate);
 
   return { count: tickets.length, runtime: Date.now() - startTime };
 }
 
 /**
+ * @deprecated School year model uses single school year per spreadsheet
  * Filter TicketData to keep only historical rows (year <= cutoff)
- * Uses filter-and-rewrite for efficiency (much faster than row deletion)
  */
 function filterAndRewriteTicketData(sheet, historicalCutoff) {
-  const lastRow = sheet.getLastRow();
-  if (lastRow <= 1) {
-    return { keptCount: 0, clearedCount: 0 };
-  }
-
-  const data = sheet.getRange(2, 1, lastRow - 1, 36).getValues();
-  const rowsToKeep = [];
-  let clearedCount = 0;
-
-  for (let i = 0; i < data.length; i++) {
-    const row = data[i];
-    const year = row[3]; // Column D
-
-    if (year && year <= historicalCutoff) {
-      rowsToKeep.push(row);
-    } else {
-      clearedCount++;
-    }
-  }
-
-  sheet.getRange(2, 1, lastRow - 1, 36).clear();
-
-  if (rowsToKeep.length > 0) {
-    sheet.getRange(2, 1, rowsToKeep.length, 36).setValues(rowsToKeep);
-  }
-
-  return { keptCount: rowsToKeep.length, clearedCount: clearedCount };
+  // No longer used in school year model - each spreadsheet has one school year
+  logOperation('Trigger', 'DEPRECATED', 'filterAndRewriteTicketData no longer used in school year model');
+  return { keptCount: 0, clearedCount: 0 };
 }
 
 /**
@@ -566,19 +586,26 @@ function triggerSlaDataContinue() {
 function setupAutomatedTriggers() {
   const ui = SpreadsheetApp.getUi();
 
+  const config = getConfig();
+  const isCurrent = isSchoolYearCurrent(config);
+  const yearStatus = isCurrent ? 'CURRENT (all triggers active)' : 'HISTORICAL (only initial load needed)';
+
   const response = ui.alert(
     'Setup Automated Triggers',
+    `School Year: ${config.schoolYear || 'Not configured'}\n` +
+    `Status: ${yearStatus}\n\n` +
     'This will create the following time-driven triggers:\n\n' +
     '• triggerDataContinue - Every 10 minutes\n' +
-    '  (Continues any in-progress loading)\n\n' +
+    '  (Continues any in-progress loading) [ALL]\n\n' +
     '• triggerOpenTicketRefresh - Every 2 hours\n' +
-    '  (Refreshes open tickets and SLA data)\n\n' +
+    '  (Refreshes open tickets and SLA data) [CURRENT ONLY]\n\n' +
     '• triggerNewTickets - Every 30 minutes\n' +
-    '  (Catches newly created tickets)\n\n' +
+    '  (Catches newly created tickets) [CURRENT ONLY]\n\n' +
     '• triggerDailySnapshot - Daily at 7:00 PM\n' +
-    '  (Captures backlog metrics for trending)\n\n' +
+    '  (Captures backlog metrics for trending) [CURRENT ONLY]\n\n' +
     '• triggerWeeklyFullRefresh - Weekly Sunday 2:00 AM\n' +
-    '  (Full reload to catch deletions)\n\n' +
+    '  (Full reload to catch deletions) [CURRENT ONLY]\n\n' +
+    'Historical school years: Triggers skip automatically once data is loaded.\n\n' +
     'Any existing triggers for these functions will be replaced.\n\n' +
     'Continue?',
     ui.ButtonSet.YES_NO

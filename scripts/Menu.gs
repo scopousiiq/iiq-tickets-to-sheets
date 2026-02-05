@@ -3,6 +3,10 @@
  *
  * Provides menu access to data loader and analytics functions.
  *
+ * School Year Model:
+ * - Each spreadsheet contains ONE school year's data (e.g., 2025-2026)
+ * - Configured via SCHOOL_YEAR and SCHOOL_YEAR_START in Config sheet
+ *
  * Data Loading:
  * - Ticket Data includes consolidated SLA metrics (36 columns)
  * - SLA data is fetched per-batch during ticket loading
@@ -10,7 +14,7 @@
  * Refresh Strategy:
  * - Initial Load: Use "Continue Loading" repeatedly until complete
  * - Ongoing: "Open Ticket Refresh" every 2 hours (updates open + recently closed)
- * - New Tickets: Automatically fetched with open refresh
+ * - New Tickets: Automatically fetched with open refresh (current school year only)
  * - Weekly: "Full Reload" catches deletions and corrections
  *
  * Analytics Sheets:
@@ -39,7 +43,7 @@ function onOpen() {
     .addSubMenu(ui.createMenu('Ticket Data')
       .addItem('Continue Loading (Initial)', 'refreshTicketDataContinue')
       .addSeparator()
-      .addItem('Clear Year Data + Reset Progress', 'clearYearDataAndResetProgress')
+      .addItem('Clear Data + Reset Progress', 'clearYearDataAndResetProgress')
       .addSeparator()
       .addItem('Open Ticket Refresh (Start)', 'refreshOpenTicketsStart')
       .addItem('Open Ticket Refresh (Continue)', 'refreshOpenTicketsContinue')

@@ -2,7 +2,7 @@
  * Setup Script - Initial Spreadsheet Configuration
  *
  * Creates required data sheets and default analytics sheets.
- * Safe to run multiple times - only creates missing sheets/headers.
+ * Running setup provides a CLEAN SLATE - existing sheets are overwritten.
  *
  * Data Sheets (always created):
  * - Instructions: Setup and usage guide
@@ -28,7 +28,20 @@
  */
 
 /**
+ * Delete a sheet if it exists
+ * @param {Spreadsheet} ss - The spreadsheet
+ * @param {string} sheetName - Name of the sheet to delete
+ */
+function deleteSheetIfExists(ss, sheetName) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (sheet) {
+    ss.deleteSheet(sheet);
+  }
+}
+
+/**
  * Main setup function - creates all sheets and configurations
+ * WARNING: This overwrites existing sheets for a clean slate!
  */
 function setupSpreadsheet() {
   const ui = SpreadsheetApp.getUi();
@@ -36,13 +49,13 @@ function setupSpreadsheet() {
 
   const response = ui.alert(
     'Setup iiQ Data Spreadsheet',
-    'This will create/configure the following sheets:\n\n' +
+    '⚠️ WARNING: This will DELETE and RECREATE the following sheets:\n\n' +
     'DATA SHEETS:\n' +
     '- Instructions (setup guide)\n' +
-    '- Config (API settings)\n' +
-    '- TicketData (36 columns)\n' +
-    '- Teams (directory)\n' +
-    '- DailySnapshot (trending)\n' +
+    '- Config (API settings) - CREDENTIALS WILL BE LOST!\n' +
+    '- TicketData (36 columns) - ALL DATA WILL BE LOST!\n' +
+    '- Teams (directory) - ALL DATA WILL BE LOST!\n' +
+    '- DailySnapshot (trending) - ALL DATA WILL BE LOST!\n' +
     '- Logs (operations)\n\n' +
     'DEFAULT ANALYTICS:\n' +
     '- MonthlyVolume\n' +
@@ -52,42 +65,38 @@ function setupSpreadsheet() {
     '- PerformanceTrends\n' +
     '- AtRiskResponse\n' +
     '- AtRiskResolution\n\n' +
-    'Additional analytics sheets can be added later via:\n' +
-    'iiQ Data > Add Analytics Sheet\n\n' +
-    'Existing sheets will not be overwritten.\n\n' +
-    'Continue?',
+    'This provides a CLEAN SLATE for the spreadsheet.\n\n' +
+    'Are you sure you want to continue?',
     ui.ButtonSet.YES_NO
   );
 
   if (response !== ui.Button.YES) return;
 
-  let created = [];
-  let skipped = [];
+  const created = [];
 
-  // Create data sheets (required)
-  if (setupInstructionsSheet(ss)) created.push('Instructions'); else skipped.push('Instructions');
-  if (setupConfigSheet(ss)) created.push('Config'); else skipped.push('Config');
-  if (setupTicketDataSheet(ss)) created.push('TicketData'); else skipped.push('TicketData');
-  if (setupTeamsSheet(ss)) created.push('Teams'); else skipped.push('Teams');
-  if (setupDailySnapshotSheet(ss)) created.push('DailySnapshot'); else skipped.push('DailySnapshot');
-  if (setupLogsSheet(ss)) created.push('Logs'); else skipped.push('Logs');
+  // Create data sheets (required) - these delete existing sheets first
+  setupInstructionsSheet(ss); created.push('Instructions');
+  setupConfigSheet(ss); created.push('Config');
+  setupTicketDataSheet(ss); created.push('TicketData');
+  setupTeamsSheet(ss); created.push('Teams');
+  setupDailySnapshotSheet(ss); created.push('DailySnapshot');
+  setupLogsSheet(ss); created.push('Logs');
 
   // Create default analytics sheets
   // Additional sheets can be added via iiQ Data > Add Analytics Sheet menu
-  if (setupMonthlyVolumeSheet(ss)) created.push('MonthlyVolume'); else skipped.push('MonthlyVolume');
-  if (setupBacklogAgingSheet(ss)) created.push('BacklogAging'); else skipped.push('BacklogAging');
-  if (setupTeamWorkloadSheet(ss)) created.push('TeamWorkload'); else skipped.push('TeamWorkload');
-  if (setupSLAComplianceSheet(ss)) created.push('SLACompliance'); else skipped.push('SLACompliance');
-  if (setupPerformanceTrendsSheet(ss)) created.push('PerformanceTrends'); else skipped.push('PerformanceTrends');
-  if (setupAtRiskResponseSheet(ss)) created.push('AtRiskResponse'); else skipped.push('AtRiskResponse');
-  if (setupAtRiskResolutionSheet(ss)) created.push('AtRiskResolution'); else skipped.push('AtRiskResolution');
+  setupMonthlyVolumeSheet(ss); created.push('MonthlyVolume');
+  setupBacklogAgingSheet(ss); created.push('BacklogAging');
+  setupTeamWorkloadSheet(ss); created.push('TeamWorkload');
+  setupSLAComplianceSheet(ss); created.push('SLACompliance');
+  setupPerformanceTrendsSheet(ss); created.push('PerformanceTrends');
+  setupAtRiskResponseSheet(ss); created.push('AtRiskResponse');
+  setupAtRiskResolutionSheet(ss); created.push('AtRiskResolution');
 
   // Reorder sheets for better UX
   reorderSheets(ss);
 
   const message = [];
-  if (created.length > 0) message.push('Created: ' + created.join(', '));
-  if (skipped.length > 0) message.push('Already existed: ' + skipped.join(', '));
+  message.push('Created ' + created.length + ' sheets: ' + created.join(', '));
   message.push('\nNext steps:');
   message.push('1. Fill in Config sheet with API credentials');
   message.push('2. Run "Refresh Teams" to load team directory');
@@ -98,11 +107,10 @@ function setupSpreadsheet() {
 
 /**
  * Setup Instructions sheet with setup and usage guide
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupInstructionsSheet(ss) {
-  if (ss.getSheetByName('Instructions')) return false;
-
+  deleteSheetIfExists(ss, 'Instructions');
   const sheet = ss.insertSheet('Instructions');
 
   // Set column width for readability
@@ -120,6 +128,10 @@ function setupInstructionsSheet(ss) {
     ['and Power BI consumption. Data is loaded via Google Apps Script and refreshed'],
     ['automatically via time-driven triggers.'],
     [''],
+    ['SCHOOL YEAR MODEL: Each spreadsheet contains ONE school year\'s data.'],
+    ['Example: A "2025-2026" spreadsheet covers July 1, 2025 through June 30, 2026.'],
+    ['Create a new spreadsheet for each school year.'],
+    [''],
     ['Data Flow: iiQ API → Google Apps Script → This Spreadsheet → Power BI'],
     [''],
     [''],
@@ -132,18 +144,13 @@ function setupInstructionsSheet(ss) {
     ['   • BEARER_TOKEN: JWT token from iiQ (Admin > Integrations > API)'],
     ['   • SITE_ID: Optional - only needed for multi-site instances'],
     [''],
-    ['2. CONFIGURE YEAR TRACKING (Config sheet)'],
-    ['   For historical years (full reload via pagination):'],
-    ['   • Add row: TICKET_2024_LAST_PAGE = -1'],
-    ['   • Add row: TICKET_2024_COMPLETE = FALSE'],
+    ['2. CONFIGURE SCHOOL YEAR (Config sheet)'],
+    ['   • SCHOOL_YEAR: The school year for this spreadsheet (e.g., "2025-2026")'],
+    ['   • SCHOOL_YEAR_START: First day of school year in MM-DD format (default "07-01")'],
     [''],
-    ['   For current year (incremental updates via date windowing):'],
-    ['   • Add row: TICKET_2025_LAST_FETCH = (leave empty)'],
-    [''],
-    ['   Example for loading 2023-2025 data with 2025 as current year:'],
-    ['   • TICKET_2023_LAST_PAGE, TICKET_2023_COMPLETE'],
-    ['   • TICKET_2024_LAST_PAGE, TICKET_2024_COMPLETE'],
-    ['   • TICKET_2025_LAST_FETCH'],
+    ['   Examples:'],
+    ['   • Traditional: SCHOOL_YEAR=2025-2026, SCHOOL_YEAR_START=07-01 (July 1 - June 30)'],
+    ['   • Fall start:  SCHOOL_YEAR=2025-2026, SCHOOL_YEAR_START=08-15 (Aug 15 - Aug 14)'],
     [''],
     ['3. VERIFY CONFIGURATION'],
     ['   • Menu: iiQ Data > Setup > Verify Configuration'],
@@ -347,12 +354,18 @@ function setupInstructionsSheet(ss) {
 
 /**
  * Setup Config sheet with required settings
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupConfigSheet(ss) {
-  if (ss.getSheetByName('Config')) return false;
-
+  deleteSheetIfExists(ss, 'Config');
   const sheet = ss.insertSheet('Config');
+
+  // Determine current school year (July-June)
+  const now = new Date();
+  const currentMonth = now.getMonth(); // 0-indexed
+  const currentYear = now.getFullYear();
+  const schoolYearStart = currentMonth >= 6 ? currentYear : currentYear - 1; // July = 6
+  const defaultSchoolYear = `${schoolYearStart}-${schoolYearStart + 1}`;
 
   // Headers and initial config values
   const configData = [
@@ -363,6 +376,10 @@ function setupConfigSheet(ss) {
     ['BEARER_TOKEN', ''],
     ['SITE_ID', ''],
     ['', ''],
+    ['# School Year Configuration', ''],
+    ['SCHOOL_YEAR', defaultSchoolYear],
+    ['SCHOOL_YEAR_START', '07-01'],
+    ['', ''],
     ['# Performance Settings (Optional)', ''],
     ['PAGE_SIZE', '100'],
     ['THROTTLE_MS', '1000'],
@@ -371,15 +388,15 @@ function setupConfigSheet(ss) {
     ['SLA_RISK_PERCENT', '75'],
     ['', ''],
     ['# Progress Tracking - Managed Automatically', ''],
-    ['# Add TICKET_{YEAR}_LAST_PAGE rows for historical years', ''],
-    ['# Add TICKET_{YEAR}_LAST_FETCH row for current year', ''],
+    ['TICKET_TOTAL_PAGES', ''],
+    ['TICKET_LAST_PAGE', '-1'],
+    ['TICKET_COMPLETE', 'FALSE'],
+    ['TICKET_LAST_FETCH', ''],
     ['', ''],
-    ['# Example for 2024 historical + 2025 current:', ''],
-    ['TICKET_2024_LAST_PAGE', '-1'],
-    ['TICKET_2024_COMPLETE', 'FALSE'],
-    ['TICKET_2025_LAST_PAGE', '-1'],
-    ['TICKET_2025_COMPLETE', 'FALSE'],
-    ['TICKET_2026_LAST_FETCH', ''],
+    ['# Config Lock - Set when loading starts, cleared by "Clear Data + Reset"', ''],
+    ['SCHOOL_YEAR_LOADED', ''],
+    ['PAGE_SIZE_LOADED', ''],
+    ['BATCH_SIZE_LOADED', ''],
     ['', ''],
     ['LAST_REFRESH', '']
   ];
@@ -390,7 +407,7 @@ function setupConfigSheet(ss) {
   sheet.getRange(1, 1, 1, 2).setFontWeight('bold').setBackground('#4285f4').setFontColor('white');
 
   // Format section headers (rows starting with #)
-  const sectionRows = [3, 8, 15, 19];
+  const sectionRows = [3, 8, 12, 19, 25];
   sectionRows.forEach(row => {
     sheet.getRange(row, 1, 1, 2).setFontWeight('bold').setBackground('#e8f0fe');
   });
@@ -406,11 +423,10 @@ function setupConfigSheet(ss) {
 
 /**
  * Setup TicketData sheet with 36-column header
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupTicketDataSheet(ss) {
-  if (ss.getSheetByName('TicketData')) return false;
-
+  deleteSheetIfExists(ss, 'TicketData');
   const sheet = ss.insertSheet('TicketData');
 
   const headers = [
@@ -441,11 +457,10 @@ function setupTicketDataSheet(ss) {
 
 /**
  * Setup Teams sheet
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupTeamsSheet(ss) {
-  if (ss.getSheetByName('Teams')) return false;
-
+  deleteSheetIfExists(ss, 'Teams');
   const sheet = ss.insertSheet('Teams');
 
   const headers = ['TeamId', 'TeamName', 'FunctionalArea', 'IsActive'];
@@ -474,11 +489,10 @@ function setupTeamsSheet(ss) {
 /**
  * Setup DailySnapshot sheet
  * Headers match GUIDE.md for PerformanceTrends lookups
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupDailySnapshotSheet(ss) {
-  if (ss.getSheetByName('DailySnapshot')) return false;
-
+  deleteSheetIfExists(ss, 'DailySnapshot');
   const sheet = ss.insertSheet('DailySnapshot');
 
   // Headers matching GUIDE.md
@@ -513,11 +527,10 @@ function setupDailySnapshotSheet(ss) {
 
 /**
  * Setup Logs sheet
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupLogsSheet(ss) {
-  if (ss.getSheetByName('Logs')) return false;
-
+  deleteSheetIfExists(ss, 'Logs');
   const sheet = ss.insertSheet('Logs');
 
   const headers = ['Timestamp', 'Operation', 'Status', 'Details'];
@@ -542,11 +555,10 @@ function setupLogsSheet(ss) {
 
 /**
  * Setup SLACompliance sheet with formulas
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupSLAComplianceSheet(ss) {
-  if (ss.getSheetByName('SLACompliance')) return false;
-
+  deleteSheetIfExists(ss, 'SLACompliance');
   const sheet = ss.insertSheet('SLACompliance');
 
   const headers = ['Month', 'Year', 'Closed', 'Breaches', 'Breach Rate', 'Avg Response (hrs)', 'Avg Resolution (hrs)'];
@@ -621,11 +633,10 @@ function setupSLAComplianceSheet(ss) {
 
 /**
  * Setup MonthlyVolume sheet with formulas
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupMonthlyVolumeSheet(ss) {
-  if (ss.getSheetByName('MonthlyVolume')) return false;
-
+  deleteSheetIfExists(ss, 'MonthlyVolume');
   const sheet = ss.insertSheet('MonthlyVolume');
 
   // Headers matching GUIDE.md: Month, Year, Created, Closed, Net Change, Closure Rate
@@ -673,18 +684,20 @@ function setupMonthlyVolumeSheet(ss) {
   sheet.getRange('F:F').setNumberFormat('0.0%');
 
   // Conditional formatting for Net Change (red if positive/backlog growing, green if negative/backlog shrinking)
-  const netChangeRange = sheet.getRange(2, 5, dataRows.length, 1);
-  const positiveRule = SpreadsheetApp.newConditionalFormatRule()
-    .whenNumberGreaterThan(0)
-    .setBackground('#fce8e6')
-    .setRanges([netChangeRange])
-    .build();
-  const negativeRule = SpreadsheetApp.newConditionalFormatRule()
-    .whenNumberLessThan(0)
-    .setBackground('#e6f4ea')
-    .setRanges([netChangeRange])
-    .build();
-  sheet.setConditionalFormatRules([positiveRule, negativeRule]);
+  if (dataRows.length > 0) {
+    const netChangeRange = sheet.getRange(2, 5, dataRows.length, 1);
+    const positiveRule = SpreadsheetApp.newConditionalFormatRule()
+      .whenNumberGreaterThan(0)
+      .setBackground('#fce8e6')
+      .setRanges([netChangeRange])
+      .build();
+    const negativeRule = SpreadsheetApp.newConditionalFormatRule()
+      .whenNumberLessThan(0)
+      .setBackground('#e6f4ea')
+      .setRanges([netChangeRange])
+      .build();
+    sheet.setConditionalFormatRules([positiveRule, negativeRule]);
+  }
 
   sheet.setFrozenRows(1);
 
@@ -694,11 +707,10 @@ function setupMonthlyVolumeSheet(ss) {
 /**
  * Setup BacklogAging sheet with formulas
  * Matches GUIDE.md structure with Sample Ticket and Last Refreshed columns
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupBacklogAgingSheet(ss) {
-  if (ss.getSheetByName('BacklogAging')) return false;
-
+  deleteSheetIfExists(ss, 'BacklogAging');
   const sheet = ss.insertSheet('BacklogAging');
 
   // Headers matching GUIDE.md
@@ -789,11 +801,10 @@ function setupBacklogAgingSheet(ss) {
 /**
  * Setup TeamWorkload sheet with formulas
  * Uses a single array formula for sortable output
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupTeamWorkloadSheet(ss) {
-  if (ss.getSheetByName('TeamWorkload')) return false;
-
+  deleteSheetIfExists(ss, 'TeamWorkload');
   const sheet = ss.insertSheet('TeamWorkload');
 
   // Headers matching GUIDE.md structure
@@ -865,11 +876,10 @@ function setupTeamWorkloadSheet(ss) {
 
 /**
  * Setup LocationBreakdown sheet with formulas
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupLocationBreakdownSheet(ss) {
-  if (ss.getSheetByName('LocationBreakdown')) return false;
-
+  deleteSheetIfExists(ss, 'LocationBreakdown');
   const sheet = ss.insertSheet('LocationBreakdown');
 
   // Headers - includes sort controls
@@ -937,11 +947,10 @@ function setupLocationBreakdownSheet(ss) {
 
 /**
  * Setup FunctionalAreaSummary sheet with formulas
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupFunctionalAreaSummarySheet(ss) {
-  if (ss.getSheetByName('FunctionalAreaSummary')) return false;
-
+  deleteSheetIfExists(ss, 'FunctionalAreaSummary');
   const sheet = ss.insertSheet('FunctionalAreaSummary');
 
   // Headers - includes sort controls
@@ -1012,11 +1021,10 @@ function setupFunctionalAreaSummarySheet(ss) {
 /**
  * Setup AtRiskResponse sheet with formulas
  * Shows tickets approaching Response SLA breach threshold
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupAtRiskResponseSheet(ss) {
-  if (ss.getSheetByName('AtRiskResponse')) return false;
-
+  deleteSheetIfExists(ss, 'AtRiskResponse');
   const sheet = ss.insertSheet('AtRiskResponse');
 
   // Headers
@@ -1073,11 +1081,10 @@ function setupAtRiskResponseSheet(ss) {
 /**
  * Setup AtRiskResolution sheet with formulas
  * Shows tickets approaching Resolution SLA breach threshold
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupAtRiskResolutionSheet(ss) {
-  if (ss.getSheetByName('AtRiskResolution')) return false;
-
+  deleteSheetIfExists(ss, 'AtRiskResolution');
   const sheet = ss.insertSheet('AtRiskResolution');
 
   // Headers
@@ -1144,43 +1151,45 @@ function setupAtRiskQueueSheet(ss) {
 /**
  * Setup PerformanceTrends sheet with formulas
  * Answers "Are we getting better?" with trending metrics
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupPerformanceTrendsSheet(ss) {
-  if (ss.getSheetByName('PerformanceTrends')) return false;
-
+  deleteSheetIfExists(ss, 'PerformanceTrends');
   const sheet = ss.insertSheet('PerformanceTrends');
 
   // Headers
   const headers = ['Month', 'Year', 'Closed', 'Avg Resolution (days)', 'Closure Rate', 'Breach Rate', 'Backlog EOM', '% Aged 30+ EOM'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  // Generate month rows for last 2 years
-  const currentYear = new Date().getFullYear();
+  // Generate month rows based on school year configuration
+  const config = getConfig();
+  const monthRange = getMonthRangeFromData(ss, 'E'); // Use CreatedDate column
+
   const months = ['January', 'February', 'March', 'April', 'May', 'June',
                   'July', 'August', 'September', 'October', 'November', 'December'];
 
   const dataRows = [];
-  for (let year = currentYear - 1; year <= currentYear; year++) {
-    for (let m = 0; m < 12; m++) {
-      const rowNum = dataRows.length + 2;
-      dataRows.push([
-        months[m],
-        year,
-        // C: Count tickets closed in that month
-        `=LET(m, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), COUNTIFS(TicketData!H:H, ">="&TEXT(DATE(B${rowNum},m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(B${rowNum},m+1,1), "YYYY-MM-DD")))`,
-        // D: Average resolution time in DAYS for tickets closed that month
-        `=LET(m, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!I:I, "Yes", TicketData!H:H, ">="&TEXT(DATE(B${rowNum},m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(B${rowNum},m+1,1), "YYYY-MM-DD")), "N/A"))`,
-        // E: Closure rate (Closed ÷ Created)
-        `=LET(m, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), created, COUNTIFS(TicketData!E:E, ">="&TEXT(DATE(B${rowNum},m,1), "YYYY-MM-DD"), TicketData!E:E, "<"&TEXT(DATE(B${rowNum},m+1,1), "YYYY-MM-DD")), IF(created>0, C${rowNum}/created, "N/A"))`,
-        // F: Breach rate - lookup from SLACompliance
-        `=IFERROR(INDEX(SLACompliance!E:E, MATCH(A${rowNum}&B${rowNum}, SLACompliance!A:A&SLACompliance!B:B, 0)), "N/A")`,
-        // G: Backlog at end of month - lookup from DailySnapshot
-        `=IFERROR(INDEX(DailySnapshot!B:B, MATCH(EOMONTH(DATE(B${rowNum}, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), 1), 0), DailySnapshot!A:A, 0)), "No snapshot")`,
-        // H: % Aged 30+ at end of month - lookup from DailySnapshot
-        `=IFERROR(INDEX(DailySnapshot!D:D, MATCH(EOMONTH(DATE(B${rowNum}, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), 1), 0), DailySnapshot!A:A, 0)), "No snapshot")`
-      ]);
-    }
+  for (const period of monthRange) {
+    const rowNum = dataRows.length + 2;
+    const year = period.year;
+    const m = period.month;
+
+    dataRows.push([
+      months[m],
+      year,
+      // C: Count tickets closed in that month
+      `=LET(m, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), COUNTIFS(TicketData!H:H, ">="&TEXT(DATE(B${rowNum},m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(B${rowNum},m+1,1), "YYYY-MM-DD")))`,
+      // D: Average resolution time in DAYS for tickets closed that month
+      `=LET(m, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!I:I, "Yes", TicketData!H:H, ">="&TEXT(DATE(B${rowNum},m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(B${rowNum},m+1,1), "YYYY-MM-DD")), "N/A"))`,
+      // E: Closure rate (Closed ÷ Created)
+      `=LET(m, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), created, COUNTIFS(TicketData!E:E, ">="&TEXT(DATE(B${rowNum},m,1), "YYYY-MM-DD"), TicketData!E:E, "<"&TEXT(DATE(B${rowNum},m+1,1), "YYYY-MM-DD")), IF(created>0, C${rowNum}/created, "N/A"))`,
+      // F: Breach rate - lookup from SLACompliance
+      `=IFERROR(INDEX(SLACompliance!E:E, MATCH(A${rowNum}&B${rowNum}, SLACompliance!A:A&SLACompliance!B:B, 0)), "N/A")`,
+      // G: Backlog at end of month - lookup from DailySnapshot
+      `=IFERROR(INDEX(DailySnapshot!B:B, MATCH(EOMONTH(DATE(B${rowNum}, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), 1), 0), DailySnapshot!A:A, 0)), "No snapshot")`,
+      // H: % Aged 30+ at end of month - lookup from DailySnapshot
+      `=IFERROR(INDEX(DailySnapshot!D:D, MATCH(EOMONTH(DATE(B${rowNum}, MATCH(A${rowNum}, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), 1), 0), DailySnapshot!A:A, 0)), "No snapshot")`
+    ]);
   }
 
   if (dataRows.length > 0) {
@@ -1224,11 +1233,10 @@ function setupPerformanceTrendsSheet(ss) {
 /**
  * Setup StaleTickets sheet with formulas
  * Shows tickets with no update in X days (from STALE_DAYS config)
- * @returns {boolean} true if created, false if already exists
+ * Deletes existing sheet if present for clean slate
  */
 function setupStaleTicketsSheet(ss) {
-  if (ss.getSheetByName('StaleTickets')) return false;
-
+  deleteSheetIfExists(ss, 'StaleTickets');
   const sheet = ss.insertSheet('StaleTickets');
 
   // Headers
@@ -1350,8 +1358,49 @@ function verifyConfiguration() {
         issues.push('BEARER_TOKEN not configured');
       }
 
-      if (config.historicalYears.length === 0 && !config.currentYear) {
-        issues.push('No TICKET_{YEAR}_LAST_PAGE or TICKET_{YEAR}_LAST_FETCH rows found');
+      // Validate school year configuration
+      if (!config.schoolYear) {
+        issues.push('SCHOOL_YEAR not configured (e.g., "2025-2026")');
+      } else {
+        // Validate format: YYYY-YYYY with consecutive years
+        const yearMatch = config.schoolYear.match(/^(\d{4})-(\d{4})$/);
+        if (!yearMatch) {
+          issues.push('SCHOOL_YEAR format invalid. Expected: YYYY-YYYY (e.g., "2025-2026")');
+        } else {
+          const startYear = parseInt(yearMatch[1], 10);
+          const endYear = parseInt(yearMatch[2], 10);
+          if (endYear !== startYear + 1) {
+            issues.push('SCHOOL_YEAR must be consecutive years (e.g., "2025-2026", not "2025-2027")');
+          }
+        }
+      }
+
+      // Validate school year start format
+      if (config.schoolYearStart) {
+        const startMatch = config.schoolYearStart.match(/^(\d{2})-(\d{2})$/);
+        if (!startMatch) {
+          issues.push('SCHOOL_YEAR_START format invalid. Expected: MM-DD (e.g., "07-01")');
+        } else {
+          const month = parseInt(startMatch[1], 10);
+          const day = parseInt(startMatch[2], 10);
+          if (month < 1 || month > 12) {
+            issues.push('SCHOOL_YEAR_START month must be 01-12');
+          }
+          if (day < 1 || day > 31) {
+            issues.push('SCHOOL_YEAR_START day must be 01-31');
+          }
+        }
+      }
+
+      // Check for config lock mismatches (school year, page size, batch size)
+      const lockStatus = checkConfigLock(config);
+      if (lockStatus.locked && !lockStatus.matches) {
+        lockStatus.mismatches.forEach(m => {
+          issues.push(
+            `${m.key} MISMATCH! Config has "${m.current}" but data was loaded with "${m.locked}". ` +
+            `Use "Clear Data + Reset Progress" to change locked values.`
+          );
+        });
       }
 
     } catch (e) {
@@ -1360,7 +1409,33 @@ function verifyConfiguration() {
   }
 
   if (issues.length === 0) {
-    ui.alert('Configuration Valid', 'All required settings are configured.\n\nYou can now run "Continue Loading" to start loading data.', ui.ButtonSet.OK);
+    const config = getConfig();
+    const dates = getSchoolYearDates(config);
+    const isCurrent = isSchoolYearCurrent(config);
+    const lockStatus = checkConfigLock(config);
+    const dateRange = dates ?
+      `${Utilities.formatDate(dates.startDate, Session.getScriptTimeZone(), 'MMM d, yyyy')} - ${Utilities.formatDate(dates.endDate, Session.getScriptTimeZone(), 'MMM d, yyyy')}` :
+      'Unknown';
+
+    let lockMessage = '';
+    if (lockStatus.locked) {
+      lockMessage = `\n\nConfig Lock: LOCKED (data loading started)\n` +
+        `  SCHOOL_YEAR: ${config.schoolYearLoaded}\n` +
+        `  PAGE_SIZE: ${config.pageSizeLoaded}\n` +
+        `  BATCH_SIZE: ${config.batchSizeLoaded}\n` +
+        `To change these values, use "Clear Data + Reset Progress"`;
+    } else {
+      lockMessage = `\n\nConfig Lock: Unlocked (can change settings)`;
+    }
+
+    ui.alert('Configuration Valid',
+      `All required settings are configured.\n\n` +
+      `School Year: ${config.schoolYear}\n` +
+      `Date Range: ${dateRange}\n` +
+      `Status: ${isCurrent ? 'Current (incremental updates enabled)' : 'Historical'}` +
+      lockMessage + `\n\n` +
+      `You can now run "Continue Loading" to start loading data.`,
+      ui.ButtonSet.OK);
   } else {
     ui.alert('Configuration Issues', 'Please fix the following issues:\n\n- ' + issues.join('\n- '), ui.ButtonSet.OK);
   }
