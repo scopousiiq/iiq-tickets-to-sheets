@@ -66,7 +66,7 @@ function appendDailySnapshot() {
 
     for (let i = 1; i < ticketData.length; i++) {
       const row = ticketData[i];
-      if (row[isClosedIdx] === 'No') {
+      if (row[isClosedIdx] === 'Open') {
         openCount++;
         if (row[ageDaysIdx] >= 30) {
           aged30Count++;
@@ -95,7 +95,7 @@ function appendDailySnapshot() {
 
   for (let i = 1; i < ticketData.length; i++) {
     const row = ticketData[i];
-    if (row[isClosedCol] === 'No') {
+    if (row[isClosedCol] === 'Open') {
       openCount++;
       if (row[ageDaysCol] >= 30) {
         aged30Count++;
@@ -217,7 +217,7 @@ function populateHistoricalSnapshots() {
 
       // Was this ticket open on this date?
       if (createdDate <= current) {
-        if (isClosed === 'No' || (closedDate && closedDate > current)) {
+        if (isClosed === 'Open' || (closedDate && closedDate > current)) {
           openCount++;
           if (createdDate <= thirtyDaysAgo) {
             aged30Count++;

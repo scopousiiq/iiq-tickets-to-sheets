@@ -28,6 +28,7 @@
  * - ResponseTrends: Monthly response/resolution time trends
  * - TemporalPatterns: When do tickets come in? (day/hour analysis)
  * - QueueTimeAnalysis: How long do tickets wait before being picked up?
+ * - DeviceReliability: Which device models generate the most tickets?
  */
 
 // ============================================================================
@@ -263,6 +264,20 @@ function addTemporalPatternsSheet() {
   SpreadsheetApp.getUi().alert('Created', 'TemporalPatterns sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
+// --- Device ---
+
+/**
+ * Add Device Reliability sheet (deletes and recreates if exists)
+ */
+function addDeviceReliabilitySheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  setupDeviceReliabilitySheet(ss);
+  SpreadsheetApp.getUi().alert('Created',
+    'DeviceReliability sheet has been created.\n\n' +
+    'Groups tickets by device model (column AL) to identify problematic models.',
+    SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -382,11 +397,11 @@ function setupIssueCategoryVolumeSheet(ss) {
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, cats,' +
-    'col_b, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "No"))),' +
+    'col_b, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Open"))),' +
     'col_c, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
     'col_d, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
-    'col_e, BYROW(cats, LAMBDA(c, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!Y:Y, c, TicketData!I:I, "Yes"), "N/A"))),' +
-    'col_f, BYROW(cats, LAMBDA(c, LET(total, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Yes"), breached, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Yes", TicketData!AF:AF, TRUE)+COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Yes", TicketData!AI:AI, TRUE), IF(total>0, breached/total, "N/A")))),' +
+    'col_e, BYROW(cats, LAMBDA(c, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!Y:Y, c, TicketData!I:I, "Closed"), "N/A"))),' +
+    'col_f, BYROW(cats, LAMBDA(c, LET(total, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Closed"), breached, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Closed", TicketData!AF:AF, 1)+COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Closed", TicketData!AI:AI, 1), IF(total>0, breached/total, "N/A")))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f),' +
     'SORT(data, $H$2, $I$2))';
 
@@ -466,12 +481,12 @@ function setupPriorityAnalysisSheet(ss) {
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, pris,' +
-    'col_b, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "No"))),' +
+    'col_b, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Open"))),' +
     'col_c, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
     'col_d, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
-    'col_e, BYROW(pris, LAMBDA(p, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!S:S, p, TicketData!I:I, "Yes"), "N/A"))),' +
-    'col_f, BYROW(pris, LAMBDA(p, IFERROR(AVERAGEIFS(TicketData!AE:AE, TicketData!S:S, p, TicketData!I:I, "Yes", TicketData!AE:AE, ">0")/60, "N/A"))),' +
-    'col_g, BYROW(pris, LAMBDA(p, LET(total, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Yes"), breached, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Yes", TicketData!AF:AF, TRUE)+COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Yes", TicketData!AI:AI, TRUE), IF(total>0, breached/total, "N/A")))),' +
+    'col_e, BYROW(pris, LAMBDA(p, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!S:S, p, TicketData!I:I, "Closed"), "N/A"))),' +
+    'col_f, BYROW(pris, LAMBDA(p, IFERROR(AVERAGEIFS(TicketData!AE:AE, TicketData!S:S, p, TicketData!I:I, "Closed", TicketData!AE:AE, ">0")/60, "N/A"))),' +
+    'col_g, BYROW(pris, LAMBDA(p, LET(total, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Closed"), breached, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Closed", TicketData!AF:AF, 1)+COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Closed", TicketData!AI:AI, 1), IF(total>0, breached/total, "N/A")))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g),' +
     'SORT(data, 2, FALSE))';
 
@@ -647,12 +662,12 @@ function setupTechnicianPerformanceSheet(ss) {
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, techs,' +
     'col_b, BYROW(techs, LAMBDA(t, IFERROR(INDEX(TicketData!L:L, MATCH(t, TicketData!Q:Q, 0)), ""))),' +
-    'col_c, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "No"))),' +
+    'col_c, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Open"))),' +
     'col_d, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
     'col_e, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
-    'col_f, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "No", TicketData!R:R, ">=30"))),' +
-    'col_g, BYROW(techs, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!Q:Q, t, TicketData!I:I, "Yes"), "N/A"))),' +
-    'col_h, BYROW(techs, LAMBDA(t, LET(total, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Yes"), breached, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Yes", TicketData!AF:AF, TRUE)+COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Yes", TicketData!AI:AI, TRUE), IF(total>0, breached/total, "N/A")))),' +
+    'col_f, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Open", TicketData!R:R, ">=30"))),' +
+    'col_g, BYROW(techs, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!Q:Q, t, TicketData!I:I, "Closed"), "N/A"))),' +
+    'col_h, BYROW(techs, LAMBDA(t, LET(total, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Closed"), breached, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Closed", TicketData!AF:AF, 1)+COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Closed", TicketData!AI:AI, 1), IF(total>0, breached/total, "N/A")))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h),' +
     'SORT(data, $J$2, $K$2))';
 
@@ -844,12 +859,12 @@ function setupLocationTypeComparisonSheet(ss) {
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, types,' +
     'col_b, BYROW(types, LAMBDA(t, COUNTA(UNIQUE(FILTER(TicketData!N:N, TicketData!O:O=t))))),' +
-    'col_c, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "No"))),' +
+    'col_c, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open"))),' +
     'col_d, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
     'col_e, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
-    'col_f, BYROW(types, LAMBDA(t, LET(locs, COUNTA(UNIQUE(FILTER(TicketData!N:N, TicketData!O:O=t))), open, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "No"), IF(locs>0, open/locs, 0)))),' +
-    'col_g, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "No", TicketData!R:R, ">=30"))),' +
-    'col_h, BYROW(types, LAMBDA(t, LET(open, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "No"), aged, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "No", TicketData!R:R, ">=30"), IF(open>0, aged/open, 0)))),' +
+    'col_f, BYROW(types, LAMBDA(t, LET(locs, COUNTA(UNIQUE(FILTER(TicketData!N:N, TicketData!O:O=t))), open, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open"), IF(locs>0, open/locs, 0)))),' +
+    'col_g, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open", TicketData!R:R, ">=30"))),' +
+    'col_h, BYROW(types, LAMBDA(t, LET(open, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open"), aged, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open", TicketData!R:R, ">=30"), IF(open>0, aged/open, 0)))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h),' +
     'SORT(data, 3, FALSE))';
 
@@ -905,10 +920,10 @@ function setupReopenRateSheet(ss) {
     ['', '', ''],
     ['--- Reopen Detection ---', '', ''],
     ['Currently Open with ClosedDate',
-     '=COUNTIFS(TicketData!I:I, "No", TicketData!H:H, "<>")',
+     '=COUNTIFS(TicketData!I:I, "Open", TicketData!H:H, "<>")',
      'Tickets that were closed but are now open (reopened)'],
     ['Total Open Tickets',
-     '=COUNTIFS(TicketData!I:I, "No")',
+     '=COUNTIFS(TicketData!I:I, "Open")',
      'All currently open tickets'],
     ['Implied Reopen Rate',
      '=IF(B5>0, B4/B5, 0)',
@@ -916,10 +931,10 @@ function setupReopenRateSheet(ss) {
     ['', '', ''],
     ['--- Quality Indicators ---', '', ''],
     ['Tickets Closed Multiple Times',
-     '=COUNTIFS(TicketData!I:I, "No", TicketData!H:H, "<>", TicketData!R:R, ">7")',
+     '=COUNTIFS(TicketData!I:I, "Open", TicketData!H:H, "<>", TicketData!R:R, ">7")',
      'Reopened tickets open for 7+ days (significant rework)'],
     ['Avg Age of Reopened',
-     '=IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!I:I, "No", TicketData!H:H, "<>"), "N/A")',
+     '=IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!I:I, "Open", TicketData!H:H, "<>"), "N/A")',
      'How long reopened tickets have been open'],
     ['', '', ''],
     ['--- Reopened Tickets List ---', '', 'Sorted by age, oldest first'],
@@ -935,7 +950,7 @@ function setupReopenRateSheet(ss) {
   const listFormula =
     '=IFERROR(SORT(FILTER({TicketData!B2:B, LEFT(TicketData!C2:C,60), TicketData!L2:L, ' +
     'LEFT(TicketData!G2:G,10), TicketData!Q2:Q, TicketData!I2:I}, ' +
-    '(TicketData!H2:H="No")*(TicketData!G2:G<>"")), 5, FALSE), "No reopened tickets found")';
+    '(TicketData!I2:I="Open")*(TicketData!H2:H<>"")), 5, FALSE), "No reopened tickets found")';
 
   sheet.getRange('A15').setValue(listFormula);
 
@@ -969,7 +984,7 @@ function setupReopenRateSheet(ss) {
   sheet.getRange('A1').setNote(
     'Reopen Rate Analysis\n\n' +
     'Question: "Are we truly resolving issues?"\n\n' +
-    'Detection method: Tickets where IsClosed="No" but ClosedDate is not empty\n' +
+    'Detection method: Tickets where IsClosed="Open" but ClosedDate is not empty\n' +
     '(indicates ticket was closed then reopened)\n\n' +
     'Use this to:\n' +
     '- Identify quality issues in resolutions\n' +
@@ -1001,10 +1016,10 @@ function setupFrequentRequestersSheet(ss) {
     'reqs, UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AC2:AC<>"RequesterName")),' +
     'col_a, reqs,' +
     'col_b, BYROW(reqs, LAMBDA(r, COUNTIF(TicketData!AC:AC, r))),' +
-    'col_c, BYROW(reqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "No"))),' +
-    'col_d, BYROW(reqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Yes"))),' +
+    'col_c, BYROW(reqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Open"))),' +
+    'col_d, BYROW(reqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Closed"))),' +
     'col_e, BYROW(reqs, LAMBDA(r, IFERROR(INDEX(SORT(UNIQUE(FILTER(TicketData!Y:Y, TicketData!AC:AC=r, TicketData!Y:Y<>"")), 1, FALSE), 1), ""))),' +
-    'col_f, BYROW(reqs, LAMBDA(r, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AC:AC, r, TicketData!I:I, "Yes"), "N/A"))),' +
+    'col_f, BYROW(reqs, LAMBDA(r, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AC:AC, r, TicketData!I:I, "Closed"), "N/A"))),' +
     'sorted, SORT(HSTACK(col_a, col_b, col_c, col_d, col_e, col_f), $H$2, $I$2),' +
     'IFERROR(ARRAY_CONSTRAIN(sorted, 50, 6), sorted))';
 
@@ -1441,10 +1456,10 @@ function setupQueueTimeAnalysisSheet(ss) {
      '=COUNTIFS(TicketData!F:F, "<>", TicketData!E:E, "<>")',
      'Tickets where both CreatedDate and StartedDate exist'],
     ['Tickets Never Started',
-     '=COUNTIFS(TicketData!F:F, "", TicketData!I:I, "No")',
+     '=COUNTIFS(TicketData!F:F, "", TicketData!I:I, "Open")',
      'Open tickets with no StartedDate (still in queue)'],
     ['Currently in Queue',
-     '=COUNTIFS(TicketData!F:F, "", TicketData!I:I, "No")',
+     '=COUNTIFS(TicketData!F:F, "", TicketData!I:I, "Open")',
      'Open tickets waiting to be picked up'],
     ['', '', ''],
     ['--- Queue Time Stats (hours) ---', '', ''],
@@ -1512,7 +1527,7 @@ function setupQueueTimeAnalysisSheet(ss) {
   // List of open tickets with no StartedDate, sorted by age (constrained to fit left side)
   const waitingFormula =
     '=IFERROR(ARRAY_CONSTRAIN(SORT(FILTER({TicketData!B2:B, LEFT(TicketData!C2:C,30), TicketData!L2:L, TicketData!R2:R}, ' +
-    '(TicketData!F2:F="")*(TicketData!I2:I="No")), 4, FALSE), 25, 4), "No tickets waiting")';
+    '(TicketData!F2:F="")*(TicketData!I2:I="Open")), 4, FALSE), 25, 4), "No tickets waiting")';
 
   sheet.getRange(waitingRow + 2, 1).setValue(waitingFormula);
 
@@ -1840,6 +1855,90 @@ function setupQueueTimeTrendSheet(ss) {
     '- Red: > 8 hours (needs attention)\n\n' +
     'Tip: Set Sort by=1 and Ascending=FALSE to see recent months first.'
   );
+
+  return true;
+}
+
+/**
+ * Setup DeviceReliability sheet with formulas
+ * Groups tickets by device model to identify unreliable models
+ * Deletes existing sheet if present for clean slate
+ */
+function setupDeviceReliabilitySheet(ss) {
+  deleteSheetIfExists(ss, 'DeviceReliability');
+  const sheet = ss.insertSheet('DeviceReliability');
+
+  // Headers - includes sort controls
+  const headers = ['Model Name', 'Total Tickets', 'Open', 'Closed', 'Avg Resolution (days)', 'Breach Rate', 'Last Refreshed', 'Sort Col#', 'Desc?'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // Main formula - aggregates by ModelName (column AL)
+  const mainFormula =
+    '=LET(' +
+    'models, UNIQUE(FILTER(TicketData!AL2:AL, TicketData!AL2:AL<>"", TicketData!AL2:AL<>"ModelName")),' +
+    'col_a, models,' +
+    'col_b, BYROW(models, LAMBDA(m, COUNTIF(TicketData!AL:AL, m))),' +
+    'col_c, BYROW(models, LAMBDA(m, COUNTIFS(TicketData!AL:AL, m, TicketData!I:I, "Open"))),' +
+    'col_d, BYROW(models, LAMBDA(m, COUNTIFS(TicketData!AL:AL, m, TicketData!I:I, "Closed"))),' +
+    'col_e, BYROW(models, LAMBDA(m, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AL:AL, m, TicketData!I:I, "Closed"), "N/A"))),' +
+    'col_f, BYROW(models, LAMBDA(m, LET(total, COUNTIFS(TicketData!AL:AL, m, TicketData!I:I, "Closed"), breached, COUNTIFS(TicketData!AL:AL, m, TicketData!I:I, "Closed", TicketData!AF:AF, 1)+COUNTIFS(TicketData!AL:AL, m, TicketData!I:I, "Closed", TicketData!AI:AI, 1), IF(total>0, breached/total, "N/A")))),' +
+    'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f),' +
+    'SORT(data, $H$2, $I$2))';
+
+  sheet.getRange('A2').setValue(mainFormula);
+  sheet.getRange('G2').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
+
+  // Default sort settings (column 2 = Total Tickets, descending)
+  sheet.getRange('H2').setValue(2);
+  sheet.getRange('I2').setValue('FALSE');
+
+  // Format header
+  sheet.getRange(1, 1, 1, headers.length)
+    .setFontWeight('bold')
+    .setBackground('#546e7a')
+    .setFontColor('white');
+
+  // Format columns
+  sheet.getRange('E:E').setNumberFormat('0.0');   // Avg Resolution
+  sheet.getRange('F:F').setNumberFormat('0.0%');  // Breach Rate
+
+  // Column widths
+  sheet.setColumnWidth(1, 200);  // Model Name
+  sheet.setColumnWidth(7, 180);  // Last Refreshed
+  sheet.setColumnWidth(8, 80);   // Sort Col#
+  sheet.setColumnWidth(9, 60);   // Desc?
+
+  sheet.setFrozenRows(1);
+
+  // Add data validation for sort column
+  const sortColRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['1', '2', '3', '4', '5', '6'], true)
+    .setHelpText('1=Model, 2=Total, 3=Open, 4=Closed, 5=AvgRes, 6=Breach')
+    .build();
+  sheet.getRange('H2').setDataValidation(sortColRule);
+
+  // Add data validation for sort order
+  const sortOrderRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['FALSE', 'TRUE'], true)
+    .setHelpText('FALSE=Descending, TRUE=Ascending')
+    .build();
+  sheet.getRange('I2').setDataValidation(sortOrderRule);
+
+  // Add notes
+  sheet.getRange('A1').setNote(
+    'Device Reliability Analysis\n\n' +
+    'Question: "Which device models generate the most tickets?"\n\n' +
+    'Use this to:\n' +
+    '- Identify unreliable device models with high ticket counts\n' +
+    '- Justify replacement budgets with data\n' +
+    '- Compare breach rates across device models\n' +
+    '- Prioritize bulk replacements or warranty claims\n\n' +
+    'Note: Only shows tickets that have an asset attached.\n' +
+    'Uses ModelName from column AL (TicketData).\n\n' +
+    'Use Sort Col# and Desc? to change sorting.'
+  );
+  sheet.getRange('H2').setNote('Sort column: 1=Model, 2=Total, 3=Open, 4=Closed, 5=AvgRes, 6=Breach');
+  sheet.getRange('I2').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
 
   return true;
 }

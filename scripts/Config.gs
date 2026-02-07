@@ -10,6 +10,7 @@
  *
  * SLA Data:
  * - SLA metrics are consolidated into TicketData (columns 30-36)
+ * - Device/asset info from first asset in columns 37-39 (AK-AM)
  * - SLA is fetched per-batch during ticket loading, no separate SLA loading phase
  */
 

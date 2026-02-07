@@ -53,7 +53,7 @@
  * - Open ticket refresh continues until all tickets are closed
  *   (handles tickets opened near end of school year)
  * - Once all tickets closed, data becomes STATIC
- * - Weekly refresh, new tickets, and daily snapshot skip automatically
+ * - All triggers are automatically removed when data becomes static
  *
  * CURRENT SCHOOL YEAR:
  * - Initial load via triggerDataContinue
@@ -121,8 +121,13 @@ function triggerOpenTicketRefresh() {
     if (!isSchoolYearCurrent(config)) {
       const openCount = countOpenTickets(sheet);
       if (openCount === 0) {
-        logOperation('Trigger', 'SKIP',
-          `Open ticket refresh skipped - school year ${config.schoolYear} is historical and all tickets are closed`);
+        if (config.ticketComplete) {
+          // Data is fully static - auto-remove all triggers
+          autoRemoveTriggers(`school year ${config.schoolYear} is historical and all tickets are closed`);
+        } else {
+          logOperation('Trigger', 'SKIP',
+            `Open ticket refresh skipped - school year ${config.schoolYear} is historical and all tickets are closed`);
+        }
         return;
       }
       logOperation('Trigger', 'INFO',
@@ -278,7 +283,7 @@ function triggerWeeklyFullRefresh() {
       if (ticketSheet) {
         const lastRow = ticketSheet.getLastRow();
         if (lastRow > 1) {
-          ticketSheet.getRange(2, 1, lastRow - 1, 36).clear();
+          ticketSheet.getRange(2, 1, lastRow - 1, 39).clear();
           logOperation('Trigger', 'WEEKLY_RESET', `Cleared ${lastRow - 1} ticket rows`);
         }
       }
@@ -419,6 +424,15 @@ function triggerDataContinue() {
       logOperation('Trigger', 'IDLE', `Idle - page=${progress.page}, complete=${progress.complete}`);
     }
 
+    // Auto-remove triggers for fully static historical school years
+    // At this point we know: initial load is complete AND no open refresh in progress
+    if (!isSchoolYearCurrent(config)) {
+      const ticketSheet = ss.getSheetByName('TicketData');
+      if (ticketSheet && countOpenTickets(ticketSheet) === 0) {
+        autoRemoveTriggers(`school year ${config.schoolYear} is historical and all tickets are closed`);
+      }
+    }
+
   } finally {
     releaseScriptLock(lock);
   }
@@ -456,12 +470,35 @@ function countOpenTickets(sheet) {
 
   let openCount = 0;
   for (let i = 0; i < isClosedData.length; i++) {
-    if (isClosedData[i][0] === 'No') {
+    if (isClosedData[i][0] === 'Open') {
       openCount++;
     }
   }
 
   return openCount;
+}
+
+/**
+ * Automatically remove all triggers when sheet data becomes fully static.
+ * Called when a historical school year has completed loading and has no open tickets.
+ *
+ * @param {string} reason - Description of why triggers are being removed (for logging)
+ */
+function autoRemoveTriggers(reason) {
+  const triggers = ScriptApp.getProjectTriggers();
+  if (triggers.length === 0) return;
+
+  const count = triggers.length;
+  try {
+    triggers.forEach(trigger => {
+      ScriptApp.deleteTrigger(trigger);
+    });
+    logOperation('Trigger', 'AUTO_REMOVE',
+      `Automatically removed ${count} trigger(s) - ${reason}`);
+  } catch (error) {
+    logOperation('Trigger', 'ERROR',
+      `Failed to auto-remove triggers: ${error.message}`);
+  }
 }
 
 /**
@@ -541,7 +578,7 @@ function runNewTicketsCheck(sheet, config) {
   tickets.sort((a, b) => new Date(a.CreatedDate) - new Date(b.CreatedDate));
   const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 36).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, 39).setValues(rows);
 
   // Update last fetch timestamp
   const lastTicket = tickets[tickets.length - 1];
@@ -561,11 +598,11 @@ function filterAndRewriteTicketData(sheet, historicalCutoff) {
 }
 
 /**
- * Create the TicketData sheet with headers (36 columns including SLA metrics)
+ * Create the TicketData sheet with headers (39 columns including SLA metrics and device/asset)
  */
 function createTicketSheet(ss) {
   const sheet = ss.insertSheet('TicketData');
-  sheet.getRange(1, 1, 1, 36).setValues([[
+  sheet.getRange(1, 1, 1, 39).setValues([[
     'TicketId', 'TicketNumber', 'Subject', 'Year',
     'CreatedDate', 'StartedDate', 'ModifiedDate', 'ClosedDate', 'IsClosed',
     'Status', 'TeamId', 'TeamName', 'LocationId', 'LocationName', 'LocationType',
@@ -573,7 +610,8 @@ function createTicketSheet(ss) {
     'SlaId', 'SlaName', 'IssueCategoryId', 'IssueCategoryName',
     'IssueTypeId', 'IssueTypeName', 'RequesterId', 'RequesterName',
     'ResponseThreshold', 'ResponseActual', 'ResponseBreach',
-    'ResolutionThreshold', 'ResolutionActual', 'ResolutionBreach', 'IsRunning'
+    'ResolutionThreshold', 'ResolutionActual', 'ResolutionBreach', 'IsRunning',
+    'AssetTag', 'ModelName', 'SerialNumber'
   ]]);
   sheet.setFrozenRows(1);
   return sheet;

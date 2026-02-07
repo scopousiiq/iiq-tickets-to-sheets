@@ -8,7 +8,7 @@
  * - Configured via SCHOOL_YEAR and SCHOOL_YEAR_START in Config sheet
  *
  * Data Loading:
- * - Ticket Data includes consolidated SLA metrics (36 columns)
+ * - Ticket Data includes consolidated SLA metrics and device/asset info (39 columns)
  * - SLA data is fetched per-batch during ticket loading
  *
  * Refresh Strategy:
@@ -19,7 +19,7 @@
  *
  * Analytics Sheets:
  * - 7 default sheets created by Setup Spreadsheet
- * - 17 additional sheets available via "Add Analytics Sheet" menu
+ * - 18 additional sheets available via "Add Analytics Sheet" menu
  * - All sheets can be deleted and recreated as needed
  * - Organized by category: Volume, Backlog, SLA, Team, Location, Issue
  * - Default sheets marked with ★ in menu
@@ -83,6 +83,8 @@ function onOpen() {
         .addItem('Issue Category Volume', 'addIssueCategoryVolumeSheet')
         .addItem('Priority Analysis', 'addPriorityAnalysisSheet')
         .addItem('Frequent Requesters', 'addFrequentRequestersSheet'))
+      .addSubMenu(ui.createMenu('Device')
+        .addItem('Device Reliability', 'addDeviceReliabilitySheet'))
       .addSeparator()
       .addItem('Regenerate All Monthly Sheets', 'regenerateMonthlyAnalyticsSheets'))
     .addSubMenu(ui.createMenu('Daily Snapshot')
