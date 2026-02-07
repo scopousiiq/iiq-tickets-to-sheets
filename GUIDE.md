@@ -7,14 +7,14 @@ This guide explains how the iiQ Tickets to Sheets system works — the sheet str
 ### Architecture
 
 ```
-┌─────────────┐     ┌──────────────────┐     ┌─────────────┐
-│  iiQ API    │────▶│  Google Sheets   │────▶│  Power BI   │
-│             │     │  + Apps Script   │     │             │
-│ /tickets    │     │                  │     │ Dashboards  │
-│ /teams      │     │ • Config sheet   │     │             │
-└─────────────┘     │ • Volume data    │     └─────────────┘
-                    │ • Aging data     │
-                    │ • Team data      │
+┌─────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│  iiQ API    │────▶│  Google Sheets   │────▶│  Dashboards      │
+│             │     │  + Apps Script   │     │                  │
+│ /tickets    │     │                  │     │ • Looker Studio  │
+│ /teams      │     │ • Config sheet   │     │ • Power BI       │
+└─────────────┘     │ • Ticket data    │     │ • Google Sheets  │
+                    │ • Analytics      │     │   (built-in)     │
+                    │ • Team data      │     └──────────────────┘
                     └──────────────────┘
 ```
 
@@ -31,7 +31,7 @@ Create a new Google Sheet. The **Setup Spreadsheet** function will create all re
 | Sheet Name | Purpose |
 |------------|---------|
 | `Config` | API credentials and settings |
-| `TicketData` | Raw ticket dump with SLA metrics (36 columns) |
+| `TicketData` | Raw ticket dump with SLA metrics and device info (39 columns) |
 | `Teams` | Team directory with FA mapping |
 | `DailySnapshot` | Daily backlog metrics for trending |
 | `Logs` | API call logs and errors |
@@ -74,38 +74,45 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
 | `SLA_RISK_PERCENT` | 75 | % of SLA used before ticket shows in AtRiskResponse/AtRiskResolution |
 | `TICKET_BATCH_SIZE` | 2000 | Tickets per batch during bulk load |
 
+**School Year Configuration (set during Setup):**
+
+| Setting | Purpose |
+|---------|---------|
+| `SCHOOL_YEAR` | The school year for this spreadsheet (e.g., "2025-2026") |
+| `SCHOOL_YEAR_START` | First day of school year in MM-DD format (default "07-01") |
+
 **Progress Tracking (auto-managed, don't edit):**
 
 | Setting | Purpose |
 |---------|---------|
-| `TICKET_2024_LAST_PAGE` | Tracks loading progress for 2024 tickets |
-| `TICKET_2024_COMPLETE` | TRUE when 2024 is fully loaded |
-| `TICKET_2025_LAST_PAGE` | Tracks loading progress for 2025 tickets |
-| `TICKET_2025_COMPLETE` | TRUE when 2025 is fully loaded |
-| `TICKET_2026_LAST_FETCH` | Timestamp for incremental 2026 loading |
+| `TICKET_LAST_PAGE` | Last completed page index (0-indexed, -1 = not started) |
+| `TICKET_TOTAL_PAGES` | Total pages (0-indexed, matches LAST_PAGE when complete) |
+| `TICKET_COMPLETE` | TRUE when pagination loading is fully loaded |
+| `TICKET_LAST_FETCH` | Incremental sync timestamp (for current school year only) |
 | `LAST_REFRESH` | When data was last refreshed (shown on analytics sheets) |
-| `OPEN_REFRESH_*` | Progress tracking for open ticket refresh |
+| `OPEN_REFRESH_LAST_RUN` | Timestamp of last successful open ticket refresh |
+| `OPEN_REFRESH_PAGE` | Current refresh cycle page progress |
+| `OPEN_REFRESH_COMPLETE` | TRUE when current refresh cycle is complete |
 
-> **Year Configuration:** Years are auto-discovered from these rows — no code changes needed.
-> - **Historical years** (pagination-based): Detected from `TICKET_{YEAR}_LAST_PAGE` rows
-> - **Current year** (date windowing): Detected from `TICKET_{YEAR}_LAST_FETCH` row
+**Config Lock (set when loading starts, cleared by "Clear Data + Reset"):**
+
+| Setting | Purpose |
+|---------|---------|
+| `SCHOOL_YEAR_LOADED` | Locks the school year value |
+| `PAGE_SIZE_LOADED` | Locks the page size value |
+| `BATCH_SIZE_LOADED` | Locks the batch size value |
+
+> **School Year Model:** Each spreadsheet contains ONE school year's data. The `SCHOOL_YEAR` value is set during setup and locked once loading begins. To change it, use "Clear Data + Reset Progress" to unlock configuration.
+>
+> **Historical vs Current School Year:**
+> - **Historical school years**: Pagination-based loading only. Data becomes static once loaded and all tickets are closed. Triggers are automatically removed when this state is detected.
+> - **Current school year**: Pagination + date windowing for incremental updates. All triggers stay active.
 >
 > **Consolidated SLA Data:**
 > - SLA metrics are fetched per-batch during ticket loading (single API call per batch)
 > - No separate SLA loading phase - SLA data is always in sync with ticket data
-> - TicketData columns 30-36 (AD-AJ) contain: ResponseThreshold, ResponseActual, ResponseBreach, ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning
+> - TicketData columns AD-AJ contain: ResponseThreshold, ResponseActual, ResponseBreach, ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning
 > - Tickets without SLA policies will have blank values in these columns
->
-> **To add a ticket year (e.g., 2023):**
-> ```
-> TICKET_2023_TOTAL_PAGES | (auto-populated)
-> TICKET_2023_LAST_PAGE   | -1
-> TICKET_2023_COMPLETE    | FALSE
-> ```
->
-> **To remove a ticket year:** Delete the corresponding `TICKET_{YEAR}_*` rows from Config, then optionally delete data rows from TicketData sheet.
->
-> **To change current ticket year:** Replace `TICKET_2026_LAST_FETCH` with `TICKET_2027_LAST_FETCH`.
 >
 > **Important:** Format column B as **Plain text** (Format → Number → Plain text) to prevent Sheets from auto-formatting page counts as dates.
 
@@ -165,11 +172,11 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
 2. **Column A (Age Buckets):** Enter the bucket labels manually: `0-15 days`, `16-30 days`, `31-60 days`, `61-90 days`, `90+ days`, `TOTAL`
 
 3. **Column B (Count):** Enter these formulas for each row:
-   - **B2 (0-15 days):** `=COUNTIFS(TicketData!I:I, "No", TicketData!R:R, ">=0", TicketData!R:R, "<=15")`
-   - **B3 (16-30 days):** `=COUNTIFS(TicketData!I:I, "No", TicketData!R:R, ">=16", TicketData!R:R, "<=30")`
-   - **B4 (31-60 days):** `=COUNTIFS(TicketData!I:I, "No", TicketData!R:R, ">=31", TicketData!R:R, "<=60")`
-   - **B5 (61-90 days):** `=COUNTIFS(TicketData!I:I, "No", TicketData!R:R, ">=61", TicketData!R:R, "<=90")`
-   - **B6 (90+ days):** `=COUNTIFS(TicketData!I:I, "No", TicketData!R:R, ">90")`
+   - **B2 (0-15 days):** `=COUNTIFS(TicketData!I:I, "Open", TicketData!R:R, ">=0", TicketData!R:R, "<=15")`
+   - **B3 (16-30 days):** `=COUNTIFS(TicketData!I:I, "Open", TicketData!R:R, ">=16", TicketData!R:R, "<=30")`
+   - **B4 (31-60 days):** `=COUNTIFS(TicketData!I:I, "Open", TicketData!R:R, ">=31", TicketData!R:R, "<=60")`
+   - **B5 (61-90 days):** `=COUNTIFS(TicketData!I:I, "Open", TicketData!R:R, ">=61", TicketData!R:R, "<=90")`
+   - **B6 (90+ days):** `=COUNTIFS(TicketData!I:I, "Open", TicketData!R:R, ">90")`
    - **B7 (TOTAL):** `=SUM(B2:B6)`
 
 4. **Column C (% of Total):** Enter for each row (format as percentage):
@@ -177,11 +184,11 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
    - **C7:** Enter `100%` or `=1`
 
 5. **Column D (Sample Ticket):** Oldest ticket in each bucket:
-   - **D2:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="No")*(TicketData!R2:R>=0)*(TicketData!R2:R<=15)),2,FALSE),1,1),"")`
-   - **D3:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="No")*(TicketData!R2:R>=16)*(TicketData!R2:R<=30)),2,FALSE),1,1),"")`
-   - **D4:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="No")*(TicketData!R2:R>=31)*(TicketData!R2:R<=60)),2,FALSE),1,1),"")`
-   - **D5:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="No")*(TicketData!R2:R>=61)*(TicketData!R2:R<=90)),2,FALSE),1,1),"")`
-   - **D6:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="No")*(TicketData!R2:R>90)),2,FALSE),1,1),"")`
+   - **D2:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Open")*(TicketData!R2:R>=0)*(TicketData!R2:R<=15)),2,FALSE),1,1),"")`
+   - **D3:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Open")*(TicketData!R2:R>=16)*(TicketData!R2:R<=30)),2,FALSE),1,1),"")`
+   - **D4:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Open")*(TicketData!R2:R>=31)*(TicketData!R2:R<=60)),2,FALSE),1,1),"")`
+   - **D5:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Open")*(TicketData!R2:R>=61)*(TicketData!R2:R<=90)),2,FALSE),1,1),"")`
+   - **D6:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Open")*(TicketData!R2:R>90)),2,FALSE),1,1),"")`
 
 6. **Column E (Last Refreshed):**
    - **E2:** `=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")` (drag down)
@@ -226,10 +233,10 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
      mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),
      col_a, teams,
      col_b, BYROW(teams, LAMBDA(t, IFERROR(VLOOKUP(t, Teams!B:C, 2, FALSE), ""))),
-     col_c, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "No"))),
+     col_c, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "Open"))),
      col_d, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),
      col_e, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),
-     col_f, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "No", TicketData!R:R, ">=30"))),
+     col_f, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "Open", TicketData!R:R, ">=30"))),
      data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f),
      SORT(data, $H$2, $I$2)
    )
@@ -261,11 +268,11 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
 2. **Column A & B:** Manually enter the months and years you want to track (or copy from MonthlyVolume)
 3. **Cell C2:** Count tickets closed in that month (drag down)
    ```
-   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), COUNTIFS(TicketData!I:I, "Yes", TicketData!H:H, ">="&TEXT(DATE(B2,m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(B2,m+1,1), "YYYY-MM-DD")))
+   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), COUNTIFS(TicketData!I:I, "Closed", TicketData!H:H, ">="&TEXT(DATE(B2,m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(B2,m+1,1), "YYYY-MM-DD")))
    ```
 4. **Cell D2:** Count breaches (Response OR Resolution) for closed tickets that month (drag down)
    ```
-   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), startDate, TEXT(DATE(B2,m,1), "YYYY-MM-DD"), endDate, TEXT(DATE(B2,m+1,1), "YYYY-MM-DD"), COUNTIFS(TicketData!I:I, "Yes", TicketData!H:H, ">="&startDate, TicketData!H:H, "<"&endDate, TicketData!AF:AF, TRUE) + COUNTIFS(TicketData!I:I, "Yes", TicketData!H:H, ">="&startDate, TicketData!H:H, "<"&endDate, TicketData!AI:AI, TRUE) - COUNTIFS(TicketData!I:I, "Yes", TicketData!H:H, ">="&startDate, TicketData!H:H, "<"&endDate, TicketData!AF:AF, TRUE, TicketData!AI:AI, TRUE))
+   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), startDate, TEXT(DATE(B2,m,1), "YYYY-MM-DD"), endDate, TEXT(DATE(B2,m+1,1), "YYYY-MM-DD"), COUNTIFS(TicketData!I:I, "Closed", TicketData!H:H, ">="&startDate, TicketData!H:H, "<"&endDate, TicketData!AF:AF, 1) + COUNTIFS(TicketData!I:I, "Closed", TicketData!H:H, ">="&startDate, TicketData!H:H, "<"&endDate, TicketData!AI:AI, 1) - COUNTIFS(TicketData!I:I, "Closed", TicketData!H:H, ">="&startDate, TicketData!H:H, "<"&endDate, TicketData!AF:AF, 1, TicketData!AI:AI, 1))
    ```
 5. **Cell E2:** Breach rate (drag down, format as percentage)
    ```
@@ -273,16 +280,16 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
    ```
 6. **Cell F2:** Avg Response time in hours (drag down)
    ```
-   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), startDate, TEXT(DATE(B2,m,1), "YYYY-MM-DD"), endDate, TEXT(DATE(B2,m+1,1), "YYYY-MM-DD"), IFERROR(AVERAGEIFS(TicketData!AE:AE, TicketData!I:I, "Yes", TicketData!H:H, ">="&startDate, TicketData!H:H, "<"&endDate, TicketData!AE:AE, ">0")/60, "N/A"))
+   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), startDate, TEXT(DATE(B2,m,1), "YYYY-MM-DD"), endDate, TEXT(DATE(B2,m+1,1), "YYYY-MM-DD"), IFERROR(AVERAGEIFS(TicketData!AE:AE, TicketData!I:I, "Closed", TicketData!H:H, ">="&startDate, TicketData!H:H, "<"&endDate, TicketData!AE:AE, ">0")/60, "N/A"))
    ```
 7. **Cell G2:** Avg Resolution time in hours (drag down)
    ```
-   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), startDate, TEXT(DATE(B2,m,1), "YYYY-MM-DD"), endDate, TEXT(DATE(B2,m+1,1), "YYYY-MM-DD"), IFERROR(AVERAGEIFS(TicketData!AH:AH, TicketData!I:I, "Yes", TicketData!H:H, ">="&startDate, TicketData!H:H, "<"&endDate, TicketData!AH:AH, ">0")/60, "N/A"))
+   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), startDate, TEXT(DATE(B2,m,1), "YYYY-MM-DD"), endDate, TEXT(DATE(B2,m+1,1), "YYYY-MM-DD"), IFERROR(AVERAGEIFS(TicketData!AH:AH, TicketData!I:I, "Closed", TicketData!H:H, ">="&startDate, TicketData!H:H, "<"&endDate, TicketData!AH:AH, ">0")/60, "N/A"))
    ```
 
 **Columns Explained:**
 - **Closed**: Count of tickets closed in that month
-- **Breaches**: Count where ResponseBreach=TRUE OR ResolutionBreach=TRUE (avoiding double-count)
+- **Breaches**: Count where ResponseBreach=1 OR ResolutionBreach=1 (avoiding double-count)
 - **Breach Rate**: Breaches / Closed
 - **Avg Response (hrs)**: Average ResponseActual (column AE, converted from minutes to hours)
 - **Avg Resolution (hrs)**: Average ResolutionActual (column AH, converted from minutes to hours)
@@ -319,7 +326,7 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
 
 4. **Cell D2:** Average resolution time in DAYS for tickets closed that month (drag down)
    ```
-   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!I:I, "Yes", TicketData!H:H, ">="&TEXT(DATE(B2,m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(B2,m+1,1), "YYYY-MM-DD")), "N/A"))
+   =LET(m, MATCH(A2, {"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"}, 0), IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!I:I, "Closed", TicketData!H:H, ">="&TEXT(DATE(B2,m,1), "YYYY-MM-DD"), TicketData!H:H, "<"&TEXT(DATE(B2,m+1,1), "YYYY-MM-DD")), "N/A"))
    ```
 
 5. **Cell E2:** Closure rate (Closed ÷ Created) - drag down, format as percentage
@@ -376,42 +383,47 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
 
 #### Sheet: `LocationBreakdown`
 
-| A | B | C | D | E | F |
-|---|---|---|---|---|---|
-| **Location Name** | **Location Type** | **Open** | **Created (MTD)** | **Closed (MTD)** | **Last Refreshed** |
-| (formula) | (formula) | (formula) | (formula) | (formula) | (formula) |
+| A | B | C | D | E | F | G | H |
+|---|---|---|---|---|---|---|---|
+| **Location Name** | **Location Type** | **Open** | **Created (MTD)** | **Closed (MTD)** | **Last Refreshed** | **Sort Col#** | **Desc?** |
+| (formula - spills down) | | | | | (formula) | 3 | FALSE |
 
-> **Note:** This sheet uses formulas to calculate from TicketData - no script required.
+> **Note:** This sheet uses a single array formula to calculate all data from TicketData. The entire table is sortable via G2 (column number 1-5) and H2 (FALSE=descending, TRUE=ascending).
 
 **Setup Instructions:**
 
-1. **Row 1 (Headers):** Enter the column headers manually
-2. **Cell A2:** Get unique locations from TicketData
+1. **Row 1 (Headers):** Enter column headers: Location Name, Location Type, Open, Created (MTD), Closed (MTD), Last Refreshed, Sort Col#, Desc?
+
+2. **Cell G2:** Enter the sort column number (default: `3` for Open)
+   - Options: `1` (Location), `2` (Type), `3` (Open), `4` (Created), `5` (Closed)
+
+3. **Cell H2:** Enter sort order (default: `FALSE` for descending)
+   - `FALSE` = Descending (highest first), `TRUE` = Ascending (lowest first)
+
+4. **Cell A2:** Paste this formula — it generates the entire table automatically:
    ```
-   =UNIQUE(FILTER(TicketData!M2:M, TicketData!M2:M<>"", TicketData!M2:M<>"LocationName"))
-   ```
-3. **Cell B2:** Look up location type (drag down to match A column)
-   ```
-   =IFERROR(INDEX(TicketData!N:N, MATCH(A2, TicketData!M:M, 0)), "")
-   ```
-4. **Cell C2:** Count open tickets for location (drag down)
-   ```
-   =COUNTIFS(TicketData!M:M, A2, TicketData!I:I, "No")
-   ```
-5. **Cell D2:** Count tickets created this month (drag down)
-   ```
-   =COUNTIFS(TicketData!M:M, A2, TicketData!E:E, ">="&EOMONTH(TODAY(),-1)+1, TicketData!E:E, "<="&TODAY())
-   ```
-6. **Cell E2:** Count tickets closed this month (drag down)
-   ```
-   =COUNTIFS(TicketData!M:M, A2, TicketData!H:H, ">="&EOMONTH(TODAY(),-1)+1, TicketData!H:H, "<="&TODAY())
-   ```
-7. **Cell F2:** Reference last refresh from Config (drag down)
-   ```
-   =IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "Not yet refreshed")
+   =LET(
+     locs, UNIQUE(FILTER(TicketData!N2:N, TicketData!N2:N<>"", TicketData!N2:N<>"LocationName")),
+     mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),
+     mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),
+     col_a, locs,
+     col_b, BYROW(locs, LAMBDA(l, IFERROR(INDEX(TicketData!O:O, MATCH(l, TicketData!N:N, 0)), ""))),
+     col_c, BYROW(locs, LAMBDA(l, COUNTIFS(TicketData!N:N, l, TicketData!I:I, "Open"))),
+     col_d, BYROW(locs, LAMBDA(l, COUNTIFS(TicketData!N:N, l, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),
+     col_e, BYROW(locs, LAMBDA(l, COUNTIFS(TicketData!N:N, l, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),
+     data, HSTACK(col_a, col_b, col_c, col_d, col_e),
+     SORT(data, $G$2, $H$2)
+   )
    ```
 
-> **Tip:** After entering A2, wait for the UNIQUE formula to populate, then drag B2:F2 down to cover all location rows.
+5. **Cell F2:** Show when data was last refreshed:
+   ```
+   =IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")
+   ```
+
+> **How it works:** Uses column N (LocationName) consistently for both UNIQUE and COUNTIFS matching. Looks up LocationType from column O. Sortable via G2/H2 controls.
+>
+> **How sorting works:** Set G2 to the column number (1=Location, 2=Type, 3=Open, 4=Created, 5=Closed). Set H2 to FALSE for descending or TRUE for ascending. The table re-sorts automatically.
 
 #### Sheet: `FunctionalAreaSummary`
 
@@ -481,8 +493,8 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
    ```
    =LET(riskPct, IFERROR(VLOOKUP("SLA_RISK_PERCENT",Config!A:B,2,FALSE)/100, 0.75),
    data, FILTER({TicketData!B:B, TicketData!C:C, TicketData!L:L, TicketData!AD:AD, TicketData!AE:AE},
-   (TicketData!I:I="No")*(TicketData!AJ:AJ=TRUE)*(TicketData!AD:AD>0)*(TicketData!AE:AE>0)*
-   (TicketData!AE:AE/TicketData!AD:AD>=riskPct)*(TicketData!AE:AE/TicketData!AD:AD<1)*(TicketData!AF:AF<>TRUE)),
+   (TicketData!I:I="Open")*(TicketData!AJ:AJ=1)*(TicketData!AD:AD>0)*(TicketData!AE:AE>0)*
+   (TicketData!AE:AE/TicketData!AD:AD>=riskPct)*(TicketData!AE:AE/TicketData!AD:AD<1)*(TicketData!AF:AF<>1)),
    IFERROR(SORT({INDEX(data,,1), LEFT(INDEX(data,,2),60), INDEX(data,,3),
    IF(ROWS(data)>0,"Response",""), INDEX(data,,4)/60, INDEX(data,,5)/60,
    INDEX(data,,5)/INDEX(data,,4), (INDEX(data,,4)-INDEX(data,,5))/60}, 7, FALSE),
@@ -490,7 +502,7 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
    ```
 
 > **How it works:**
-> - Filters TicketData where IsClosed="No" (col I), IsRunning=TRUE (col AJ), threshold > 0, and % used is between SLA_RISK_PERCENT and 100%
+> - Filters TicketData where IsClosed="Open" (col I), IsRunning=1 (col AJ), threshold > 0, and % used is between SLA_RISK_PERCENT and 100%
 > - SLA columns: AD=ResponseThreshold, AE=ResponseActual, AF=ResponseBreach
 > - Threshold/Elapsed/Remaining are converted from minutes to hours
 > - Sorted by % of SLA descending (most urgent first)
@@ -512,8 +524,8 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
    ```
    =LET(riskPct, IFERROR(VLOOKUP("SLA_RISK_PERCENT",Config!A:B,2,FALSE)/100, 0.75),
    data, FILTER({TicketData!B:B, TicketData!C:C, TicketData!L:L, TicketData!AG:AG, TicketData!AH:AH},
-   (TicketData!I:I="No")*(TicketData!AJ:AJ=TRUE)*(TicketData!AG:AG>0)*(TicketData!AH:AH>0)*
-   (TicketData!AH:AH/TicketData!AG:AG>=riskPct)*(TicketData!AH:AH/TicketData!AG:AG<1)*(TicketData!AI:AI<>TRUE)),
+   (TicketData!I:I="Open")*(TicketData!AJ:AJ=1)*(TicketData!AG:AG>0)*(TicketData!AH:AH>0)*
+   (TicketData!AH:AH/TicketData!AG:AG>=riskPct)*(TicketData!AH:AH/TicketData!AG:AG<1)*(TicketData!AI:AI<>1)),
    IFERROR(SORT({INDEX(data,,1), LEFT(INDEX(data,,2),60), INDEX(data,,3),
    IF(ROWS(data)>0,"Resolution",""), INDEX(data,,4)/60, INDEX(data,,5)/60,
    INDEX(data,,5)/INDEX(data,,4), (INDEX(data,,4)-INDEX(data,,5))/60}, 7, FALSE),
@@ -521,7 +533,7 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
    ```
 
 > **How it works:**
-> - Filters TicketData where IsClosed="No" (col I), IsRunning=TRUE (col AJ), threshold > 0, and % used is between SLA_RISK_PERCENT and 100%
+> - Filters TicketData where IsClosed="Open" (col I), IsRunning=1 (col AJ), threshold > 0, and % used is between SLA_RISK_PERCENT and 100%
 > - SLA columns: AG=ResolutionThreshold, AH=ResolutionActual, AI=ResolutionBreach, AJ=IsRunning
 > - Threshold/Elapsed/Remaining are converted from minutes to hours
 > - Sorted by % of SLA descending (most urgent first)
@@ -546,12 +558,12 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
 1. **Row 1 (Headers):** Enter the column headers manually
 2. **Cell A2:** Single formula that returns all stale tickets, sorted by days since update
    ```
-   =SORT(FILTER({TicketData!B2:B, LEFT(TicketData!C2:C,80), TicketData!K2:K, INT(TODAY()-DATEVALUE(LEFT(TicketData!F2:F,10))), LEFT(TicketData!F2:F,10), LEFT(TicketData!E2:E,10), TicketData!I2:I}, (TicketData!H2:H="No")*(INT(TODAY()-DATEVALUE(LEFT(TicketData!F2:F,10)))>=VLOOKUP("STALE_DAYS",Config!A:B,2,FALSE))), 4, FALSE)
+   =IFERROR(SORT(FILTER({TicketData!B2:B, LEFT(TicketData!C2:C,80), TicketData!L2:L, INT(TODAY()-DATEVALUE(LEFT(TicketData!F2:F,10))), LEFT(TicketData!F2:F,10), LEFT(TicketData!E2:E,10), TicketData!I2:I}, (TicketData!I2:I="Open")*(INT(TODAY()-DATEVALUE(LEFT(TicketData!G2:G,10)))>=IFERROR(VLOOKUP("STALE_DAYS",Config!A:B,2,FALSE),7))), 4, FALSE), "No stale tickets found")
    ```
 
 > **How it works:**
-> - Filters TicketData where IsClosed="No" AND days since ModifiedDate >= STALE_DAYS from Config
-> - Returns 7 columns: TicketNumber, Subject (truncated), TeamName, DaysSinceUpdate, LastUpdate, CreatedDate, Status
+> - Filters TicketData where IsClosed="Open" AND days since ModifiedDate (col G) >= STALE_DAYS from Config
+> - Returns 7 columns: TicketNumber, Subject (truncated), TeamName (col L), DaysSinceUpdate, LastUpdate (StartedDate), CreatedDate, Status
 > - Sorts by DaysSinceUpdate (column 4) in descending order (oldest first)
 > - Uses `LEFT(...,10)` to extract date portion from ISO timestamps
 >
@@ -578,9 +590,14 @@ iiQ Data > Add Analytics Sheet >
 │   └── Reopen Rate
 ├── SLA & Response
 │   ├── SLA Compliance ★
-│   ├── At-Risk Queue ★
+│   ├── At-Risk Response ★
+│   ├── At-Risk Resolution ★
 │   ├── First Contact Resolution
-│   └── Response Distribution
+│   ├── Response Distribution
+│   ├── Response Trends
+│   ├── Queue Time Analysis
+│   ├── Queue Time by Team
+│   └── Queue Time Trend
 ├── Team & Staff
 │   ├── Team Workload ★
 │   ├── Technician Performance
@@ -588,10 +605,14 @@ iiQ Data > Add Analytics Sheet >
 ├── Location
 │   ├── Location Breakdown
 │   └── Location Type Comparison
-└── Issue & Requester
-    ├── Issue Category Volume
-    ├── Priority Analysis
-    └── Frequent Requesters
+├── Issue & Requester
+│   ├── Issue Category Volume
+│   ├── Priority Analysis
+│   └── Frequent Requesters
+├── Device
+│   └── Device Reliability
+├── ─────────────
+└── Regenerate All Monthly Sheets
 ```
 
 ★ = Default sheet (created by Setup Spreadsheet, can be recreated if deleted)
@@ -613,6 +634,7 @@ iiQ Data > Add Analytics Sheet >
 | **Issue Category Volume** | "What types of problems are we handling?" | Open/Closed by category, breach rate per category |
 | **Priority Analysis** | "Are high-priority tickets handled faster?" | Metrics by priority level, response times |
 | **Frequent Requesters** | "Who generates the most tickets?" | Top 50 requesters with category data |
+| **Device Reliability** | "Which device models generate the most tickets?" | Total/Open/Closed by model, avg resolution, breach rate |
 
 > **How to Add a Sheet:**
 > 1. Go to **iiQ Data > Add Analytics Sheet**
@@ -638,12 +660,12 @@ iiQ Data > Add Analytics Sheet >
 | A | **TicketId** | UUID primary key |
 | B | **TicketNumber** | Human-readable ticket number |
 | C | **Subject** | Ticket subject line (truncated to 200 chars) |
-| D | **Year** | Extracted from CreatedDate (2024, 2025, 2026) |
+| D | **Year** | School year string (e.g., "2025-2026") |
 | E | **CreatedDate** | ISO timestamp when ticket was created |
 | F | **StartedDate** | ISO timestamp when work began (for queue time) |
 | G | **ModifiedDate** | ISO timestamp of last modification |
 | H | **ClosedDate** | ISO timestamp when closed (blank if open) |
-| I | **IsClosed** | "Yes" or "No" |
+| I | **IsClosed** | "Closed" or "Open" |
 | J | **Status** | Current workflow step name |
 | K | **TeamId** | Assigned team UUID |
 | L | **TeamName** | Assigned team name (for FA mapping) |
@@ -654,7 +676,7 @@ iiQ Data > Add Analytics Sheet >
 | Q | **OwnerName** | Ticket owner name |
 | R | **AgeDays** | Days open (or days between created and closed) |
 | S | **Priority** | Priority weight (integer) |
-| T | **IsPastDue** | "Yes" or "No" |
+| T | **IsPastDue** | "Overdue" or "On Track" |
 | U | **DueDate** | ISO timestamp of due date (if set) |
 | V | **SlaId** | Applied SLA UUID (if any) |
 | W | **SlaName** | Applied SLA name |
@@ -662,37 +684,44 @@ iiQ Data > Add Analytics Sheet >
 | Y | **IssueCategoryName** | Issue category name (e.g., "Hardware", "Software") |
 | Z | **IssueTypeId** | Issue type UUID |
 | AA | **IssueTypeName** | Issue type name (e.g., "Display", "Battery") |
-| AB | **ForId** | Requester user UUID |
-| AC | **ForName** | Requester user name |
+| AB | **RequesterId** | Requester user UUID |
+| AC | **RequesterName** | Requester user name |
 | AD | **ResponseThreshold** | Required first response time in minutes (from SLA policy) |
 | AE | **ResponseActual** | Actual first response time in minutes |
-| AF | **ResponseBreach** | TRUE if actual > threshold, FALSE otherwise |
+| AF | **ResponseBreach** | 1 if actual > threshold, 0 otherwise |
 | AG | **ResolutionThreshold** | Required resolution time in minutes (from SLA policy) |
 | AH | **ResolutionActual** | Actual resolution time in minutes |
-| AI | **ResolutionBreach** | TRUE if actual > threshold, FALSE otherwise |
-| AJ | **IsRunning** | TRUE if SLA timer is still active (ticket not yet resolved) |
+| AI | **ResolutionBreach** | 1 if actual > threshold, 0 otherwise |
+| AJ | **IsRunning** | 1 if SLA timer is still active, 0 otherwise |
+| AK | **AssetTag** | Asset tag of the first attached device (blank if no asset) |
+| AL | **ModelName** | Model name of the first attached device (blank if no asset) |
+| AM | **SerialNumber** | Serial number of the first attached device (blank if no asset) |
 
-> **Note:** Raw ticket data dump with consolidated SLA metrics for Power BI analysis. Data is loaded by year with automatic resume capability. 36 columns total.
+> **Note:** Raw ticket data dump with consolidated SLA metrics and device info for Power BI analysis. Data is loaded by year with automatic resume capability. 39 columns total.
 >
 > **Loading Strategy:**
-> - **Historical years (2024, 2025)**: Standard pagination with page tracking. Once complete, these don't change.
-> - **Current year (2026)**: Date windowing for incremental updates. Use "Open Ticket Refresh" every 2 hours for open ticket SLA updates.
+> - **Historical school years**: Standard pagination with page tracking. Once complete and all tickets closed, triggers are auto-removed.
+> - **Current school year**: Pagination + date windowing for incremental updates. Use "Open Ticket Refresh" every 2 hours for open ticket SLA updates.
 >
 > **SLA Columns Explained (AD-AJ):**
 > - **ResponseThreshold/ResolutionThreshold**: SLA policy limits in minutes
 > - **ResponseActual/ResolutionActual**: Actual elapsed time in minutes
-> - **ResponseBreach/ResolutionBreach**: TRUE if actual exceeded threshold
-> - **IsRunning**: TRUE if SLA timer is still active (ticket not resolved)
+> - **ResponseBreach/ResolutionBreach**: 1 if actual exceeded threshold, 0 otherwise
+> - **IsRunning**: 1 if SLA timer is still active, 0 otherwise
 > - Tickets without SLA policies will have blank values in these columns
+>
+> **Device/Asset Columns (AK-AM):**
+> - AssetTag, ModelName, SerialNumber from the first attached asset
+> - Blank if no asset is attached to the ticket
 >
 > **Formula-Based Analytics:** With these columns, you can build all common IT metrics using sheet formulas:
 > - **Volume/Throughput**: COUNTIFS on CreatedDate, ClosedDate by month/year
-> - **Backlog Aging**: COUNTIFS on AgeDays ranges where IsClosed="No"
+> - **Backlog Aging**: COUNTIFS on AgeDays ranges where IsClosed="Open"
 > - **Priority Distribution**: COUNTIFS on Priority or pivot table
 > - **Category/IssueType Breakdown**: COUNTIFS or pivot on IssueCategoryName, IssueTypeName
-> - **Team Workload**: COUNTIFS on TeamName where IsClosed="No"
+> - **Team Workload**: COUNTIFS on TeamName where IsClosed="Open"
 > - **SLA Compliance**: Use columns AD-AJ for response/resolution times and breach status
-> - **At-Risk Queue**: Filter on IsRunning=TRUE and % of SLA threshold
+> - **At-Risk Queue**: Filter on IsRunning=1 and % of SLA threshold
 > - **Location Analysis**: COUNTIFS on LocationName, LocationType
 
 ---
@@ -714,12 +743,12 @@ The Apps Script source code is in the `scripts/` folder of this repository.
 | [`Config.gs`](scripts/Config.gs) | Configuration reading from Config sheet, logging utilities |
 | [`ApiClient.gs`](scripts/ApiClient.gs) | HTTP requests with retry/exponential backoff for rate limiting |
 | [`Teams.gs`](scripts/Teams.gs) | Team data loading from API |
-| [`TicketData.gs`](scripts/TicketData.gs) | Bulk ticket data loader with consolidated SLA (36 columns, year-based pagination) |
+| [`TicketData.gs`](scripts/TicketData.gs) | Bulk ticket data loader with consolidated SLA and device info (39 columns, year-based pagination) |
 | [`DailySnapshot.gs`](scripts/DailySnapshot.gs) | Daily backlog metrics capture for trending |
 | [`Menu.gs`](scripts/Menu.gs) | iiQ Data menu for data loader and analytics functions |
 | [`Triggers.gs`](scripts/Triggers.gs) | Time-driven trigger functions for automated updates |
 | [`Setup.gs`](scripts/Setup.gs) | Spreadsheet setup and default sheet creation |
-| [`OptionalMetrics.gs`](scripts/OptionalMetrics.gs) | Optional analytics sheets (24 total, added via menu) |
+| [`OptionalMetrics.gs`](scripts/OptionalMetrics.gs) | Optional analytics sheets (25 total, added via menu) |
 
 > **Note:** Analytics sheets use formulas (see Part 1). Scripts handle data loading (TicketData with SLA, Teams), daily snapshots (DailySnapshot), and orchestration (Menu, Triggers). OptionalMetrics.gs provides menu functions to add/recreate any analytics sheet.
 
@@ -747,10 +776,10 @@ Setup.gs (Spreadsheet Setup)
     └── Creates data sheets and 7 default analytics sheets
 
 OptionalMetrics.gs (Optional Analytics)
-    └── Creates any of 24 analytics sheets via menu
+    └── Creates any of 25 analytics sheets via menu
     └── Uses setup functions from Setup.gs for default sheets
 
-Formula-based analytics sheets (24 total, no scripts needed):
+Formula-based analytics sheets (25 total, no scripts needed):
     DEFAULT (created by Setup):
     ├── MonthlyVolume           → reads from TicketData
     ├── BacklogAging            → reads from TicketData and Config
@@ -777,7 +806,8 @@ Formula-based analytics sheets (24 total, no scripts needed):
     ├── FrequentRequesters      → reads from TicketData (top requesters)
     ├── QueueTimeAnalysis       → reads from TicketData (queue time stats)
     ├── QueueTimeByTeam         → reads from TicketData (queue time per team)
-    └── QueueTimeTrend          → reads from TicketData (monthly queue time trend)
+    ├── QueueTimeTrend          → reads from TicketData (monthly queue time trend)
+    └── DeviceReliability       → reads from TicketData (column AL: ModelName)
 ```
 
 ---
@@ -786,12 +816,13 @@ Formula-based analytics sheets (24 total, no scripts needed):
 
 ### Step 1: Create and Configure the Spreadsheet
 
-1. Create a new Google Spreadsheet
+1. Create a new Google Spreadsheet (one per school year)
 2. **Recommended:** Run **iiQ Data > Setup > Setup Spreadsheet** to auto-create all required sheets
+   - Prompts for school year (e.g., `2023-2024` for historical data, or leave blank for the current year based on July-June cycle)
    - Creates data sheets: Config, TicketData, Teams, DailySnapshot, Logs
-   - Creates 7 default analytics sheets: MonthlyVolume, BacklogAging, TeamWorkload, SLACompliance, PerformanceTrends, AtRiskResponse, AtRiskResolution
+   - Creates 7 default analytics sheets with formulas configured for the specified school year's month range
 3. **Or create manually:** Set up each sheet with headers as shown in Part 1
-4. **Add more analytics later:** Use **iiQ Data > Add Analytics Sheet** to add any of the 17 optional analytics sheets
+4. **Add more analytics later:** Use **iiQ Data > Add Analytics Sheet** to add any of the 18 optional analytics sheets
 
 ### Step 2: Add the Apps Script Code
 
@@ -805,7 +836,8 @@ Formula-based analytics sheets (24 total, no scripts needed):
    - `API_BASE_URL`: Your iiQ instance URL (e.g., `https://yourdistrict.incidentiq.com`)
    - `BEARER_TOKEN`: Your API authentication token
    - `SITE_ID`: Your site UUID (if required)
-   - `PAGE_SIZE`: `100` (recommended)
+   - `SCHOOL_YEAR`: The school year for this spreadsheet (e.g., "2025-2026") — set automatically if you used Setup Spreadsheet
+   - `SCHOOL_YEAR_START`: First day of school year in MM-DD format (default "07-01" for July 1)
 
 ### Step 4: Authorize and Run
 
@@ -821,10 +853,10 @@ Before setting up automated triggers, complete the initial bulk load:
 
 1. Click **iiQ Data > Ticket Data > Continue Loading (Initial)**
 2. Wait for it to finish (~5 minutes), then check **iiQ Data > Ticket Data > Show Status**
-3. If any year shows "Page X of Y" instead of "Complete", run Continue Loading again
-4. Repeat until all years show "Complete"
+3. If status shows "Page X of Y" instead of "Complete", run Continue Loading again
+4. Repeat until status shows "Complete"
 
-> **Why multiple runs?** Google Apps Script has a 6-minute timeout. Large districts may have 50,000+ tickets spanning multiple years. The script saves progress after each batch, so you just keep running it until done. SLA data is included automatically.
+> **Why multiple runs?** Google Apps Script has a 6-minute timeout. Large districts may have 50,000+ tickets. The script saves progress after each batch, so you just keep running it until done. SLA data is included automatically.
 
 **Alternative: Let it run automatically**
 
@@ -1007,17 +1039,17 @@ In Apps Script, go to **Triggers** (clock icon) and add these triggers:
 >
 > **Getting Started:** Run `populateHistoricalSnapshots()` once to create estimated historical data based on current ticket dates (estimates only).
 
-### LocationBreakdown Sheet (Formula-Calculated)
+### LocationBreakdown Sheet (Formula-Calculated, Sortable)
 
-| Location Name | Location Type | Open | Created (MTD) | Closed (MTD) | Last Refreshed |
-|---------------|---------------|------|---------------|--------------|----------------|
-| Central High School | School | 45 | 67 | 58 | 2026-01-21T14:30:00Z |
-| Technology Center | District Office | 38 | 42 | 45 | 2026-01-21T14:30:00Z |
-| East Elementary | School | 32 | 51 | 48 | 2026-01-21T14:30:00Z |
-| West Middle School | School | 28 | 34 | 31 | 2026-01-21T14:30:00Z |
-| Admin Building | District Office | 24 | 28 | 30 | 2026-01-21T14:30:00Z |
+| Location Name | Location Type | Open | Created (MTD) | Closed (MTD) | | Sort Col# | Desc? |
+|---------------|---------------|------|---------------|--------------|---|-----------|-------|
+| Central High School | School | 45 | 67 | 58 | | 3 | FALSE |
+| Technology Center | District Office | 38 | 42 | 45 | | | |
+| East Elementary | School | 32 | 51 | 48 | | | |
+| West Middle School | School | 28 | 34 | 31 | | | |
+| Admin Building | District Office | 24 | 28 | 30 | | | |
 
-> **Formula-Based:** This sheet calculates automatically from TicketData - no refresh needed. Data updates when TicketData is refreshed.
+> **Formula-Based & Sortable:** Uses a single array formula (LET + BYROW + HSTACK + SORT) with column N (LocationName) for matching. Set G2 to column number (1-5) and H2 to FALSE (descending) or TRUE (ascending) to re-sort.
 >
 > **Power BI Tip:** Use this sheet to identify schools or departments with high ticket volume or growing backlogs.
 
@@ -1065,7 +1097,7 @@ These two sheets filter tickets approaching their respective SLA thresholds. Sam
 
 ### TicketData Sheet (After Refresh)
 
-The TicketData sheet includes 36 columns (A-AJ) with consolidated SLA metrics. Sample rows:
+The TicketData sheet includes 39 columns (A-AM) with consolidated SLA metrics and device info. Sample rows:
 
 | Column | Row 1 | Row 2 | Row 3 |
 |--------|-------|-------|-------|
@@ -1077,7 +1109,7 @@ The TicketData sheet includes 36 columns (A-AJ) with consolidated SLA metrics. S
 | F: StartedDate | 2026-01-15T09:35:00 | 2026-01-10T11:30:00 | 2026-01-18T08:02:00 |
 | G: ModifiedDate | 2026-01-21T14:20:00 | 2026-01-20T16:45:00 | 2026-01-18T08:15:00 |
 | H: ClosedDate | | | 2026-01-18T08:15:00 |
-| I: IsClosed | No | No | Yes |
+| I: IsClosed | Open | Open | Closed |
 | J: Status | In Progress | Pending Parts | Resolved |
 | K: TeamId | def-456... | pqr-678... | bcd-890... |
 | L: TeamName | Help Desk Tier 2 | Field Services | Help Desk Tier 1 |
@@ -1088,7 +1120,7 @@ The TicketData sheet includes 36 columns (A-AJ) with consolidated SLA metrics. S
 | Q: OwnerName | John Smith | Jane Doe | Bob Jones |
 | R: AgeDays | 6 | 11 | 0 |
 | S: Priority | 50 | 75 | 25 |
-| T: IsPastDue | No | Yes | No |
+| T: IsPastDue | On Track | Overdue | On Track |
 | U: DueDate | 2026-01-22T17:00:00 | 2026-01-18T17:00:00 | |
 | V: SlaId | sla-111... | sla-222... | sla-333... |
 | W: SlaName | Standard Response | Device Repair | Quick Fix |
@@ -1100,26 +1132,36 @@ The TicketData sheet includes 36 columns (A-AJ) with consolidated SLA metrics. S
 | AC: RequesterName | Sarah Wilson | Mike Brown | Emily Davis |
 | AD: ResponseThreshold | 240 | 480 | 60 |
 | AE: ResponseActual | 45 | 120 | 12 |
-| AF: ResponseBreach | FALSE | FALSE | FALSE |
+| AF: ResponseBreach | 0 | 0 | 0 |
 | AG: ResolutionThreshold | 2880 | 4320 | 480 |
 | AH: ResolutionActual | | | 15 |
-| AI: ResolutionBreach | | | FALSE |
-| AJ: IsRunning | TRUE | TRUE | FALSE |
+| AI: ResolutionBreach | | | 0 |
+| AJ: IsRunning | 1 | 1 | 0 |
+| AK: AssetTag | AT-12345 | AT-67890 | |
+| AL: ModelName | HP Chromebook 14 G7 | Dell Latitude 5520 | |
+| AM: SerialNumber | 5CD1234ABC | FXYZ9876543 | |
 
-> **Raw Data Export:** This sheet contains all 36 columns including consolidated SLA metrics for custom analysis, pivot tables, or Power BI integration.
+> **Raw Data Export:** This sheet contains all 39 columns including consolidated SLA metrics and device info for custom analysis, pivot tables, or Power BI integration.
 >
 > **SLA Columns (AD-AJ):**
 > - Threshold values are in minutes (240 = 4 hours)
 > - Actual values are in minutes (blank if not yet measured)
-> - Breach columns are TRUE/FALSE (blank if not applicable)
-> - IsRunning is TRUE while SLA timer is active
+> - Breach columns are 1/0 numeric (blank if not applicable)
+> - IsRunning is 1 while SLA timer is active, 0 otherwise
+>
+> **Device/Asset Columns (AK-AM):**
+> - Extracted from the first asset attached to the ticket (`Assets[0]`)
+> - Blank if no asset is attached (most non-hardware tickets)
+> - AssetTag: District-assigned tag (e.g., "AT-12345")
+> - ModelName: Device model (e.g., "HP Chromebook 14 G7")
+> - SerialNumber: Manufacturer serial number
 >
 > **Formula-Based Analytics:** With this data, build metrics using COUNTIFS, SUMIFS, and pivot tables without additional API calls:
 > - Volume: `=COUNTIFS(E:E, ">=2026-01-01", E:E, "<2026-02-01")` for monthly created
-> - Aging: `=COUNTIFS(I:I, "No", R:R, ">=31", R:R, "<=60")` for 31-60 day bucket
-> - SLA Breach Rate: `=COUNTIFS(AF:AF, TRUE)/COUNTIFS(AF:AF, "<>"&"")` for response breach rate
-> - At-Risk: Filter on AJ:AJ=TRUE and AE:AE/AD:AD >= 0.75 for tickets approaching response SLA
-> - By Category: `=COUNTIFS(Y:Y, "Hardware", I:I, "No")` for open hardware tickets
+> - Aging: `=COUNTIFS(I:I, "Open", R:R, ">=31", R:R, "<=60")` for 31-60 day bucket
+> - SLA Breach Rate: `=COUNTIFS(AF:AF, 1)/COUNTIFS(AF:AF, "<>"&"")` for response breach rate
+> - At-Risk: Filter on AJ:AJ=1 and AE:AE/AD:AD >= 0.75 for tickets approaching response SLA
+> - By Category: `=COUNTIFS(Y:Y, "Hardware", I:I, "Open")` for open hardware tickets
 
 ---
 
@@ -1207,8 +1249,9 @@ Once your data is flowing, here are some ideas for getting more value:
 | Issue Category Volume | IssueCategoryVolume | Issue & Requester |
 | Priority Analysis | PriorityAnalysis | Issue & Requester |
 | Frequent Requesters | FrequentRequesters | Issue & Requester |
+| Device Reliability | DeviceReliability | Device |
 
-> **24 Total Analytics Sheets:** 7 default + 17 optional. All can be deleted and recreated via **iiQ Data > Add Analytics Sheet** menu.
+> **25 Total Analytics Sheets:** 7 default + 18 optional. All can be deleted and recreated via **iiQ Data > Add Analytics Sheet** menu.
 
 ---
 

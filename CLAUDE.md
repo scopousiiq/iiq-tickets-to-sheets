@@ -16,7 +16,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 
 **Data Flow:**
 1. Scripts fetch data from iiQ API using Bearer token authentication
-2. Raw data lands in `TicketData` sheet (36 columns including consolidated SLA metrics)
+2. Raw data lands in `TicketData` sheet (39 columns including consolidated SLA metrics and device/asset info)
 3. Analytics sheets (`MonthlyVolume`, `BacklogAging`, `TeamWorkload`, etc.) calculate via Google Sheets formulas - no scripts needed
 4. Power BI connects to Google Sheets for dashboards
 
@@ -32,6 +32,10 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 - SLA metrics are fetched per-batch during ticket loading (single API call per batch)
 - No separate SLA loading phase - SLA is always in sync with ticket data
 - Columns 29-35: ResponseThreshold, ResponseActual, ResponseBreach, ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning
+- Boolean-like fields use Looker Studio-safe values (not "Yes"/"No" or JS booleans):
+  - IsClosed: "Closed" / "Open"
+  - IsPastDue: "Overdue" / "On Track"
+  - ResponseBreach, ResolutionBreach, IsRunning: 1 / 0 (numeric)
 
 ## Code Structure (scripts/)
 
@@ -40,12 +44,12 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `Setup.gs` | Initial spreadsheet setup - creates all sheets, headers, and formulas |
 | `Config.gs` | Reads settings from Config sheet, school year date calculation, logging utilities, concurrency control (LockService helpers) |
 | `ApiClient.gs` | HTTP client with retry/exponential backoff (429, 503, network errors) |
-| `TicketData.gs` | Bulk ticket loader - 36 columns (28 ticket + 7 SLA), fetches SLA per-batch, school year pagination, 5.5min timeout with resume |
+| `TicketData.gs` | Bulk ticket loader - 39 columns (28 ticket + 7 SLA + 3 device/asset), fetches SLA per-batch, school year pagination, 5.5min timeout with resume |
 | `Teams.gs` | Team directory loader, preserves Functional Area mappings |
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively). Skips if loading incomplete. |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
 | `Triggers.gs` | Time-driven trigger functions (no UI dialogs) |
-| `OptionalMetrics.gs` | Additional analytics sheets added via menu (17 optional KPI sheets) |
+| `OptionalMetrics.gs` | Additional analytics sheets added via menu (18 optional KPI sheets) |
 
 **Key Dependencies:**
 - `ApiClient.gs` → `Config.gs`
@@ -147,7 +151,7 @@ Workflow for destructive operations:
 |-------|------|---------|
 | Instructions | Static | Setup and usage guide |
 | Config | Manual | API settings, progress tracking |
-| TicketData | Data | Main ticket data (36 columns with SLA) |
+| TicketData | Data | Main ticket data (39 columns with SLA + device) |
 | Teams | Data | Team directory with Functional Area mapping |
 | DailySnapshot | Data | Daily backlog metrics for trending |
 | Logs | Data | Operation logs |
@@ -217,22 +221,28 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | PriorityAnalysis | "Are high-priority tickets handled faster?" | Metrics by priority level, response/resolution times |
 | FrequentRequesters | "Who generates the most tickets?" | Top 50 requesters with category and resolution data |
 
-## TicketData Column Layout (36 columns)
+### Device
+| Sheet | Question Answered | Key Metrics |
+|-------|-------------------|-------------|
+| DeviceReliability | "Which device models generate the most tickets?" | Total/Open/Closed by model, avg resolution, breach rate |
+
+## TicketData Column Layout (39 columns)
 
 | Columns | Description |
 |---------|-------------|
 | A-D | Core: TicketId, TicketNumber, Subject, Year (school year string, e.g., "2025-2026") |
-| E-I | Dates: CreatedDate, StartedDate, ModifiedDate, ClosedDate, IsClosed |
+| E-I | Dates: CreatedDate, StartedDate, ModifiedDate, ClosedDate, IsClosed ("Open"/"Closed") |
 | J | Status (WorkflowStep) |
 | K-L | Team: TeamId, TeamName |
 | M-O | Location: LocationId, LocationName, LocationType |
 | P-Q | Owner: OwnerId, OwnerName |
 | R | AgeDays |
-| S-U | Priority: Priority, IsPastDue, DueDate |
+| S-U | Priority: Priority, IsPastDue ("Overdue"/"On Track"), DueDate |
 | V-W | SLA (basic): SlaId, SlaName |
 | X-AA | Issue: IssueCategoryId, IssueCategoryName, IssueTypeId, IssueTypeName |
 | AB-AC | Requester: RequesterId, RequesterName |
-| AD-AJ | SLA Metrics: ResponseThreshold, ResponseActual, ResponseBreach, ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning |
+| AD-AJ | SLA Metrics: ResponseThreshold, ResponseActual, ResponseBreach (1/0), ResolutionThreshold, ResolutionActual, ResolutionBreach (1/0), IsRunning (1/0) |
+| AK-AM | Device/Asset: AssetTag, ModelName, SerialNumber (from first asset, blank if no asset) |
 
 ### Analytics Formula Column Reference
 
@@ -248,12 +258,13 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | IssueCategory | X (IssueCategoryId) | **Y (IssueCategoryName)** |
 | IssueType | Z (IssueTypeId) | **AA (IssueTypeName)** |
 | Requester | AB (RequesterId) | **AC (RequesterName)** |
+| Asset/Device | - | **AL (ModelName)** |
 
 Example pattern for aggregating by team:
 ```javascript
 // CORRECT: Use column L (TeamName) for both UNIQUE and COUNTIFS
 'teams, UNIQUE(FILTER(TicketData!L2:L, TicketData!L2:L<>"")),' +
-'col_c, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "No"))),'
+'col_c, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "Open"))),'
 
 // WRONG: Don't mix K (TeamId) in UNIQUE with L (TeamName) in COUNTIFS
 ```
@@ -298,7 +309,7 @@ Example pattern for aggregating by team:
 **Easy Setup:** Run **iiQ Data > Setup > Setup Automated Triggers** to create all triggers automatically.
 
 **Historical vs Current School Year:**
-- **Historical school years**: Data becomes STATIC once loaded. Only `triggerDataContinue` is needed to complete initial load. All other triggers skip automatically.
+- **Historical school years**: Data becomes STATIC once loaded and all tickets are closed. Triggers are **automatically removed** when this state is detected (by `triggerDataContinue` or `triggerOpenTicketRefresh`).
 - **Current school year**: All triggers are active to keep data fresh.
 
 **Manual Setup:** Use Extensions > Apps Script > Triggers to add these:

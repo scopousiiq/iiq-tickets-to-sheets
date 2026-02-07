@@ -4,13 +4,13 @@ Extract Incident IQ ticket and SLA data into Google Sheets for analytics and Pow
 
 ## Quick Start
 
-### 1. Create Your Spreadsheet
+### 1. Create and Set Up Your Spreadsheet
 
 **Option A: Copy the Template (Fastest)**
 
 [**Make a copy of the Google Sheets template**](https://docs.google.com/spreadsheets/d/1azxyYEefeAJ-oSmTKb199yzdULaaPvi_pjUydiC-fuA/edit?usp=sharing)
 
-This template includes all sheets and formulas pre-configured. You just need to add your API credentials.
+This template includes all sheets and formulas pre-configured. Skip to step 2.
 
 **Option B: Build from Scratch**
 
@@ -18,7 +18,10 @@ This template includes all sheets and formulas pre-configured. You just need to 
 2. Go to **Extensions > Apps Script**
 3. Copy all `.gs` files from the `scripts/` folder in this repository
 4. Save and reload the spreadsheet
-5. Click **iiQ Data > Setup > Setup Spreadsheet** to create all sheets automatically
+5. Click **iiQ Data > Setup > Setup Spreadsheet**
+6. When prompted, enter the school year (e.g., `2023-2024` for historical data, or leave blank for the current year)
+
+> Setup creates all sheets and configures analytics formulas for the correct date range automatically. Each spreadsheet holds one school year's data.
 
 ### 2. Configure API Access
 
@@ -30,18 +33,18 @@ In the `Config` sheet, enter your Incident IQ credentials:
 | `BEARER_TOKEN` | Your API token | iiQ Admin > Integrations > API |
 | `SITE_ID` | Your site UUID (optional) | Only needed for multi-site districts |
 
+Then click **iiQ Data > Setup > Verify Configuration** to confirm everything looks good.
+
 ### 3. Load Your Data
 
-1. Reload the spreadsheet to see the **iiQ Data** menu
-2. Click **iiQ Data > Setup > Verify Configuration** to check your settings
-3. Click **iiQ Data > Refresh Teams** — authorize when prompted
-4. Click **iiQ Data > Ticket Data > Continue Loading (Initial)** to start importing
+1. Click **iiQ Data > Refresh Teams** — authorize when prompted
+2. Click **iiQ Data > Ticket Data > Continue Loading (Initial)** to start importing
+3. The script runs for ~5.5 minutes then pauses — run "Continue Loading" again to resume
 
 > **Tip for large districts:** Instead of manually running "Continue Loading" repeatedly, set up a trigger:
 > 1. Go to **Extensions > Apps Script > Triggers** (clock icon)
 > 2. Add `triggerDataContinue` to run every 10 minutes
-> 3. Check **iiQ Data > Ticket Data > Show Status** periodically until all years show "Complete"
-> 4. You can leave this trigger enabled — it also helps complete open ticket refreshes
+> 3. Check **iiQ Data > Ticket Data > Show Status** periodically until complete
 >
 > SLA data is included automatically — no separate step needed.
 
@@ -76,7 +79,7 @@ Go to Extensions > Apps Script > Triggers (clock icon) and add these triggers:
 
 | Sheet | What It Shows |
 |-------|---------------|
-| `TicketData` | All ticket data with SLA metrics (36 columns) — your raw data source |
+| `TicketData` | All ticket data with SLA metrics and device info (39 columns) — your raw data source |
 | `Teams` | Team directory — add your Functional Area labels here |
 | `DailySnapshot` | Historical backlog counts for trend analysis |
 
@@ -94,7 +97,7 @@ Go to Extensions > Apps Script > Triggers (clock icon) and add these triggers:
 
 ### Additional Analytics (add via menu)
 
-Use **iiQ Data > Add Analytics Sheet** to add any of these 17 optional sheets:
+Use **iiQ Data > Add Analytics Sheet** to add any of these 18 optional sheets:
 
 | Category | Available Sheets |
 |----------|------------------|
@@ -104,6 +107,7 @@ Use **iiQ Data > Add Analytics Sheet** to add any of these 17 optional sheets:
 | Team & Staff | Technician Performance, Functional Area Summary |
 | Location | Location Breakdown, Location Type Comparison |
 | Issue & Requester | Issue Category Volume, Priority Analysis, Frequent Requesters |
+| Device | Device Reliability |
 
 > **Flexible & Customizable:** Districts can delete any analytics sheet and recreate it later via the menu. Default sheets (marked with ★ in the menu) can also be recreated if accidentally deleted.
 
@@ -121,6 +125,13 @@ Use **iiQ Data > Add Analytics Sheet** to add any of these 17 optional sheets:
 
 - [**Implementation Guide**](GUIDE.md) — Detailed setup, formulas, and how everything works
 - [**CLAUDE.md**](CLAUDE.md) — Technical reference for developers
+
+### Looker Studio Dashboard Guides
+
+Step-by-step build guides for creating Looker Studio dashboards from your data:
+
+- [**Superintendent Dashboard**](lookerStudioDashboardSamples/superintendent-dashboard.md) — Strategic overview for district leadership (single-page, 6 KPIs, trend charts)
+- [**IT Director Dashboard**](lookerStudioDashboardSamples/it-director-dashboard.md) — Operational dashboard for daily execution and team management
 
 ## License
 
