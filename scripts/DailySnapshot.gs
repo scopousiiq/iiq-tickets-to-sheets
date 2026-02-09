@@ -78,7 +78,7 @@ function appendDailySnapshot() {
 
     // Append the snapshot
     snapshotSheet.appendRow([
-      today,
+      todayStr,
       openCount,
       aged30Count,
       percentAged
@@ -107,7 +107,7 @@ function appendDailySnapshot() {
 
   // Append the snapshot
   snapshotSheet.appendRow([
-    today,
+    todayStr,
     openCount,
     aged30Count,
     percentAged
@@ -227,7 +227,8 @@ function populateHistoricalSnapshots() {
     }
 
     const percentAged = openCount > 0 ? (aged30Count / openCount) : 0;
-    snapshots.push([current, openCount, aged30Count, percentAged]);
+    const currentStr = Utilities.formatDate(current, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    snapshots.push([currentStr, openCount, aged30Count, percentAged]);
 
     // Move to next month
     current = new Date(current.getFullYear(), current.getMonth() + 2, 0);
