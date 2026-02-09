@@ -1,41 +1,39 @@
 ---
 title: "Building API-to-Sheets Analytics Projects: A Blueprint"
-description: Lessons learned, best practices, and reusable patterns from the iiQ Ticket & SLA Data project
+description: Reusable patterns, architecture, and best practices for building API-to-Sheets analytics projects
 tags:
   - google-apps-script
   - google-sheets
   - api-integration
   - analytics
   - blueprint
-  - lessons-learned
 created: 2026-02-06
 project: iiQ Ticket & SLA Data
 ---
 
 # Building API-to-Sheets Analytics Projects
 
-> [!abstract] Purpose
-> This document captures hard-won knowledge from building a Google Apps Script system that extracts API data into Google Sheets with formula-based analytics. It's intended as a guideline for building similar projects covering different data domains.
+> **Purpose:** A step-by-step guide for building Google Apps Script systems that extract API data into Google Sheets with formula-based analytics. Follow these patterns to get a production-quality system with automated loading, resumable pagination, formula-driven analytics, and BI tool integration.
 
 ## Table of Contents
 
-1. [[#Project Anatomy]]
-2. [[#Build Order — What to Build First]]
-3. [[#Lessons Learned — What Worked]]
-4. [[#Lessons Learned — What Didn't Work]]
-5. [[#Architecture Patterns to Reuse]]
-6. [[#The File Structure Template]]
-7. [[#Configuration Management]]
-8. [[#API Client Pattern]]
-9. [[#Data Loading with Timeout Resume]]
-10. [[#Concurrency and Safety]]
-11. [[#Trigger Strategy]]
-12. [[#Analytics Sheet Patterns]]
-13. [[#Menu System Design]]
-14. [[#Logging and Observability]]
-15. [[#Documentation Strategy]]
-16. [[#Common Pitfalls and Gotchas]]
-17. [[#Checklist — New Project Kickoff]]
+1. [Project Anatomy](#project-anatomy)
+2. [Build Order — What to Build First](#build-order--what-to-build-first)
+3. [Design Principles — What Works](#design-principles--what-works)
+4. [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
+5. [Architecture Patterns to Reuse](#architecture-patterns-to-reuse)
+6. [The File Structure Template](#the-file-structure-template)
+7. [Configuration Management](#configuration-management)
+8. [API Client Pattern](#api-client-pattern)
+9. [Data Loading with Timeout Resume](#data-loading-with-timeout-resume)
+10. [Concurrency and Safety](#concurrency-and-safety)
+11. [Trigger Strategy](#trigger-strategy)
+12. [Analytics Sheet Patterns](#analytics-sheet-patterns)
+13. [Menu System Design](#menu-system-design)
+14. [Logging and Observability](#logging-and-observability)
+15. [Documentation Strategy](#documentation-strategy)
+16. [Common Pitfalls and Gotchas](#common-pitfalls-and-gotchas)
+17. [Checklist — New Project Kickoff](#checklist--new-project-kickoff)
 
 ---
 
@@ -50,8 +48,7 @@ flowchart LR
     C -->|connect| D["BI Tool\n(dashboards)"]
 ```
 
-> [!tip] Key Insight
-> Google Sheets serves as both a **data warehouse** and a **computation engine**. Raw data lands in a primary data sheet, and analytics sheets calculate everything via formulas — no scripts needed for analytics.
+> **Key Insight:** Google Sheets serves as both a **data warehouse** and a **computation engine**. Raw data lands in a primary data sheet, and analytics sheets calculate everything via formulas — no scripts needed for analytics.
 
 This means:
 - Analytics update automatically when data refreshes
@@ -59,14 +56,13 @@ This means:
 - BI tools (Power BI, Looker Studio) connect directly to the sheets
 - The script layer is purely responsible for data extraction
 
-> [!info] Scope per Spreadsheet
-> One logical data boundary per spreadsheet (e.g., one school year, one fiscal quarter, one department). This keeps data volumes manageable within Google Sheets limits and simplifies the loading/refresh logic.
+> **Scope per Spreadsheet:** One logical data boundary per spreadsheet (e.g., one school year, one fiscal quarter, one department). This keeps data volumes manageable within Google Sheets limits and simplifies the loading/refresh logic.
 
 ---
 
 ## Build Order — What to Build First
 
-The iiQ project evolved through 23+ commits over two weeks. Here's the optimal build order distilled from that experience.
+Follow this build order to avoid the most common pitfalls. Each phase builds on the previous one.
 
 ### Phase 1: Foundation (Build First)
 
@@ -78,8 +74,7 @@ The iiQ project evolved through 23+ commits over two weeks. Here's the optimal b
 | 4 | `Setup.gs` (basic) | Automate sheet creation from day one. Manual sheet setup doesn't scale and leads to inconsistency. |
 | 5 | `Menu.gs` (basic) | A minimal menu to run operations. Even "Load Data" and "Show Status" is enough. |
 
-> [!warning] Lesson Learned
-> The original project started without automated setup — users had to manually create sheets and copy formulas from documentation. This was replaced by programmatic setup in the first major refactor. **Automate sheet creation from the start.**
+> **Don't Skip This:** It's tempting to create sheets manually during early development. Don't — manual sheet setup doesn't scale, leads to inconsistency, and always gets replaced by automated setup later. **Automate sheet creation from the start.**
 
 ### Phase 2: Reliability (Build Second)
 
@@ -90,8 +85,7 @@ The iiQ project evolved through 23+ commits over two weeks. Here's the optimal b
 | 8 | `Triggers.gs` (basic) | At minimum: a continuation trigger that resumes interrupted loads. |
 | 9 | Concurrency control | LockService wrappers to prevent overlapping operations. |
 
-> [!warning] Lesson Learned
-> The concurrency control came much later (commit 25 of 27) but caused real data corruption issues before it was added. **Build it early.**
+> **Don't Defer This:** Concurrency control feels like a "polish" concern, but without it you'll get data corruption from overlapping operations (e.g., a trigger fires while a user runs a manual load). **Build it early.**
 
 ### Phase 3: Analytics (Build Third)
 
@@ -101,8 +95,7 @@ The iiQ project evolved through 23+ commits over two weeks. Here's the optimal b
 | 11 | Optional analytics framework | The `OptionalMetrics.gs` pattern for on-demand sheet creation. |
 | 12 | Specific optional sheets | Build these incrementally based on user requests. |
 
-> [!tip] Scaling Pattern
-> The iiQ project went from 0 to 7 default + 18 optional analytics sheets. Start with defaults that answer the top questions, then add optional sheets iteratively. The modular pattern (`addXxxSheet()` wrapper calling `setupXxxSheet(ss)`) scales well.
+> **Scaling Pattern:** Start with 5–7 default sheets that answer the most common questions, then add optional sheets iteratively based on user requests. The modular pattern (`addXxxSheet()` wrapper calling `setupXxxSheet(ss)`) scales to dozens of sheets without architectural changes.
 
 ### Phase 4: Polish (Build Last)
 
@@ -115,16 +108,13 @@ The iiQ project evolved through 23+ commits over two weeks. Here's the optimal b
 
 ---
 
-## Lessons Learned — What Worked
+## Design Principles — What Works
 
 ### Consolidated Data Loading
 
-> [!example]- Before & After
-> **Before:** Two separate loaders writing to two sheets (`TicketData.gs` + `TicketSlaData.gs`). Users had to load each independently, and the data could get out of sync.
->
-> **After:** SLA data fetched per-batch during ticket loading and written as additional columns in the same row. One load operation, always in sync.
+If you have related data from different API endpoints (e.g., tickets + SLA metrics, orders + shipping status), fetch it per-batch and merge into a single row. Don't create separate sheets that need to be joined later.
 
-**Guideline:** If you have related data from different API endpoints, fetch it per-batch and merge into a single row. Don't create separate sheets that need to be joined later.
+> **Anti-Pattern:** Splitting related data across sheets (e.g., tickets in one, SLA in another) causes sync issues, doubles trigger complexity, and makes formula joins awkward. Merge into one row instead.
 
 ### Formula-Based Analytics (No Scripts for Computation)
 
@@ -153,9 +143,9 @@ Four documents serving different audiences:
 
 ### CLAUDE.md as Project Memory
 
-The `CLAUDE.md` file evolved from 103 lines to a comprehensive technical reference. Combined with `.claude/memory/MEMORY.md`, it gives AI assistants full context to make correct changes.
+A comprehensive `CLAUDE.md` gives AI assistants full context to make correct changes without asking repeated questions. Combined with `.claude/memory/MEMORY.md`, it becomes the project's institutional knowledge.
 
-Key sections that proved essential:
+Key sections to include:
 - Column layout table with exact column letters
 - "Name column vs ID column" pattern for formulas
 - Config key reference (required vs optional vs auto-managed)
@@ -192,100 +182,62 @@ function setupXxxSheet(ss) {
 
 ### Exponential Backoff from Day One
 
-The API client had retry logic with exponential backoff from the very first commit. This was never reworked or debugged because it was already production-tested.
-
-**Guideline:** Don't skip retry logic in v1. API rate limits and transient failures are inevitable. Build the backoff pattern into your API client from the start.
+Don't skip retry logic in v1. API rate limits and transient failures are inevitable. Build the backoff pattern into your API client from the start — it's one of those things that's easy to add at the beginning and painful to retrofit later.
 
 ---
 
-## Lessons Learned — What Didn't Work
+## Anti-Patterns to Avoid
 
-### Multi-Year Data in One Spreadsheet (Abandoned)
+### Multi-Year Data in One Spreadsheet
 
-> [!failure] What Happened
-> A single spreadsheet held data for multiple years, with config keys like `TICKET_2024_LAST_PAGE`, `TICKET_2025_LAST_PAGE`, etc. A `discoverYearsFromConfig()` function auto-discovered which years had data.
+Don't cram multiple time periods into one spreadsheet. Year-prefixed config keys (`TICKET_2024_LAST_PAGE`, `TICKET_2025_LAST_PAGE`) clutter the config, complicate progress tracking, and cause unbounded sheet growth.
 
-**Why it failed:**
-- Config sheet became cluttered with year-prefixed keys
-- Progress tracking was complex (per-year pagination state)
-- Sheet size grew unbounded
-- Trigger logic had to iterate over all years
+**Do this instead:** One spreadsheet = one logical data boundary (e.g., one school year, one fiscal quarter). A single config key defines the scope. Simple, clean, bounded.
 
-**Replacement:** One spreadsheet = one school year. The `SCHOOL_YEAR` config key defines the scope. Simple, clean, bounded.
+### Separate Sheets for Related Data
 
-**Guideline:** One logical data boundary per spreadsheet. Don't try to cram multiple time periods into one file.
-
-### Separate SLA Data Sheet (Abandoned)
-
-> [!failure] What Happened
-> Tickets in one sheet, SLA metrics in another. Required users to load each separately.
-
-**Why it failed:**
+Don't split related data across sheets (e.g., tickets in one sheet, SLA metrics in another). This causes:
 - Two loading operations to manage instead of one
-- Data could get out of sync (tickets loaded but SLA not)
-- Joining data across sheets in formulas is awkward
+- Data sync issues (primary data loaded but supplementary not)
+- Awkward cross-sheet formula joins
 - Double the trigger complexity
 
-**Replacement:** SLA data fetched per-batch and merged into ticket rows as additional columns.
+**Do this instead:** Fetch supplementary data per-batch and merge into the primary row as additional columns. The small cost of wider rows is far outweighed by the simplicity.
 
-**Guideline:** Merge related data into a single row in a single sheet whenever possible. The small cost of wider rows is far outweighed by the simplicity.
+### Manual Sheet Setup
 
-### Manual Sheet Setup (Abandoned)
-
-> [!failure] What Happened
-> Users created sheets manually and copied formulas from documentation.
-
-**Why it failed:**
+Don't ask users to create sheets manually or copy formulas from documentation. This is:
 - Error-prone (wrong column references, missing formulas)
-- Time-consuming (25 sheets to create)
+- Time-consuming (scales poorly beyond a few sheets)
 - Hard to update (change a formula? Tell every user to update their sheet)
-- Documentation went stale as formulas evolved
 
-**Replacement:** `Setup.gs` programmatically creates all sheets with headers, formulas, formatting, and data validation.
+**Do this instead:** `Setup.gs` programmatically creates all sheets with headers, formulas, formatting, and data validation. One menu click, consistent every time.
 
-**Guideline:** Automate sheet creation from day one. Never ask users to copy formulas from documentation.
+### Boolean Flags for Concurrency Control
 
-### Simple Boolean Reload Flag (Replaced)
+Don't use manual boolean flags (e.g., `RELOAD_IN_PROGRESS = TRUE`) to prevent concurrent operations. If the script crashes, the flag stays set permanently (orphaned lock), and it has no timeout mechanism.
 
-> [!failure] What Happened
-> A `RELOAD_IN_PROGRESS` boolean flag in Config to prevent triggers from running during reloads.
+**Do this instead:** Use Google Apps Script's `LockService` with auto-expiring locks. The 6-minute timeout matches the execution limit, and crash recovery is automatic.
 
-**Why it failed:**
-- If the script crashed, the flag stayed `true` permanently (orphaned lock)
-- No timeout mechanism
-- Didn't prevent concurrent menu operations
+### Hardcoded Column Counts
 
-**Replacement:** Google Apps Script's `LockService` with auto-expiring locks (6-minute timeout matches the execution limit).
+Don't hardcode column count (e.g., `getRange(..., 39)`) in multiple files. Every time a column is added, you'll need to update 10+ locations across multiple files plus shift formula references.
 
-**Guideline:** Never use manual boolean flags for concurrency control. Use `LockService` — it handles timeouts and crash recovery automatically.
+**Do this instead:** Define column count from the header array length (`headers.length`) everywhere. See [Appendix B — The Column Count Solution](#appendix-b--the-column-count-solution) for the full pattern.
 
-### Hardcoded Column Counts (Ongoing Pain Point)
+### 1-Indexed Page Tracking
 
-Column count (e.g., `getRange(..., 39)`) is hardcoded in multiple files. Every time a column is added:
-- 7+ locations in `TicketData.gs` need updating
-- 3+ locations in `Triggers.gs` need updating
-- Header arrays in `Setup.gs` and `Triggers.gs` need updating
-- Formula column references across all analytics sheets shift
+Don't use 1-indexed page numbers for internal tracking. It causes off-by-one errors in completion detection and doesn't align with most API pagination schemes.
 
-> [!tip] Better Approach
-> Define column count from the header array length (`headers.length`) everywhere, not hardcoded numbers. See [[#Appendix C — The Column Count Problem]] for a full solution.
+**Do this instead:** Use 0-indexed page tracking internally. Add 1 for display purposes when showing progress to users.
 
-### 1-Indexed Page Tracking (Fixed)
+### Numeric Config Values in Google Sheets
 
-**Original:** Pages tracked as 1-indexed (page 1, 2, 3...). Caused off-by-one errors in completion detection.
+Don't store bare numbers (`0`, `5`) in Google Sheets Config cells. Sheets may auto-format these as dates (interpreting `5` as January 5, 1900).
 
-**Fix:** Switched to 0-indexed page tracking. For display purposes, add 1 when showing to users.
+**Do this instead:** Store all progress-tracking values as strings (`'5'` not `5`). Parse back to integers when reading.
 
-**Guideline:** Use 0-indexed page tracking internally. It aligns with API pagination and eliminates off-by-one errors.
-
-### Numeric Config Values in Google Sheets (Fixed)
-
-**Problem:** Storing numeric values like `0` or `5` in Google Sheets cells. Sheets sometimes auto-formatted these as dates (interpreting `5` as January 5, 1900).
-
-**Fix:** Store all progress-tracking values as strings (`'5'` not `5`). Parse back to integers when reading.
-
-> [!warning] Google Sheets Gotcha
-> Always store Config values as strings. Google Sheets' auto-formatting is aggressive and unpredictable with bare numbers.
+> **Google Sheets Gotcha:** Always store Config values as strings. Google Sheets' auto-formatting is aggressive and unpredictable with bare numbers.
 
 ---
 
@@ -305,8 +257,7 @@ block-beta
   A --> B --> C --> D --> E
 ```
 
-> [!important] Key Rule
-> Each layer only depends on layers below it. Menu.gs calls domain functions. Domain functions call ApiClient. ApiClient calls Config. **Never the reverse.**
+> **Key Rule:** Each layer only depends on layers below it. Menu.gs calls domain functions. Domain functions call ApiClient. ApiClient calls Config. **Never the reverse.**
 
 ### Menu vs Trigger Function Pairs
 
@@ -352,7 +303,7 @@ const rows = items.map(item => extractRow(item, supplementaryMap));
 
 ### Batch Write Pattern
 
-> [!danger] Never write row-by-row. Always batch.
+> **Never write row-by-row. Always batch.**
 
 ```javascript
 // WRONG: O(n) sheet operations
@@ -442,8 +393,7 @@ function getConfig() {
 
 ### Type Coercion Helpers (Essential)
 
-> [!info] Why These Are Needed
-> Google Sheets returns values as various types (Date objects, numbers, strings, booleans). You need explicit coercion to avoid subtle bugs.
+> **Why These Are Needed:** Google Sheets returns values as various types (Date objects, numbers, strings, booleans). You need explicit coercion to avoid subtle bugs.
 
 ```javascript
 function getStringValue(val) {
@@ -466,8 +416,7 @@ function getBoolValue(val) {
 
 ### Config Caching for Performance
 
-> [!warning] Critical Optimization
-> During tight loading loops, every `sheet.getRange().getValue()` call can trigger a formula recalculation across the entire spreadsheet. This can add 5–10 seconds per operation. Cache config row positions and use direct writes instead.
+> **Critical Optimization:** During tight loading loops, every `sheet.getRange().getValue()` call can trigger a formula recalculation across the entire spreadsheet. This can add 5–10 seconds per operation. Cache config row positions and use direct writes instead.
 
 ```javascript
 let configRowCache = {};
@@ -558,8 +507,7 @@ if (config.throttleMs > 0) {
 
 ## Data Loading with Timeout Resume
 
-> [!abstract] Core Challenge
-> Google Apps Script times out after 6 minutes. Loading large datasets may take 30+ minutes. This pattern enables resumable, checkpoint-based loading.
+> **Core Challenge:** Google Apps Script times out after 6 minutes. Loading large datasets may take 30+ minutes. This pattern enables resumable, checkpoint-based loading.
 
 ### The Loading Loop
 
@@ -674,7 +622,7 @@ function requireNoTriggers(operationName) {
 }
 ```
 
-> [!important] Workflow for Destructive Operations
+> **Workflow for Destructive Operations:**
 > 1. Remove triggers via menu
 > 2. Run the destructive operation
 > 3. Make any configuration changes
@@ -744,8 +692,7 @@ function setupAutomatedTriggers() {
 
 ### Historical vs Current Data Scope
 
-> [!note] Key Pattern
-> Historical data becomes static. Once all records in a historical period are closed/finalized, most triggers become unnecessary.
+> **Key Pattern:** Historical data becomes static. Once all records in a historical period are closed/finalized, most triggers become unnecessary.
 
 | Trigger | Historical Scope | Current Scope |
 | ------- | :--------------: | :-----------: |
@@ -816,8 +763,7 @@ function setupEntityBreakdownSheet(ss) {
 
 ### Formula Column Reference
 
-> [!danger] Critical Rule
-> Always use **Name columns** for `UNIQUE`/`COUNTIFS`, never ID columns.
+> **Critical Rule:** Always use **Name columns** for `UNIQUE`/`COUNTIFS`, never ID columns.
 
 ```javascript
 // CORRECT: Name column for both UNIQUE and COUNTIFS
@@ -930,8 +876,7 @@ function logOperation(operation, status, details) {
 
 ### Document Sync Points
 
-> [!warning] Maintain a Sync Points Checklist
-> When making changes, multiple documents and code locations need updating. Track these explicitly in your `MEMORY.md` and review before every PR.
+> **Maintain a Sync Points Checklist:** When making changes, multiple documents and code locations need updating. Track these explicitly in your `MEMORY.md` and review before every PR.
 
 #### When Adding Columns to the Data Sheet
 
@@ -962,6 +907,12 @@ Create step-by-step dashboard build guides with:
 4. Component-by-component build instructions
 5. Troubleshooting section for common gotchas
 
+> **Layer Dashboards by Audience:** Create separate dashboard guides for different stakeholder levels. For example:
+> - **Executive Dashboard** — High-level KPIs (C-suite / superintendent audience)
+> - **Operations Dashboard** — Detailed operational metrics (manager / director audience)
+>
+> Each audience needs different metrics, drill-down depth, and visual complexity. Don't try to serve all audiences in one dashboard.
+
 ---
 
 ## Common Pitfalls and Gotchas
@@ -977,6 +928,7 @@ Create step-by-step dashboard build guides with:
 | Formulas break with empty data | Guard with `IF(COUNTA(range)=0, "No data", formula)` |
 | Boolean values render differently in BI tools | Use explicit strings (`"Open"`/`"Closed"`) or numbers (`1`/`0`) |
 | Date values shift timezone in BI tools | Store as ISO strings or formatted text |
+| Date columns written inconsistently across functions | Standardize on one format (e.g., `YYYY-MM-DD`) and use a shared helper |
 
 ### Google Apps Script Specific
 
@@ -1058,46 +1010,7 @@ Create step-by-step dashboard build guides with:
 
 ---
 
-## Appendix A — Evolution Timeline
-
-This timeline shows how the iiQ project actually evolved, as a reference for what the "real" build order looks like:
-
-```mermaid
-timeline
-    title iiQ Project Evolution (14 Days)
-    Day 1 : Foundation
-           : Initial codebase extracted from production
-           : README split into README + GUIDE
-    Day 3 : Big Refactor
-           : Automated setup
-           : SLA consolidation
-           : Trigger overhaul
-    Days 3–4 : Feature Sprint
-              : 10 commits in 2 days
-              : Analytics sheets, triggers, columns
-    Days 4–5 : Fix-Follow
-              : Column reference fixes
-              : Off-by-one fixes
-              : Date formatting fixes
-    Days 4–6 : Analytics Expansion
-              : Queue time analysis
-              : 25 total analytics sheets
-    Days 6–11 : Reflection Gap
-               : Real-world testing
-               : Gathering feedback
-    Days 11–14 : Architecture Maturation
-                : School year model finalized
-                : Concurrency control
-                : Trigger safety
-                : Config locking
-```
-
-> [!tip] Key Observation
-> The biggest architectural improvements came after a multi-day pause for real-world testing. **Don't rush to add features** — let the foundation stabilize and gather real usage feedback.
-
----
-
-## Appendix B — Data Type Safety Reference
+## Appendix A — Data Type Safety Reference
 
 For values that will be consumed by BI tools (Power BI, Looker Studio), use these safe representations:
 
@@ -1112,9 +1025,9 @@ For values that will be consumed by BI tools (Power BI, Looker Studio), use thes
 
 ---
 
-## Appendix C — The Column Count Problem
+## Appendix B — The Column Count Solution
 
-The iiQ project hardcodes column count (`39`) in `getRange()` calls across multiple files. This was identified as an ongoing pain point. For new projects, use this approach instead:
+Hardcoding column counts in `getRange()` calls is a common mistake. Use this approach instead:
 
 ```javascript
 // Define column layout ONCE
@@ -1140,5 +1053,4 @@ function extractRow(item) {
 }
 ```
 
-> [!success] Benefit
-> This eliminates the need to search-and-replace column counts when adding fields. Add a column to `DATA_COLUMNS`, update `extractRow()`, and everything else adapts automatically.
+> **Benefit:** This eliminates the need to search-and-replace column counts when adding fields. Add a column to `DATA_COLUMNS`, update `extractRow()`, and everything else adapts automatically.
