@@ -109,16 +109,26 @@ function getConfig() {
   const schoolYear = getStringValue(rawConfig['SCHOOL_YEAR']) || '';
   const schoolYearStart = getMonthDayString(rawConfig['SCHOOL_YEAR_START'], '07-01');
 
+  // Product configuration (IT Ticketing vs Facilities)
+  const module = getStringValue(rawConfig['MODULE']) || 'Ticketing';
+  const MODULE_PRODUCT_IDS = {
+    'Ticketing': '88df910c-91aa-e711-80c2-0004ffa00010',
+    'Facilities': '88df910c-91aa-e711-80c2-0004ffa00020'
+  };
+
   // Locked configuration values (set when loading starts)
   const schoolYearLoaded = getStringValue(rawConfig['SCHOOL_YEAR_LOADED']) || '';
   const pageSizeLoaded = getIntValue(rawConfig['PAGE_SIZE_LOADED'], 0) || null;
   const batchSizeLoaded = getIntValue(rawConfig['BATCH_SIZE_LOADED'], 0) || null;
+  const moduleLoaded = getStringValue(rawConfig['MODULE_LOADED']) || '';
 
   // Build the config object with base settings
   const config = {
     baseUrl: baseUrl,
     bearerToken: rawConfig['BEARER_TOKEN'] || '',
     siteId: rawConfig['SITE_ID'] || '',
+    module: module,
+    moduleProductId: MODULE_PRODUCT_IDS[module] || MODULE_PRODUCT_IDS['Ticketing'],
     pageSize: getIntValue(rawConfig['PAGE_SIZE'], 100),
     throttleMs: getIntValue(rawConfig['THROTTLE_MS'], 1000),
     staleDays: getIntValue(rawConfig['STALE_DAYS'], 7),
@@ -130,7 +140,8 @@ function getConfig() {
     // Locked values (set when data loading starts, cleared by "Clear Data + Reset")
     schoolYearLoaded: schoolYearLoaded,
     pageSizeLoaded: pageSizeLoaded,
-    batchSizeLoaded: batchSizeLoaded
+    batchSizeLoaded: batchSizeLoaded,
+    moduleLoaded: moduleLoaded
   };
 
   // Simplified progress tracking (no year suffix)
@@ -255,6 +266,15 @@ function checkConfigLock(config) {
     });
   }
 
+  // Check product
+  if (config.moduleLoaded && config.module !== config.moduleLoaded) {
+    mismatches.push({
+      key: 'MODULE',
+      current: config.module,
+      locked: config.moduleLoaded
+    });
+  }
+
   return {
     locked: true,
     matches: mismatches.length === 0,
@@ -307,8 +327,9 @@ function lockConfig() {
   setConfigValue('SCHOOL_YEAR_LOADED', config.schoolYear);
   setConfigValue('PAGE_SIZE_LOADED', config.pageSize);
   setConfigValue('BATCH_SIZE_LOADED', config.ticketBatchSize);
+  setConfigValue('MODULE_LOADED', config.module);
   logOperation('Config', 'LOCKED',
-    `Configuration locked: SCHOOL_YEAR=${config.schoolYear}, PAGE_SIZE=${config.pageSize}, BATCH_SIZE=${config.ticketBatchSize}`);
+    `Configuration locked: SCHOOL_YEAR=${config.schoolYear}, PAGE_SIZE=${config.pageSize}, BATCH_SIZE=${config.ticketBatchSize}, MODULE=${config.module}`);
 }
 
 /**
@@ -326,7 +347,8 @@ function unlockConfig() {
   setConfigValue('SCHOOL_YEAR_LOADED', '');
   setConfigValue('PAGE_SIZE_LOADED', '');
   setConfigValue('BATCH_SIZE_LOADED', '');
-  logOperation('Config', 'UNLOCKED', 'Configuration unlocked (SCHOOL_YEAR, PAGE_SIZE, BATCH_SIZE)');
+  setConfigValue('MODULE_LOADED', '');
+  logOperation('Config', 'UNLOCKED', 'Configuration unlocked (SCHOOL_YEAR, PAGE_SIZE, BATCH_SIZE, MODULE)');
 }
 
 /**

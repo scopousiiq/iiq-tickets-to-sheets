@@ -2,7 +2,11 @@
 
 Single A4 page, at-a-glance dashboard for a school district superintendent to understand IT service desk health.
 
+---
+
 ## Data Source Setup
+
+Complete all data source configuration before building dashboard components. This includes connecting sheets, setting field types, creating calculated fields, and defining reusable filters.
 
 ### Connect Three Sheets
 
@@ -12,7 +16,9 @@ Single A4 page, at-a-glance dashboard for a school district superintendent to un
 4. Add a second data source: Add Data > Google Sheets > same spreadsheet > **DailySnapshot** sheet
 5. Add a third data source: Add Data > Google Sheets > same spreadsheet > **MonthlyVolume** sheet
 
-### Field Type Fixes (TicketData)
+### TicketData
+
+#### Field Types
 
 Apply these in the data source config (Resource > Manage added data sources > Edit):
 
@@ -48,7 +54,64 @@ Apply these in the data source config (Resource > Manage added data sources > Ed
 > - `IsPastDue`: `"Overdue"` / `"On Track"` (text strings)
 > - `ResponseBreach`, `ResolutionBreach`, `IsRunning`: `1` / `0` (numeric — use directly in AVG/SUM)
 
-### Field Type Fixes (DailySnapshot)
+#### Calculated Fields
+
+Create these in the TicketData data source (Resource > Manage added data sources > Edit > Add a field):
+
+**SLA Compliant** — Used for the SLA Compliance % scorecard.
+
+```text
+CASE
+  WHEN ResponseBreach = 1 OR ResolutionBreach = 1 THEN 0
+  WHEN ResponseBreach = 0 OR ResolutionBreach = 0 THEN 1
+  ELSE NULL
+END
+```
+
+- Type: Number
+- Usage: AVG aggregation, formatted as Percent
+- **Important:** Apply the `Has SLA` filter (see Reusable Filters below) to any chart using this field. The `ELSE NULL` is intended to exclude tickets without SLA data, but Looker Studio does not reliably exclude NULLs from AVG calculations, which will dilute the result to near 0%.
+
+**SLA Breached** — Used for the breach rate trend line chart.
+
+```text
+CASE
+  WHEN ResponseBreach = 1 OR ResolutionBreach = 1 THEN 1
+  WHEN ResponseBreach = 0 OR ResolutionBreach = 0 THEN 0
+  ELSE NULL
+END
+```
+
+- Type: Number
+- Usage: AVG aggregation, formatted as Percent
+
+**ClosedMonth** — Used as the dimension for time-based charts grouped by month. Changing date granularity directly on `ClosedDate` in a chart's DATA panel can fail silently, causing "too many rows" errors. This calculated field avoids that.
+
+```text
+DATETIME_TRUNC(ClosedDate, MONTH)
+```
+
+- Type: Date & Time
+
+**Response Hours**
+
+```text
+ResponseActual / 60
+```
+
+- Type: Number
+
+**Resolution Hours**
+
+```text
+ResolutionActual / 60
+```
+
+- Type: Number
+
+### DailySnapshot
+
+#### Field Types
 
 | Field | Set Type To | Notes |
 |-------|-------------|-------|
@@ -57,76 +120,54 @@ Apply these in the data source config (Resource > Manage added data sources > Ed
 | `Aged 30+ Count` | Number | |
 | `% Aged 30+` | Number (Percent) | |
 
----
+### MonthlyVolume
 
-## Calculated Fields
+#### Field Types
 
-Create these in the **TicketData** data source (Resource > Manage added data sources > Edit > Add a field):
+| Field | Set Type To | Notes |
+|-------|-------------|-------|
+| `Month` | Text | |
+| `Year` | Number | |
+| `Created` | Number | |
+| `Closed` | Number | |
+| `Net Change` | Number | |
+| `Closure Rate` | Number (Percent) | |
 
-### SLA Compliant
+#### Calculated Fields
 
-Used for the SLA Compliance % scorecard.
+**MonthOrder** — Sorts months in school year order (July–June) since the `Month` field is text and would otherwise sort alphabetically.
 
-```
+```text
 CASE
-  WHEN ResponseBreach = 1 OR ResolutionBreach = 1 THEN 0
-  WHEN ResponseBreach = 0 OR ResolutionBreach = 0 THEN 1
-  ELSE NULL
+  WHEN Month = "July" THEN 1
+  WHEN Month = "August" THEN 2
+  WHEN Month = "September" THEN 3
+  WHEN Month = "October" THEN 4
+  WHEN Month = "November" THEN 5
+  WHEN Month = "December" THEN 6
+  WHEN Month = "January" THEN 7
+  WHEN Month = "February" THEN 8
+  WHEN Month = "March" THEN 9
+  WHEN Month = "April" THEN 10
+  WHEN Month = "May" THEN 11
+  WHEN Month = "June" THEN 12
+  ELSE 13
 END
 ```
 
-- **Type:** Number
-- **Usage:** AVG aggregation, formatted as Percent
-- **Important:** Add a "Has SLA" filter (see below) to any chart using this field. The `ELSE NULL` is intended to exclude tickets without SLA data, but Looker Studio does not reliably exclude NULLs from AVG calculations, which will dilute the result to near 0%.
+- Type: Number
+- Usage: Sort charts by this field ascending. Keep `Month` as the visible dimension so axis labels show month names.
 
-**"Has SLA" filter** — Create this as a reusable filter and apply it to any chart that uses `SLA Compliant` or `SLA Breached`:
+### Reusable Filters
+
+**Has SLA** — Apply to any chart that uses `SLA Compliant` or `SLA Breached`. Excludes tickets without SLA data, which would otherwise dilute AVG calculations to near 0%.
+
 - Name: `Has SLA`
 - Clause 1: **Include** `ResponseBreach` **Equal to (=)** `1`
 - **OR**
 - Clause 2: **Include** `ResponseBreach` **Equal to (=)** `0`
 
-This includes only tickets with actual SLA data. Looker Studio only allows one value per filter condition, so the OR with two clauses is required.
-
-### SLA Breached
-
-Used for the breach rate trend line chart.
-
-```
-CASE
-  WHEN ResponseBreach = 1 OR ResolutionBreach = 1 THEN 1
-  WHEN ResponseBreach = 0 OR ResolutionBreach = 0 THEN 0
-  ELSE NULL
-END
-```
-
-- **Type:** Number
-- **Usage:** AVG aggregation, formatted as Percent
-
-### ClosedMonth
-
-Used as the dimension for the SLA Breach Rate chart. Changing date granularity directly on `ClosedDate` in a chart's DATA panel can fail silently, causing "too many rows" errors. This calculated field avoids that.
-
-```
-DATETIME_TRUNC(ClosedDate, MONTH)
-```
-
-- **Type:** Date & Time
-
-### Response Hours
-
-```
-ResponseActual / 60
-```
-
-- **Type:** Number
-
-### Resolution Hours
-
-```
-ResolutionActual / 60
-```
-
-- **Type:** Number
+Looker Studio only allows one value per filter condition, so the OR with two clauses is required.
 
 ---
 
@@ -278,11 +319,11 @@ Colors sourced from the Incident IQ brand style guide.
 
 #### SLA Compliance %
 - **Chart type:** Scorecard
-- **Metric:** AVG of `SLA Compliant` (calculated field)
+- **Metric:** AVG of `SLA Compliant`
 - **Format:** Percent (0 decimal places)
 - **Filters:**
   - `IsClosed` = "Closed"
-  - `Has SLA` filter (see Calculated Fields section)
+  - `Has SLA` filter
 
 #### Avg Days to Resolve
 - **Chart type:** Scorecard
@@ -318,51 +359,17 @@ Colors sourced from the Incident IQ brand style guide.
 
 **Card container:** Rectangle behind the chart: fill `#FFFFFF`, border: 1px `#E5E7EB`, border radius: 8px
 
-- **Data source:** MonthlyVolume (add as a separate data source from the same spreadsheet)
+- **Data source:** MonthlyVolume
 - **Chart type:** Bar chart (vertical, grouped)
 - **Dimension:** `Month` — if full month names overlap on the x-axis, create a calculated field `LEFT(Month, 3)` (gives "Jul", "Aug", etc.) and use that as the dimension instead
 - **Metrics:** `Created` (SUM), `Closed` (SUM)
-- **Sort:** `MonthOrder` ascending (calculated field — see below)
+- **Sort:** `MonthOrder` ascending
 
 **Style tab:**
 - Created bars: `#365c96` (Dark Blue), Closed bars: `#22b2a3` (Teal)
 - Grid lines: `#F3F4F6`, axis labels: `#6B7280`, 10-11px
 - Rotate x-axis labels to 45 degrees if they still overlap after abbreviating
 - Chart title: left-aligned, bold, `#1F2937`, 14px
-
-**Data source setup:** Add the **MonthlyVolume** sheet as a data source (Resource > Manage added data sources > Add a data source > Google Sheets > same spreadsheet > MonthlyVolume). Set field types:
-
-| Field | Type |
-|-------|------|
-| `Month` | Text |
-| `Year` | Number |
-| `Created` | Number |
-| `Closed` | Number |
-| `Net Change` | Number |
-| `Closure Rate` | Number (Percent) |
-
-**Required calculated field:** Create a `MonthOrder` field in the MonthlyVolume data source (Resource > Manage added data sources > Edit > Add a field) to sort months in school year order:
-
-```
-CASE
-  WHEN Month = "July" THEN 1
-  WHEN Month = "August" THEN 2
-  WHEN Month = "September" THEN 3
-  WHEN Month = "October" THEN 4
-  WHEN Month = "November" THEN 5
-  WHEN Month = "December" THEN 6
-  WHEN Month = "January" THEN 7
-  WHEN Month = "February" THEN 8
-  WHEN Month = "March" THEN 9
-  WHEN Month = "April" THEN 10
-  WHEN Month = "May" THEN 11
-  WHEN Month = "June" THEN 12
-  ELSE 13
-END
-```
-
-- **Type:** Number
-- **Usage:** Sort the chart by this field ascending. Keep `Month` as the visible dimension so axis labels show month names.
 
 ---
 
@@ -372,12 +379,12 @@ END
 
 - **Data source:** TicketData
 - **Chart type:** Time series (line)
-- **Dimension:** `ClosedMonth` (calculated field) — set its granularity to **Year Month** in the chart's DATA panel
-- **Metric:** AVG of `SLA Breached` (calculated field)
+- **Dimension:** `ClosedMonth` — set its granularity to **Year Month** in the chart's DATA panel
+- **Metric:** AVG of `SLA Breached`
 - **Format:** Percent
 - **Filters:**
   - `IsClosed` = "Closed"
-  - `Has SLA` filter (see Calculated Fields section)
+  - `Has SLA` filter
 
 **Style tab:**
 - Line color: `#f1663c` (Orange — breach = warning)
@@ -472,7 +479,7 @@ When you connect a Google Sheets data source, Looker Studio assigns a **default 
 
 ### Date fields not recognized
 
-If Looker Studio doesn't auto-detect date columns, manually set the type to **Date & Time** in the data source config. The TicketData dates are ISO format (`2025-02-05T14:30:00Z`). If setting the type alone doesn't work, create a calculated field using `PARSE_DATETIME` (see the Field Type Fixes section above for the formula).
+If Looker Studio doesn't auto-detect date columns, manually set the type to **Date & Time** in the data source config. The TicketData dates are ISO format (`2025-02-05T14:30:00Z`). If setting the type alone doesn't work, create a calculated field using `PARSE_DATETIME` (see the TicketData Field Types section above for the formula).
 
 ### Blank/null values in charts
 
@@ -481,4 +488,4 @@ Many fields can be empty (no SLA, no team assigned, no location). Add a filter t
 
 ### Monthly Volume uses a separate data source
 
-The Monthly Volume chart uses the **MonthlyVolume** sheet (not TicketData) because charting Created and Closed in one bar chart requires two different date columns (`CreatedDate` and `ClosedDate`), which Looker Studio blends handle poorly. The MonthlyVolume sheet pre-calculates both counts per month, avoiding blend issues entirely. A `MonthOrder` calculated field is needed to sort months in school year order (July–June) since the `Month` field is text.
+The Monthly Volume chart uses the **MonthlyVolume** sheet (not TicketData) because charting Created and Closed in one bar chart requires two different date columns (`CreatedDate` and `ClosedDate`), which Looker Studio blends handle poorly. The MonthlyVolume sheet pre-calculates both counts per month, avoiding blend issues entirely.

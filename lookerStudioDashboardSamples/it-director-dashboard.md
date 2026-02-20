@@ -14,12 +14,13 @@ This dashboard should answer:
 
 ## Data Source Setup
 
-### Connect Two Sheets
+### Connect Three Sheets
 
 1. Go to [lookerstudio.google.com](https://lookerstudio.google.com)
 2. Create > Report > Google Sheets connector
-3. Select your spreadsheet and add **TicketData**
-4. Add a second source from the same spreadsheet: **DailySnapshot**
+3. Select your spreadsheet, choose the **TicketData** sheet, check "Use first row as headers"
+4. Add a second data source: Add Data > Google Sheets > same spreadsheet > **DailySnapshot** sheet
+5. Add a third data source: Add Data > Google Sheets > same spreadsheet > **MonthlyVolume** sheet
 
 ### Field Type Fixes (TicketData)
 
@@ -283,8 +284,8 @@ Colors sourced from the Incident IQ brand style guide.
 │ Open       │ Open 30+   │ Open Past  │ SLA Breach │ Avg Resp   │ SLA At   │
 │ Backlog    │ Days       │ Due        │ Rate (30d) │ Hrs (30d)  │ Risk     │
 ├───────────────────────────────────┬─────────────────────────────────────────┤
-│ Backlog + Aging Trend             │ Intake vs Throughput (Weekly)          │
-│ (DailySnapshot combo chart)       │ (Created vs Closed)                    │
+│ Backlog + Aging Trend             │ Intake vs Throughput                   │
+│ (DailySnapshot combo chart)       │ (Created vs Closed by month)           │
 ├───────────────────────────────────┴─────────────────────────────────────────┤
 │ Team Performance Table: Open | 30+ | Past Due | SLA Breach % | Avg Res Days │
 ├───────────────────────────────────┬─────────────────────────────────────────┤
@@ -308,10 +309,12 @@ Colors sourced from the Incident IQ brand style guide.
 
 ### Row 1: KPI Scorecards
 
+**Comparison date ranges:** Only scorecards with a chart-level date range override (like the 30-day cards) have a meaningful "previous period" for comparison. The other scorecards operate on the full dataset — there is no previous period within the same school year to compare against, so skip comparison on those.
+
 #### Open Backlog
 - Metric: `SUM(Is Open)`
 - Filter: none
-- Comparison: previous period
+- Comparison: none (full dataset, no meaningful previous period)
 
 #### Open 30+ Days
 - Metric: `SUM(Open Aged 30+)`
@@ -325,11 +328,13 @@ Colors sourced from the Incident IQ brand style guide.
 - Metric: `AVG(SLA Breached)`
 - Filters: `IsClosed = "Closed"`, `Has SLA` filter (see Calculated Fields section)
 - Chart date range: last 30 days
+- Comparison: previous period (compares to prior 30 days)
 
 #### Avg Response Hrs (30d)
 - Metric: `AVG(Response Hours)`
 - Filter: `IsClosed = "Closed"`
 - Chart date range: last 30 days
+- Comparison: previous period (compares to prior 30 days)
 
 #### SLA At Risk
 - Metric: `SUM(SLA At Risk (75%+))`
@@ -344,18 +349,64 @@ Colors sourced from the Incident IQ brand style guide.
 - Metric 2 (line): `% Aged 30+`
 - Purpose: watch both total backlog and quality of backlog age
 
-### Row 2 Right: Intake vs Throughput (Weekly)
+### Row 2 Right: Intake vs Throughput
 
-- Chart type: Time series or grouped bar using blended data
-- **Important:** Changing date granularity via the dropdown does not work in blends. Use the `CreatedWeek` and `ClosedWeek` calculated fields (see Calculated Fields section) instead of raw date fields.
-- Blend setup:
-1. Left source: `TicketData`, dimension `CreatedWeek` (calculated field), metric `Record Count`, rename to "Created"
-2. Right source: `TicketData`, dimension `ClosedWeek` (calculated field), metric `Record Count`, rename to "Closed", filter `IsClosed = "Closed"`
-3. Join type: **Full outer join**, join key: `CreatedWeek` = `ClosedWeek`
-- Sort: dimension ascending
+**Recommended approach — MonthlyVolume sheet (no blends):**
+
+The Superintendent Dashboard originally tried blending two TicketData queries (Created vs Closed by date) and ran into persistent issues: date granularity dropdowns fail silently in blends, join misalignment causes missing data, and "too many rows" errors are hard to debug. The solution was to use the pre-calculated **MonthlyVolume** sheet instead, which avoids blends entirely.
+
+- Data source: **MonthlyVolume** (add as a separate data source from the same spreadsheet)
+- Chart type: Bar chart (vertical, grouped)
+- Dimension: `Month` — if full month names overlap, create a calculated field `LEFT(Month, 3)` and use that
+- Metrics: `Created` (SUM), `Closed` (SUM)
+- Sort: `MonthOrder` ascending (calculated field — see below)
 - Purpose: quickly see if closures are keeping pace with intake
 
-> **Alternative:** If the blend causes issues, use the **MonthlyVolume** sheet as a data source (same approach as the Superintendent Dashboard). This avoids blends entirely but shows monthly instead of weekly granularity.
+**MonthlyVolume field types:**
+
+| Field | Type |
+|-------|------|
+| `Month` | Text |
+| `Year` | Number |
+| `Created` | Number |
+| `Closed` | Number |
+| `Net Change` | Number |
+| `Closure Rate` | Number (Percent) |
+
+**Required calculated field** — `MonthOrder` (in the MonthlyVolume data source) to sort months in school year order:
+
+```text
+CASE
+  WHEN Month = "July" THEN 1
+  WHEN Month = "August" THEN 2
+  WHEN Month = "September" THEN 3
+  WHEN Month = "October" THEN 4
+  WHEN Month = "November" THEN 5
+  WHEN Month = "December" THEN 6
+  WHEN Month = "January" THEN 7
+  WHEN Month = "February" THEN 8
+  WHEN Month = "March" THEN 9
+  WHEN Month = "April" THEN 10
+  WHEN Month = "May" THEN 11
+  WHEN Month = "June" THEN 12
+  ELSE 13
+END
+```
+
+- Type: Number
+- Usage: Sort the chart by this field ascending. Keep `Month` as the visible dimension.
+
+**Alternative — Blend approach (weekly granularity):**
+
+If you need weekly granularity instead of monthly, use blended data. Be aware that blends are fragile in Looker Studio — date granularity dropdowns don't work, and join alignment issues can silently drop data.
+
+- Chart type: Time series or grouped bar using blended data
+- **Important:** You must use the `CreatedWeek` and `ClosedWeek` calculated fields (see Calculated Fields section). Changing date granularity via the dropdown does not work in blends.
+- Blend setup:
+  1. Left source: `TicketData`, dimension `CreatedWeek` (calculated field), metric `Record Count`, rename to "Created"
+  2. Right source: `TicketData`, dimension `ClosedWeek` (calculated field), metric `Record Count`, rename to "Closed", filter `IsClosed = "Closed"`
+  3. Join type: **Full outer join**, join key: `CreatedWeek` = `ClosedWeek`
+- Sort: dimension ascending
 
 ### Row 3: Team Performance Table
 
@@ -388,6 +439,7 @@ Colors sourced from the Incident IQ brand style guide.
 - Metric: `SUM(Is Open)`
 - Filter: `IsClosed = "Open"`
 - Sort: `Age Bucket Order` ascending (calculated field — text dimension sorts alphabetically, not logically)
+- Style: Disable **Color by dimension** if enabled (bars should be a single solid color, not a rainbow of colors per bucket)
 
 ### Row 5: Action Queue (Table)
 
@@ -453,3 +505,15 @@ Changing date granularity via the dropdown does **not** work in blended data sou
 Add chart filters:
 - `TeamName` is not null and `TeamName` != ""
 - `OwnerName` is not null and `OwnerName` != ""
+
+### Date range silently filtering data
+
+When you connect a Google Sheets data source, Looker Studio assigns a **default date dimension** (likely `CreatedDate`). Every component is automatically filtered by the report's date range — even without a date range control. If unfiltered record counts are lower than expected, set the default date range to cover your full school year in File > Report settings.
+
+### Date fields not recognized
+
+If Looker Studio doesn't auto-detect date columns, manually set the type to **Date & Time** in the data source config (Resource > Manage added data sources > Edit). The TicketData dates are ISO format (`2025-02-05T14:30:00Z`). If setting the type alone doesn't work, create a calculated field using:
+
+```text
+PARSE_DATETIME("%Y-%m-%dT%H:%M:%S", REGEXP_REPLACE(CreatedDate, "Z$", ""))
+```

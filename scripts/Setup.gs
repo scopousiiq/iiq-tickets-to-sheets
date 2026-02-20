@@ -198,6 +198,7 @@ function setupInstructionsSheet(ss) {
     ['   • API_BASE_URL: Your iiQ instance (e.g., https://district.incidentiq.com)'],
     ['   • BEARER_TOKEN: JWT token from iiQ (Admin > Integrations > API)'],
     ['   • SITE_ID: Optional - only needed for multi-site instances'],
+    ['   • MODULE: Select "Ticketing" (IT) or "Facilities" from the dropdown (default: Ticketing)'],
     [''],
     ['3. VERIFY CONFIGURATION'],
     ['   • Menu: iiQ Data > Setup > Verify Configuration'],
@@ -480,6 +481,7 @@ function setupConfigSheet(ss, schoolYear) {
     ['API_BASE_URL', 'https://YOUR-DISTRICT.incidentiq.com'],
     ['BEARER_TOKEN', ''],
     ['SITE_ID', ''],
+    ['MODULE', 'Ticketing'],
     ['', ''],
     ['# School Year Configuration', ''],
     ['SCHOOL_YEAR', defaultSchoolYear],
@@ -502,6 +504,7 @@ function setupConfigSheet(ss, schoolYear) {
     ['SCHOOL_YEAR_LOADED', ''],
     ['PAGE_SIZE_LOADED', ''],
     ['BATCH_SIZE_LOADED', ''],
+    ['MODULE_LOADED', ''],
     ['', ''],
     ['LAST_REFRESH', '']
   ];
@@ -512,10 +515,17 @@ function setupConfigSheet(ss, schoolYear) {
   sheet.getRange(1, 1, 1, 2).setFontWeight('bold').setBackground('#4285f4').setFontColor('white');
 
   // Format section headers (rows starting with #)
-  const sectionRows = [3, 8, 12, 19, 25];
+  const sectionRows = [3, 9, 13, 20, 27];
   sectionRows.forEach(row => {
     sheet.getRange(row, 1, 1, 2).setFontWeight('bold').setBackground('#e8f0fe');
   });
+
+  // Add dropdown validation for MODULE (row 7: SITE_ID is row 6, MODULE is row 7)
+  const moduleRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['Ticketing', 'Facilities'], true)
+    .setHelpText('Ticketing = IT Ticketing module, Facilities = Facilities Ticketing module')
+    .build();
+  sheet.getRange(7, 2).setDataValidation(moduleRule);
 
   // Column widths
   sheet.setColumnWidth(1, 250);
@@ -1529,6 +1539,7 @@ function verifyConfiguration() {
         `  SCHOOL_YEAR: ${config.schoolYearLoaded}\n` +
         `  PAGE_SIZE: ${config.pageSizeLoaded}\n` +
         `  BATCH_SIZE: ${config.batchSizeLoaded}\n` +
+        `  MODULE: ${config.moduleLoaded}\n` +
         `To change these values, use "Clear Data + Reset Progress"`;
     } else {
       lockMessage = `\n\nConfig Lock: Unlocked (can change settings)`;
@@ -1537,6 +1548,7 @@ function verifyConfiguration() {
     ui.alert('Configuration Valid',
       `All required settings are configured.\n\n` +
       `School Year: ${config.schoolYear}\n` +
+      `Module: ${config.module}\n` +
       `Date Range: ${dateRange}\n` +
       `Status: ${isCurrent ? 'Current (incremental updates enabled)' : 'Historical'}` +
       lockMessage + `\n\n` +

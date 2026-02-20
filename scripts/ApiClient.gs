@@ -43,6 +43,10 @@ function makeApiRequest(endpoint, method, payload, retryCount) {
     options.headers['SiteId'] = config.siteId;
   }
 
+  if (config.moduleProductId) {
+    options.headers['ProductId'] = config.moduleProductId;
+  }
+
   if (payload) {
     options.payload = JSON.stringify(payload);
   }

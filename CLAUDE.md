@@ -289,6 +289,7 @@ Example pattern for aggregating by team:
    - `API_BASE_URL`: Your iiQ instance URL
    - `BEARER_TOKEN`: JWT authentication token
    - `SITE_ID`: Optional site UUID
+   - `MODULE`: Select "Ticketing" (default) or "Facilities" from dropdown
    - `SCHOOL_YEAR`: The school year (e.g., "2025-2026")
    - `SCHOOL_YEAR_START`: Start date MM-DD (default "07-01" for July 1)
 7. Run **iiQ Data > Setup > Verify Configuration** to check settings
@@ -363,6 +364,7 @@ Required:
 
 Optional:
 - `SITE_ID`: Site UUID (if required for multi-site instances)
+- `MODULE`: Module to pull data from — "Ticketing" (default) or "Facilities" (dropdown)
 - `SCHOOL_YEAR_START`: First day of school year in MM-DD format (default "07-01" for July 1)
 - `PAGE_SIZE`: Records per API call (default 100)
 - `THROTTLE_MS`: Delay between requests (default 1000)
@@ -382,7 +384,8 @@ Config Lock (set when loading starts, cleared by "Clear Data + Reset"):
 - `SCHOOL_YEAR_LOADED`: Locks the school year value
 - `PAGE_SIZE_LOADED`: Locks the page size value
 - `BATCH_SIZE_LOADED`: Locks the batch size value
+- `MODULE_LOADED`: Locks the module value
 
-**Configuration Lock:** Once data loading starts, critical configuration values are locked to prevent accidental changes that would cause data inconsistency. Locked values include `SCHOOL_YEAR`, `PAGE_SIZE`, and `TICKET_BATCH_SIZE`. To change these values, use "Clear Data + Reset Progress" which unlocks the configuration.
+**Configuration Lock:** Once data loading starts, critical configuration values are locked to prevent accidental changes that would cause data inconsistency. Locked values include `SCHOOL_YEAR`, `PAGE_SIZE`, `TICKET_BATCH_SIZE`, and `MODULE`. To change these values, use "Clear Data + Reset Progress" which unlocks the configuration.
 
 **Pagination Note:** All page tracking uses 0-indexed values. For a school year with 6 pages of data, after completion both `LAST_PAGE` and `TOTAL_PAGES` will be `5`. The UI displays 1-indexed values ("Page 6 of 6").

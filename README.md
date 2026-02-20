@@ -32,6 +32,7 @@ In the `Config` sheet, enter your Incident IQ credentials:
 | `API_BASE_URL` | `https://yourdistrict.incidentiq.com` | Your iiQ URL (the `/api` is added automatically) |
 | `BEARER_TOKEN` | Your API token | iiQ Admin > Integrations > API |
 | `SITE_ID` | Your site UUID (optional) | Only needed for multi-site districts |
+| `MODULE` | `Ticketing` or `Facilities` (optional) | Dropdown in Config sheet — defaults to Ticketing |
 
 Then click **iiQ Data > Setup > Verify Configuration** to confirm everything looks good.
 
