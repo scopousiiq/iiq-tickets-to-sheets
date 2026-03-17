@@ -748,7 +748,7 @@ The Apps Script source code is in the `scripts/` folder of this repository.
 | [`Menu.gs`](scripts/Menu.gs) | iiQ Data menu for data loader and analytics functions |
 | [`Triggers.gs`](scripts/Triggers.gs) | Time-driven trigger functions for automated updates |
 | [`Setup.gs`](scripts/Setup.gs) | Spreadsheet setup and default sheet creation |
-| [`OptionalMetrics.gs`](scripts/OptionalMetrics.gs) | Optional analytics sheets (25 total, added via menu) |
+| [`OptionalMetrics.gs`](scripts/OptionalMetrics.gs) | Optional analytics sheets (27 total, added via menu) |
 
 > **Note:** Analytics sheets use formulas (see Part 1). Scripts handle data loading (TicketData with SLA, Teams), daily snapshots (DailySnapshot), and orchestration (Menu, Triggers). OptionalMetrics.gs provides menu functions to add/recreate any analytics sheet.
 
@@ -776,10 +776,10 @@ Setup.gs (Spreadsheet Setup)
     └── Creates data sheets and 7 default analytics sheets
 
 OptionalMetrics.gs (Optional Analytics)
-    └── Creates any of 25 analytics sheets via menu
+    └── Creates any of 27 analytics sheets via menu
     └── Uses setup functions from Setup.gs for default sheets
 
-Formula-based analytics sheets (25 total, no scripts needed):
+Formula-based analytics sheets (27 total, no scripts needed):
     DEFAULT (created by Setup):
     ├── MonthlyVolume           → reads from TicketData
     ├── BacklogAging            → reads from TicketData and Config
@@ -795,7 +795,9 @@ Formula-based analytics sheets (25 total, no scripts needed):
     ├── FunctionalAreaSummary   → reads from TeamWorkload and Config
     ├── SeasonalComparison      → reads from TicketData (YoY comparison)
     ├── TemporalPatterns        → reads from TicketData (day/hour analysis)
+    ├── MonthlyVolumeByFA       → reads from TicketData and Teams (monthly volume × FA)
     ├── ReopenRate              → reads from TicketData (quality metric)
+    ├── BacklogAgingByFA        → reads from TicketData and Teams (aging × FA)
     ├── FirstContactResolution  → reads from TicketData (FCR metric)
     ├── ResponseDistribution    → reads from TicketData (percentiles)
     ├── ResponseTrends          → reads from TicketData (monthly response trends)
@@ -822,7 +824,7 @@ Formula-based analytics sheets (25 total, no scripts needed):
    - Creates data sheets: Config, TicketData, Teams, DailySnapshot, Logs
    - Creates 7 default analytics sheets with formulas configured for the specified school year's month range
 3. **Or create manually:** Set up each sheet with headers as shown in Part 1
-4. **Add more analytics later:** Use **iiQ Data > Add Analytics Sheet** to add any of the 18 optional analytics sheets
+4. **Add more analytics later:** Use **iiQ Data > Add Analytics Sheet** to add any of the 20 optional analytics sheets
 
 ### Step 2: Add the Apps Script Code
 
@@ -1250,8 +1252,10 @@ Once your data is flowing, here are some ideas for getting more value:
 | Priority Analysis | PriorityAnalysis | Issue & Requester |
 | Frequent Requesters | FrequentRequesters | Issue & Requester |
 | Device Reliability | DeviceReliability | Device |
+| Backlog Aging by Functional Area | BacklogAgingByFA | Backlog & Quality |
+| Monthly Volume by Functional Area | MonthlyVolumeByFA | Volume & Trends |
 
-> **25 Total Analytics Sheets:** 7 default + 18 optional. All can be deleted and recreated via **iiQ Data > Add Analytics Sheet** menu.
+> **27 Total Analytics Sheets:** 7 default + 20 optional. All can be deleted and recreated via **iiQ Data > Add Analytics Sheet** menu.
 
 ---
 

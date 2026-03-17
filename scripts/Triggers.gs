@@ -433,6 +433,15 @@ function triggerDataContinue() {
       }
     }
 
+    // Daily version check (lightweight, <1 second)
+    try {
+      if (isVersionCheckStale()) {
+        checkForUpdates();
+      }
+    } catch (e) {
+      // Version check must never affect data operations
+    }
+
   } finally {
     releaseScriptLock(lock);
   }
@@ -524,6 +533,7 @@ function setCurrentYearReloadInProgress(inProgress) {
  */
 function runNewTicketsCheck(sheet, config) {
   const startTime = Date.now();
+  setApiConfig(config);
   const lastFetch = config.ticketLastFetch;
   const batchSize = config.ticketBatchSize;
 
@@ -531,6 +541,7 @@ function runNewTicketsCheck(sheet, config) {
   const dates = getSchoolYearDates(config);
   if (!dates) {
     logOperation('Trigger', 'ERROR', 'Invalid school year configuration');
+    clearApiConfig();
     return { count: 0, runtime: Date.now() - startTime };
   }
 
@@ -552,6 +563,7 @@ function runNewTicketsCheck(sheet, config) {
   ], 0, batchSize, { field: 'TicketCreatedDate', direction: 'asc' });
 
   if (!response.Items || response.Items.length === 0) {
+    clearApiConfig();
     return { count: 0, runtime: Date.now() - startTime };
   }
 
@@ -566,6 +578,7 @@ function runNewTicketsCheck(sheet, config) {
     // Update timestamp even if no new tickets
     const lastTicket = response.Items[response.Items.length - 1];
     updateConfigValue('TICKET_LAST_FETCH', lastTicket.CreatedDate);
+    clearApiConfig();
     return { count: 0, runtime: Date.now() - startTime };
   }
 
@@ -584,6 +597,7 @@ function runNewTicketsCheck(sheet, config) {
   const lastTicket = tickets[tickets.length - 1];
   updateConfigValue('TICKET_LAST_FETCH', lastTicket.CreatedDate);
 
+  clearApiConfig();
   return { count: tickets.length, runtime: Date.now() - startTime };
 }
 

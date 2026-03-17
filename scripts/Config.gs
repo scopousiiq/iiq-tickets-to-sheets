@@ -14,6 +14,9 @@
  * - SLA is fetched per-batch during ticket loading, no separate SLA loading phase
  */
 
+/** Current script version — update when releasing new versions */
+const SCRIPT_VERSION = '1.0.0';
+
 function getConfig() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
   const allData = sheet.getDataRange().getValues();
@@ -109,11 +112,12 @@ function getConfig() {
   const schoolYear = getStringValue(rawConfig['SCHOOL_YEAR']) || '';
   const schoolYearStart = getMonthDayString(rawConfig['SCHOOL_YEAR_START'], '07-01');
 
-  // Product configuration (IT Ticketing vs Facilities)
+  // Product configuration (Ticketing, Facilities, or HRSD)
   const module = getStringValue(rawConfig['MODULE']) || 'Ticketing';
   const MODULE_PRODUCT_IDS = {
     'Ticketing': '88df910c-91aa-e711-80c2-0004ffa00010',
-    'Facilities': '88df910c-91aa-e711-80c2-0004ffa00020'
+    'Facilities': '88df910c-91aa-e711-80c2-0004ffa00020',
+    'HRSD': '88df910c-91aa-e711-80c2-0004ffa00060'
   };
 
   // Locked configuration values (set when loading starts)
@@ -449,6 +453,139 @@ function logOperation(operation, status, details) {
   if (lastRow > 501) {
     sheet.deleteRows(2, lastRow - 501);
   }
+}
+
+// =============================================================================
+// VERSION CHECK - Remote update detection via GitHub
+// =============================================================================
+
+/**
+ * Check for script updates from GitHub.
+ * Fetches remote version.json and updates Config sheet display.
+ * Fails silently on any error — version check must never break anything.
+ */
+function checkForUpdates() {
+  try {
+    const REMOTE_VERSION_URL =
+      'https://raw.githubusercontent.com/scopousiiq/iiq-tickets-to-sheets/main/version.json';
+
+    const response = UrlFetchApp.fetch(REMOTE_VERSION_URL, {
+      muteHttpExceptions: true,
+      followRedirects: true
+    });
+
+    if (response.getResponseCode() !== 200) {
+      logOperation('VersionCheck', 'WARN',
+        'Could not reach GitHub (HTTP ' + response.getResponseCode() + ')');
+      return;
+    }
+
+    const remote = JSON.parse(response.getContentText());
+    const remoteVersion = remote.version;
+
+    if (!remoteVersion) {
+      logOperation('VersionCheck', 'WARN', 'Remote version.json missing version field');
+      return;
+    }
+
+    const updateAvailable = isNewerVersion(remoteVersion, SCRIPT_VERSION);
+
+    // Update Config sheet rows
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Config');
+    if (!sheet) return;
+
+    setConfigValue('SCRIPT_VERSION', SCRIPT_VERSION);
+    setConfigValue('VERSION_CHECK_DATE', new Date().toISOString().split('T')[0]);
+
+    // Set LATEST_VERSION with status text and background color
+    if (updateAvailable) {
+      setConfigValue('LATEST_VERSION', remoteVersion + '  \u2190 update available');
+    } else {
+      setConfigValue('LATEST_VERSION', remoteVersion + '  (up to date)');
+    }
+
+    // Apply background color to the LATEST_VERSION value cell
+    const data = sheet.getDataRange().getValues();
+    for (let i = 0; i < data.length; i++) {
+      if (data[i][0] === 'LATEST_VERSION') {
+        const cell = sheet.getRange(i + 1, 2);
+        if (updateAvailable) {
+          cell.setBackground('#fff2cc'); // light yellow
+        } else {
+          cell.setBackground('#d9ead3'); // light green
+        }
+        break;
+      }
+    }
+
+    // Log result
+    if (updateAvailable) {
+      logOperation('VersionCheck', 'UPDATE_AVAILABLE',
+        'v' + remoteVersion + ' available (current: v' + SCRIPT_VERSION + '). ' +
+        (remote.releaseUrl || '') + ' \u2014 ' + (remote.message || ''));
+    } else {
+      logOperation('VersionCheck', 'CURRENT', 'v' + SCRIPT_VERSION + ' is up to date');
+    }
+
+  } catch (e) {
+    logOperation('VersionCheck', 'ERROR', 'Version check failed: ' + e.message);
+  }
+}
+
+/**
+ * Compare two semver strings (e.g., "1.2.0" vs "1.3.0").
+ * @param {string} remoteVer - The remote version string
+ * @param {string} localVer - The local version string
+ * @return {boolean} True if remoteVer is newer than localVer
+ */
+function isNewerVersion(remoteVer, localVer) {
+  const remote = remoteVer.split('.').map(Number);
+  const local = localVer.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const r = remote[i] || 0;
+    const l = local[i] || 0;
+    if (r > l) return true;
+    if (r < l) return false;
+  }
+  return false;
+}
+
+/**
+ * Check if version check is stale (>24 hours since last check).
+ * Used as a guard to avoid checking on every trigger invocation.
+ * @return {boolean} True if a version check should be performed
+ */
+function isVersionCheckStale() {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
+    if (!sheet) return true;
+    const data = sheet.getDataRange().getValues();
+    for (let i = 0; i < data.length; i++) {
+      if (data[i][0] === 'VERSION_CHECK_DATE') {
+        const val = data[i][1];
+        if (!val) return true;
+        const lastCheck = new Date(val);
+        if (isNaN(lastCheck.getTime())) return true;
+        const hoursSince = (Date.now() - lastCheck.getTime()) / (1000 * 60 * 60);
+        return hoursSince > 24;
+      }
+    }
+    return true; // No check date row found
+  } catch (e) {
+    return false; // On error, don't trigger a check
+  }
+}
+
+/**
+ * Menu wrapper for Check for Updates.
+ * Shows a toast (non-blocking) to confirm the action completed.
+ */
+function menuCheckForUpdates() {
+  checkForUpdates();
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    'Version check complete. See Config sheet for results.',
+    'Version Check', 5);
 }
 
 // =============================================================================

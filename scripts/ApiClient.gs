@@ -8,11 +8,42 @@ const MAX_RETRIES = 3;
 const BACKOFF_BASE_MS = 2000;
 
 /**
+ * Cached config for batch operations.
+ * Set via setApiConfig() before a batch, cleared via clearApiConfig() after.
+ * When set, makeApiRequest/searchTickets skip reading the Config sheet on every call.
+ */
+let apiConfig_ = null;
+
+/**
+ * Cache the config object for the duration of a batch operation.
+ * Call this once before a loop of API requests to avoid repeated Config sheet reads.
+ *
+ * @param {Object} config - Config object from getConfig()
+ */
+function setApiConfig(config) {
+  apiConfig_ = config;
+}
+
+/**
+ * Clear the cached API config. Call after batch operations complete.
+ */
+function clearApiConfig() {
+  apiConfig_ = null;
+}
+
+/**
+ * Get the current API config — uses cache if available, otherwise reads from sheet.
+ */
+function getApiConfig_() {
+  return apiConfig_ || getConfig();
+}
+
+/**
  * Get throttle delay from config (with fallback)
  */
 function getThrottleMs() {
   try {
-    const config = getConfig();
+    const config = getApiConfig_();
     return config.throttleMs || 1000;
   } catch (e) {
     return 1000; // Default fallback
@@ -20,7 +51,7 @@ function getThrottleMs() {
 }
 
 function makeApiRequest(endpoint, method, payload, retryCount) {
-  const config = getConfig();
+  const config = getApiConfig_();
   retryCount = retryCount || 0;
 
   if (!config.baseUrl || !config.bearerToken) {
@@ -113,8 +144,7 @@ function makeApiRequest(endpoint, method, payload, retryCount) {
  *   TicketDueDate, TicketId, TicketNumber, TicketSubject, TicketPriority, etc.
  */
 function searchTickets(filters, page, pageSize, sortOptions) {
-  const config = getConfig();
-  const size = pageSize || config.pageSize;
+  const size = pageSize || getApiConfig_().pageSize;
 
   // Build endpoint with $p and $s query parameters
   let endpoint = `/v1.0/tickets?$p=${page || 0}&$s=${size}`;

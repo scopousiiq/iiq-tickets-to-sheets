@@ -29,6 +29,8 @@
  * - TemporalPatterns: When do tickets come in? (day/hour analysis)
  * - QueueTimeAnalysis: How long do tickets wait before being picked up?
  * - DeviceReliability: Which device models generate the most tickets?
+ * - BacklogAgingByFA: Open ticket aging crossed with Functional Area
+ * - MonthlyVolumeByFA: Monthly Created/Closed crossed with Functional Area
  */
 
 // ============================================================================
@@ -56,6 +58,15 @@ function addPerformanceTrendsSheet() {
   SpreadsheetApp.getUi().alert('Created', 'PerformanceTrends sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
+/**
+ * Add Monthly Volume by Functional Area sheet (deletes and recreates if exists)
+ */
+function addMonthlyVolumeByFASheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  setupMonthlyVolumeByFASheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'MonthlyVolumeByFA sheet has been created.\n\nNote: Requires Teams sheet with FunctionalArea column filled in.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
 // --- Backlog & Quality ---
 
 /**
@@ -74,6 +85,15 @@ function addStaleTicketsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   setupStaleTicketsSheet(ss);
   SpreadsheetApp.getUi().alert('Created', 'StaleTickets sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Add Backlog Aging by Functional Area sheet (deletes and recreates if exists)
+ */
+function addBacklogAgingByFASheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  setupBacklogAgingByFASheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'BacklogAgingByFA sheet has been created.\n\nNote: Requires Teams sheet with FunctionalArea column filled in.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 // --- SLA & Response ---
@@ -1943,6 +1963,275 @@ function setupDeviceReliabilitySheet(ss) {
   return true;
 }
 
+/**
+ * Setup BacklogAgingByFA sheet — cross-tab of age buckets × functional areas
+ * Rows: Age buckets (0-7, 8-14, 15-30, 30+)
+ * Columns: One per Functional Area (dynamic from Teams sheet)
+ * Values: Count of open tickets in each bucket/FA combination
+ */
+function setupBacklogAgingByFASheet(ss) {
+  deleteSheetIfExists(ss, 'BacklogAgingByFA');
+  const sheet = ss.insertSheet('BacklogAgingByFA');
+
+  // Get functional areas from Teams sheet
+  const teamsSheet = ss.getSheetByName('Teams');
+  if (!teamsSheet || teamsSheet.getLastRow() < 2) {
+    sheet.getRange('A1').setValue('Teams sheet is empty or missing. Please load Teams first.');
+    return true;
+  }
+
+  const faValues = teamsSheet.getRange(2, 3, teamsSheet.getLastRow() - 1, 1).getValues()
+    .map(r => r[0])
+    .filter(v => v && String(v).trim() !== '');
+  const uniqueFAs = [...new Set(faValues)].sort();
+
+  if (uniqueFAs.length === 0) {
+    sheet.getRange('A1').setValue('No Functional Areas found. Please fill in the FunctionalArea column (C) in the Teams sheet.');
+    return true;
+  }
+
+  // Build headers: Age Bucket | FA1 | FA2 | ... | Total
+  const headers = ['Age Bucket', ...uniqueFAs, 'Total'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // Age bucket definitions: min/max are numeric thresholds
+  const buckets = [
+    { label: '0-7 days',  min: 0, max: 7 },
+    { label: '8-14 days', min: 8, max: 14 },
+    { label: '15-30 days', min: 15, max: 30 },
+    { label: '30+ days',  min: 31, max: null }
+  ];
+
+  // For each FA, we need the list of team names that belong to it
+  const teamData = teamsSheet.getRange(2, 2, teamsSheet.getLastRow() - 1, 2).getValues(); // B=TeamName, C=FA
+  const faToTeams = {};
+  for (const [teamName, fa] of teamData) {
+    if (fa && String(fa).trim() !== '') {
+      const faKey = String(fa).trim();
+      if (!faToTeams[faKey]) faToTeams[faKey] = [];
+      if (teamName && String(teamName).trim() !== '') {
+        faToTeams[faKey].push(String(teamName).trim());
+      }
+    }
+  }
+
+  const dataRows = [];
+  for (let b = 0; b < buckets.length; b++) {
+    const bucket = buckets[b];
+    const rowNum = b + 2;
+    const row = [bucket.label];
+
+    for (const fa of uniqueFAs) {
+      const teams = faToTeams[fa] || [];
+      if (teams.length === 0) {
+        row.push(0);
+      } else {
+        // Build SUMPRODUCT formula: count open tickets in this age range whose TeamName matches any team in this FA
+        // Using SUMPRODUCT with team matching via nested OR
+        const teamCriteria = teams.map(t => '(TicketData!L:L="' + t.replace(/"/g, '""') + '")').join('+');
+        let formula;
+        if (bucket.max !== null) {
+          formula = '=SUMPRODUCT((TicketData!I:I="Open")*(TicketData!R:R>=' + bucket.min + ')*(TicketData!R:R<=' + bucket.max + ')*((' + teamCriteria + ')>0))';
+        } else {
+          formula = '=SUMPRODUCT((TicketData!I:I="Open")*(TicketData!R:R>=' + bucket.min + ')*((' + teamCriteria + ')>0))';
+        }
+        row.push(formula);
+      }
+    }
+
+    // Total column: sum of FA columns in this row
+    const firstCol = 'B';
+    const lastCol = String.fromCharCode(65 + uniqueFAs.length); // A=65, so col index = 1 + uniqueFAs.length
+    row.push(`=SUM(B${rowNum}:${lastCol}${rowNum})`);
+    dataRows.push(row);
+  }
+
+  // TOTAL row
+  const totalRowNum = buckets.length + 2;
+  const totalRow = ['TOTAL'];
+  for (let c = 0; c < uniqueFAs.length; c++) {
+    const col = String.fromCharCode(66 + c); // B, C, D, ...
+    totalRow.push(`=SUM(${col}2:${col}${totalRowNum - 1})`);
+  }
+  const lastDataCol = String.fromCharCode(66 + uniqueFAs.length);
+  totalRow.push(`=SUM(${lastDataCol}2:${lastDataCol}${totalRowNum - 1})`);
+  dataRows.push(totalRow);
+
+  sheet.getRange(2, 1, dataRows.length, headers.length).setValues(dataRows);
+
+  // Format header
+  sheet.getRange(1, 1, 1, headers.length)
+    .setFontWeight('bold')
+    .setBackground('#ea4335')
+    .setFontColor('white');
+
+  // Format TOTAL row
+  sheet.getRange(totalRowNum, 1, 1, headers.length).setFontWeight('bold');
+
+  // Format Age Bucket column bold
+  sheet.getRange(2, 1, buckets.length, 1).setFontWeight('bold');
+
+  // Conditional formatting: highlight cells > 0 with light red
+  if (dataRows.length > 1) {
+    const dataRange = sheet.getRange(2, 2, buckets.length, uniqueFAs.length);
+    const rule = SpreadsheetApp.newConditionalFormatRule()
+      .whenNumberGreaterThan(0)
+      .setBackground('#fce8e6')
+      .setRanges([dataRange])
+      .build();
+    sheet.setConditionalFormatRules([rule]);
+  }
+
+  // Column widths
+  sheet.setColumnWidth(1, 100);
+  for (let c = 2; c <= headers.length; c++) {
+    sheet.setColumnWidth(c, 90);
+  }
+
+  sheet.setFrozenRows(1);
+  sheet.setFrozenColumns(1);
+
+  // Add note
+  sheet.getRange('A1').setNote(
+    'Backlog Aging by Functional Area\n\n' +
+    'Shows how long open tickets have been sitting, broken down by department.\n' +
+    'Functional Areas are derived from the Teams sheet (column C).\n\n' +
+    'To update: iiQ Data > Add Analytics Sheet > Backlog & Quality > Backlog Aging by FA'
+  );
+
+  return true;
+}
+
+/**
+ * Setup MonthlyVolumeByFA sheet — cross-tab of months × functional areas
+ * Rows: Months (from school year range)
+ * Columns: One per Functional Area with Created/Closed sub-columns
+ * Values: Ticket counts per month per FA
+ */
+function setupMonthlyVolumeByFASheet(ss) {
+  deleteSheetIfExists(ss, 'MonthlyVolumeByFA');
+  const sheet = ss.insertSheet('MonthlyVolumeByFA');
+
+  // Get functional areas from Teams sheet
+  const teamsSheet = ss.getSheetByName('Teams');
+  if (!teamsSheet || teamsSheet.getLastRow() < 2) {
+    sheet.getRange('A1').setValue('Teams sheet is empty or missing. Please load Teams first.');
+    return true;
+  }
+
+  const faValues = teamsSheet.getRange(2, 3, teamsSheet.getLastRow() - 1, 1).getValues()
+    .map(r => r[0])
+    .filter(v => v && String(v).trim() !== '');
+  const uniqueFAs = [...new Set(faValues)].sort();
+
+  if (uniqueFAs.length === 0) {
+    sheet.getRange('A1').setValue('No Functional Areas found. Please fill in the FunctionalArea column (C) in the Teams sheet.');
+    return true;
+  }
+
+  // Build FA → teams mapping
+  const teamData = teamsSheet.getRange(2, 2, teamsSheet.getLastRow() - 1, 2).getValues();
+  const faToTeams = {};
+  for (const [teamName, fa] of teamData) {
+    if (fa && String(fa).trim() !== '') {
+      const faKey = String(fa).trim();
+      if (!faToTeams[faKey]) faToTeams[faKey] = [];
+      if (teamName && String(teamName).trim() !== '') {
+        faToTeams[faKey].push(String(teamName).trim());
+      }
+    }
+  }
+
+  // Build headers: Month | Year | FA1 Created | FA1 Closed | FA2 Created | FA2 Closed | ... | Total Created | Total Closed
+  const headers = ['Month', 'Year'];
+  for (const fa of uniqueFAs) {
+    headers.push(fa + ' Created');
+    headers.push(fa + ' Closed');
+  }
+  headers.push('Total Created', 'Total Closed');
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // Get month range
+  const monthRange = getMonthRangeFromData(ss, 'E');
+
+  const dataRows = [];
+  for (const period of monthRange) {
+    const rowNum = dataRows.length + 2;
+    const y = period.year;
+    const monthNum = period.monthNum;
+
+    const startDate = `TEXT(DATE(${y},${monthNum},1), "YYYY-MM-DD")`;
+    const endDate = `TEXT(DATE(${y},${monthNum}+1,1), "YYYY-MM-DD")`;
+
+    const row = [period.monthName, y];
+
+    for (const fa of uniqueFAs) {
+      const teams = faToTeams[fa] || [];
+      if (teams.length === 0) {
+        row.push(0, 0);
+      } else {
+        const teamCriteria = teams.map(t => '(TicketData!L:L="' + t.replace(/"/g, '""') + '")').join('+');
+        // Created formula
+        row.push(`=SUMPRODUCT((TicketData!E:E>=` + startDate + `)*(TicketData!E:E<` + endDate + `)*((` + teamCriteria + `)>0))`);
+        // Closed formula
+        row.push(`=SUMPRODUCT((TicketData!H:H>=` + startDate + `)*(TicketData!H:H<` + endDate + `)*((` + teamCriteria + `)>0))`);
+      }
+    }
+
+    // Total Created and Total Closed
+    const createdCols = [];
+    const closedCols = [];
+    for (let i = 0; i < uniqueFAs.length; i++) {
+      const colIdx = 3 + (i * 2); // 1-indexed: col 3, 5, 7, ...
+      createdCols.push(String.fromCharCode(64 + colIdx) + rowNum);
+      closedCols.push(String.fromCharCode(64 + colIdx + 1) + rowNum);
+    }
+    row.push(`=${createdCols.join('+')}`);
+    row.push(`=${closedCols.join('+')}`);
+
+    dataRows.push(row);
+  }
+
+  if (dataRows.length > 0) {
+    sheet.getRange(2, 1, dataRows.length, headers.length).setValues(dataRows);
+  }
+
+  // Format header row
+  sheet.getRange(1, 1, 1, headers.length)
+    .setFontWeight('bold')
+    .setBackground('#fbbc04')
+    .setFontColor('black');
+
+  // Alternate header colors for each FA pair
+  const faColors = ['#e8f0fe', '#fce8e6', '#e6f4ea', '#fef7e0', '#f3e8fd', '#e8f5e9', '#fff3e0', '#e1f5fe'];
+  for (let i = 0; i < uniqueFAs.length; i++) {
+    const colStart = 3 + (i * 2);
+    const color = faColors[i % faColors.length];
+    sheet.getRange(1, colStart, 1, 2).setBackground(color);
+  }
+
+  // Column widths
+  sheet.setColumnWidth(1, 90);  // Month
+  sheet.setColumnWidth(2, 50);  // Year
+  for (let c = 3; c <= headers.length; c++) {
+    sheet.setColumnWidth(c, 85);
+  }
+
+  sheet.setFrozenRows(1);
+  sheet.setFrozenColumns(2);
+
+  // Add note
+  sheet.getRange('A1').setNote(
+    'Monthly Volume by Functional Area\n\n' +
+    'Shows ticket throughput (Created/Closed) per department over time.\n' +
+    'Functional Areas are derived from the Teams sheet (column C).\n\n' +
+    'This is a monthly sheet — use "Regenerate All Monthly Sheets" if school year changes.\n\n' +
+    'To update: iiQ Data > Add Analytics Sheet > Volume & Trends > Monthly Volume by FA'
+  );
+
+  return true;
+}
+
 // ============================================================================
 // REGENERATE MONTHLY ANALYTICS SHEETS
 // ============================================================================
@@ -1962,6 +2251,7 @@ function setupDeviceReliabilitySheet(ss) {
  * - FirstContactResolution
  * - ResponseTrends
  * - SeasonalComparison
+ * - MonthlyVolumeByFA
  */
 function regenerateMonthlyAnalyticsSheets() {
   const ui = SpreadsheetApp.getUi();
@@ -2000,7 +2290,8 @@ function regenerateMonthlyAnalyticsSheets() {
     { name: 'PerformanceTrends', setup: setupPerformanceTrendsSheet },
     { name: 'FirstContactResolution', setup: setupFirstContactResolutionSheet },
     { name: 'ResponseTrends', setup: setupResponseTrendsSheet },
-    { name: 'SeasonalComparison', setup: setupSeasonalComparisonSheet }
+    { name: 'SeasonalComparison', setup: setupSeasonalComparisonSheet },
+    { name: 'MonthlyVolumeByFA', setup: setupMonthlyVolumeByFASheet }
   ];
 
   // Find which sheets exist

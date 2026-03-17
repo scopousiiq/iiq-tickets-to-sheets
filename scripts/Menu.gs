@@ -19,7 +19,7 @@
  *
  * Analytics Sheets:
  * - 7 default sheets created by Setup Spreadsheet
- * - 18 additional sheets available via "Add Analytics Sheet" menu
+ * - 20 additional sheets available via "Add Analytics Sheet" menu
  * - All sheets can be deleted and recreated as needed
  * - Organized by category: Volume, Backlog, SLA, Team, Location, Issue
  * - Default sheets marked with ★ in menu
@@ -37,7 +37,9 @@ function onOpen() {
       .addSeparator()
       .addItem('Setup Automated Triggers', 'setupAutomatedTriggers')
       .addItem('View Trigger Status', 'viewTriggerStatus')
-      .addItem('Remove Automated Triggers', 'removeAutomatedTriggers'))
+      .addItem('Remove Automated Triggers', 'removeAutomatedTriggers')
+      .addSeparator()
+      .addItem('Check for Updates', 'menuCheckForUpdates'))
     .addSeparator()
     .addItem('Refresh Teams', 'refreshTeams')
     .addSubMenu(ui.createMenu('Ticket Data')
@@ -57,11 +59,13 @@ function onOpen() {
         .addItem('Monthly Volume ★', 'addMonthlyVolumeSheet')
         .addItem('Performance Trends ★', 'addPerformanceTrendsSheet')
         .addItem('Seasonal Comparison (YoY)', 'addSeasonalComparisonSheet')
-        .addItem('Temporal Patterns', 'addTemporalPatternsSheet'))
+        .addItem('Temporal Patterns', 'addTemporalPatternsSheet')
+        .addItem('Monthly Volume by FA', 'addMonthlyVolumeByFASheet'))
       .addSubMenu(ui.createMenu('Backlog & Quality')
         .addItem('Backlog Aging ★', 'addBacklogAgingSheet')
         .addItem('Stale Tickets', 'addStaleTicketsSheet')
-        .addItem('Reopen Rate', 'addReopenRateSheet'))
+        .addItem('Reopen Rate', 'addReopenRateSheet')
+        .addItem('Backlog Aging by FA', 'addBacklogAgingByFASheet'))
       .addSubMenu(ui.createMenu('SLA & Response')
         .addItem('SLA Compliance ★', 'addSLAComplianceSheet')
         .addItem('At-Risk Response ★', 'addAtRiskResponseSheet')

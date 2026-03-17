@@ -288,14 +288,16 @@ function runTicketDataLoader(sheet) {
     return { batchCount: 0, ticketCount: 0, complete: false, error: e.message };
   }
 
-  // Read config ONCE at start and cache row positions for direct writes
-  // This avoids repeated reads that force flushes and trigger recalculation
+  // Read config ONCE at start and cache for both config row writes and API calls
+  // This avoids repeated Config sheet reads that force flushes and trigger recalculation
   let config = getConfig();
   cacheConfigRowPositions();
+  setApiConfig(config);
 
   if (!config.schoolYear) {
     logOperation('Ticket Data', 'ERROR', 'No SCHOOL_YEAR configured');
     clearConfigCache();
+    clearApiConfig();
     return { batchCount: 0, ticketCount: 0, complete: true, runtime: 0 };
   }
 
@@ -382,8 +384,9 @@ function runTicketDataLoader(sheet) {
     Utilities.sleep(config.throttleMs || 1000);
   }
 
-  // Clean up cache
+  // Clean up caches
   clearConfigCache();
+  clearApiConfig();
 
   const runtime = Date.now() - startTime;
   logOperation('Ticket Data', complete ? 'COMPLETE' : 'PAUSED',
@@ -831,8 +834,6 @@ function fetchSlaForTicketIds(ticketIds) {
   if (!ticketIds || ticketIds.length === 0) {
     return slaMap;
   }
-
-  const config = getConfig();
 
   // Build endpoint - fetch all tickets in one call
   const endpoint = `/v1.0/tickets/slas?$p=0&$s=${ticketIds.length}`;
@@ -1487,6 +1488,7 @@ function clearYearDataAndResetProgress() {
 function runOpenTicketRefresh(sheet) {
   const startTime = Date.now();
   const config = getConfig();
+  setApiConfig(config);
 
   // Get last refresh timestamp - if none, use STALE_DAYS as fallback window
   let lastRefreshTime = config.openRefreshLastRun;
@@ -1604,6 +1606,7 @@ function runOpenTicketRefresh(sheet) {
     updateLastRefresh();
   }
 
+  clearApiConfig();
   return { batchCount, ticketCount, updatedCount, appendedCount, skippedCount, complete, runtime };
 }
 
@@ -1663,8 +1666,8 @@ function processTicketBatch(sheet, tickets, ticketIdToRow, now, options) {
   let skipped = 0;
   const rowsToAppend = [];
 
-  // Get school year from config for new rows
-  const config = getConfig();
+  // Get school year from config for new rows (uses API cache if available)
+  const config = getApiConfig_();
   const schoolYear = config.schoolYear || '';
 
   // Fetch SLA data for this batch

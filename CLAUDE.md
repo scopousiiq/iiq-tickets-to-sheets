@@ -49,7 +49,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively). Skips if loading incomplete. |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
 | `Triggers.gs` | Time-driven trigger functions (no UI dialogs) |
-| `OptionalMetrics.gs` | Additional analytics sheets added via menu (18 optional KPI sheets) |
+| `OptionalMetrics.gs` | Additional analytics sheets added via menu (20 optional KPI sheets) |
 
 **Key Dependencies:**
 - `ApiClient.gs` → `Config.gs`
@@ -171,7 +171,7 @@ Workflow for destructive operations:
 
 All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet** menu. Each is formula-based and auto-calculates from TicketData. Default sheets marked with ★.
 
-**School Year Optimization:** Monthly-based sheets (MonthlyVolume, SLACompliance, PerformanceTrends, FirstContactResolution, ResponseTrends, SeasonalComparison) use the configured `SCHOOL_YEAR` to determine month ranges. Use **iiQ Data > Add Analytics Sheet > Regenerate All Monthly Sheets** to rebuild these sheets if the school year config changes.
+**School Year Optimization:** Monthly-based sheets (MonthlyVolume, SLACompliance, PerformanceTrends, FirstContactResolution, ResponseTrends, SeasonalComparison, MonthlyVolumeByFA) use the configured `SCHOOL_YEAR` to determine month ranges. Use **iiQ Data > Add Analytics Sheet > Regenerate All Monthly Sheets** to rebuild these sheets if the school year config changes.
 
 ### Volume & Trends
 | Sheet | Question Answered | Key Metrics |
@@ -180,11 +180,13 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | PerformanceTrends ★ | "Are we getting better over time?" | Monthly trending of resolution time, breach rate, backlog |
 | SeasonalComparison | "How does this year compare to last year?" | YoY change by month, identifies seasonal patterns |
 | TemporalPatterns | "When do tickets come in?" | Day-of-week and hour-of-day distributions |
+| MonthlyVolumeByFA | "How does ticket throughput vary by department?" | Monthly Created/Closed crossed with Functional Area |
 
 ### Backlog & Quality
 | Sheet | Question Answered | Key Metrics |
 |-------|-------------------|-------------|
 | BacklogAging ★ | "How old are our open tickets?" | Distribution by age bucket (0-15, 16-30, 31-60, 61-90, 90+) |
+| BacklogAgingByFA | "Where is backlog accumulating by department?" | Age buckets crossed with Functional Area columns |
 | StaleTickets | "Which tickets have no recent activity?" | Open tickets with no update in X days |
 | ReopenRate | "Are we truly resolving issues?" | Reopened ticket detection and quality indicators |
 
@@ -289,7 +291,7 @@ Example pattern for aggregating by team:
    - `API_BASE_URL`: Your iiQ instance URL
    - `BEARER_TOKEN`: JWT authentication token
    - `SITE_ID`: Optional site UUID
-   - `MODULE`: Select "Ticketing" (default) or "Facilities" from dropdown
+   - `MODULE`: Select "Ticketing" (default), "Facilities", or "HRSD" from dropdown
    - `SCHOOL_YEAR`: The school year (e.g., "2025-2026")
    - `SCHOOL_YEAR_START`: Start date MM-DD (default "07-01" for July 1)
 7. Run **iiQ Data > Setup > Verify Configuration** to check settings
@@ -364,7 +366,7 @@ Required:
 
 Optional:
 - `SITE_ID`: Site UUID (if required for multi-site instances)
-- `MODULE`: Module to pull data from — "Ticketing" (default) or "Facilities" (dropdown)
+- `MODULE`: Module to pull data from — "Ticketing" (default), "Facilities", or "HRSD" (dropdown)
 - `SCHOOL_YEAR_START`: First day of school year in MM-DD format (default "07-01" for July 1)
 - `PAGE_SIZE`: Records per API call (default 100)
 - `THROTTLE_MS`: Delay between requests (default 1000)
@@ -389,3 +391,10 @@ Config Lock (set when loading starts, cleared by "Clear Data + Reset"):
 **Configuration Lock:** Once data loading starts, critical configuration values are locked to prevent accidental changes that would cause data inconsistency. Locked values include `SCHOOL_YEAR`, `PAGE_SIZE`, `TICKET_BATCH_SIZE`, and `MODULE`. To change these values, use "Clear Data + Reset Progress" which unlocks the configuration.
 
 **Pagination Note:** All page tracking uses 0-indexed values. For a school year with 6 pages of data, after completion both `LAST_PAGE` and `TOTAL_PAGES` will be `5`. The UI displays 1-indexed values ("Page 6 of 6").
+
+Version Information (managed automatically):
+- `SCRIPT_VERSION`: The installed script version (from `SCRIPT_VERSION` constant in Config.gs)
+- `LATEST_VERSION`: Latest available version from GitHub, with status text and color-coded cell (green = current, yellow = update available)
+- `VERSION_CHECK_DATE`: Date of last successful version check
+
+**Version Check:** Scripts check GitHub daily for newer versions (piggybacked on `triggerDataContinue`). The check fetches `version.json` from the repo's `main` branch via GitHub raw content. Results are displayed in the Config sheet with color coding — no pop-up dialogs. Manual check available via **iiQ Data > Setup > Check for Updates**.
