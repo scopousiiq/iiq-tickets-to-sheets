@@ -98,12 +98,12 @@ Go to Extensions > Apps Script > Triggers (clock icon) and add these triggers:
 
 ### Additional Analytics (add via menu)
 
-Use **iiQ Data > Add Analytics Sheet** to add any of these 20 optional sheets:
+Use **iiQ Data > Add Analytics Sheet** to add any of these 23 optional sheets:
 
 | Category | Available Sheets |
 |----------|------------------|
 | Volume & Trends | Seasonal Comparison (YoY), Temporal Patterns, Monthly Volume by FA |
-| Backlog & Quality | Stale Tickets, Reopen Rate, Backlog Aging by FA |
+| Backlog & Quality | Stale Tickets, Reopen Rate, Backlog Aging by FA/Team/Location Type/Priority |
 | SLA & Response | First Contact Resolution, Response Distribution, Response Trends, Queue Time Analysis, Queue Time by Team, Queue Time Trend |
 | Team & Staff | Technician Performance, Functional Area Summary |
 | Location | Location Breakdown, Location Type Comparison |

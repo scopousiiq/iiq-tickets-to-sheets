@@ -29,7 +29,10 @@
  * - TemporalPatterns: When do tickets come in? (day/hour analysis)
  * - QueueTimeAnalysis: How long do tickets wait before being picked up?
  * - DeviceReliability: Which device models generate the most tickets?
- * - BacklogAgingByFA: Open ticket aging crossed with Functional Area
+ * - BacklogAgingByFA: Open ticket aging by Functional Area
+ * - BacklogAgingByTeam: Open ticket aging by Team
+ * - BacklogAgingByLocationType: Open ticket aging by Location Type
+ * - BacklogAgingByPriority: Open ticket aging by Priority
  * - MonthlyVolumeByFA: Monthly Created/Closed crossed with Functional Area
  */
 
@@ -94,6 +97,33 @@ function addBacklogAgingByFASheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   setupBacklogAgingByFASheet(ss);
   SpreadsheetApp.getUi().alert('Created', 'BacklogAgingByFA sheet has been created.\n\nNote: Requires Teams sheet with FunctionalArea column filled in.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Add Backlog Aging by Team sheet (deletes and recreates if exists)
+ */
+function addBacklogAgingByTeamSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  setupBacklogAgingByTeamSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'BacklogAgingByTeam sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Add Backlog Aging by Location Type sheet (deletes and recreates if exists)
+ */
+function addBacklogAgingByLocationTypeSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  setupBacklogAgingByLocationTypeSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'BacklogAgingByLocationType sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Add Backlog Aging by Priority sheet (deletes and recreates if exists)
+ */
+function addBacklogAgingByPrioritySheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  setupBacklogAgingByPrioritySheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'BacklogAgingByPriority sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 // --- SLA & Response ---
@@ -1964,10 +1994,8 @@ function setupDeviceReliabilitySheet(ss) {
 }
 
 /**
- * Setup BacklogAgingByFA sheet — cross-tab of age buckets × functional areas
- * Rows: Age buckets (0-7, 8-14, 15-30, 30+)
- * Columns: One per Functional Area (dynamic from Teams sheet)
- * Values: Count of open tickets in each bucket/FA combination
+ * Setup BacklogAgingByFA sheet — Functional Areas as rows, age buckets as columns
+ * Uses SUMPRODUCT because FA requires joining TeamName through Teams sheet
  */
 function setupBacklogAgingByFASheet(ss) {
   deleteSheetIfExists(ss, 'BacklogAgingByFA');
@@ -1990,20 +2018,8 @@ function setupBacklogAgingByFASheet(ss) {
     return true;
   }
 
-  // Build headers: Age Bucket | FA1 | FA2 | ... | Total
-  const headers = ['Age Bucket', ...uniqueFAs, 'Total'];
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-
-  // Age bucket definitions: min/max are numeric thresholds
-  const buckets = [
-    { label: '0-7 days',  min: 0, max: 7 },
-    { label: '8-14 days', min: 8, max: 14 },
-    { label: '15-30 days', min: 15, max: 30 },
-    { label: '30+ days',  min: 31, max: null }
-  ];
-
-  // For each FA, we need the list of team names that belong to it
-  const teamData = teamsSheet.getRange(2, 2, teamsSheet.getLastRow() - 1, 2).getValues(); // B=TeamName, C=FA
+  // Build FA → teams mapping
+  const teamData = teamsSheet.getRange(2, 2, teamsSheet.getLastRow() - 1, 2).getValues();
   const faToTeams = {};
   for (const [teamName, fa] of teamData) {
     if (fa && String(fa).trim() !== '') {
@@ -2015,91 +2031,255 @@ function setupBacklogAgingByFASheet(ss) {
     }
   }
 
-  const dataRows = [];
-  for (let b = 0; b < buckets.length; b++) {
-    const bucket = buckets[b];
-    const rowNum = b + 2;
-    const row = [bucket.label];
+  // Headers: entity as rows, buckets as columns
+  const headers = ['Functional Area', '0-7 days', '8-14 days', '15-30 days', '30+ days', 'Total'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-    for (const fa of uniqueFAs) {
-      const teams = faToTeams[fa] || [];
-      if (teams.length === 0) {
-        row.push(0);
-      } else {
-        // Build SUMPRODUCT formula: count open tickets in this age range whose TeamName matches any team in this FA
-        // Using SUMPRODUCT with team matching via nested OR
-        const teamCriteria = teams.map(t => '(TicketData!L:L="' + t.replace(/"/g, '""') + '")').join('+');
-        let formula;
+  const buckets = [
+    { min: 0, max: 7 },
+    { min: 8, max: 14 },
+    { min: 15, max: 30 },
+    { min: 31, max: null }
+  ];
+
+  const dataRows = [];
+  for (const fa of uniqueFAs) {
+    const rowNum = dataRows.length + 2;
+    const teams = faToTeams[fa] || [];
+    const row = [fa];
+
+    if (teams.length === 0) {
+      row.push(0, 0, 0, 0);
+    } else {
+      const teamCriteria = teams.map(t => '(TicketData!L:L="' + t.replace(/"/g, '""') + '")').join('+');
+      for (const bucket of buckets) {
         if (bucket.max !== null) {
-          formula = '=SUMPRODUCT((TicketData!I:I="Open")*(TicketData!R:R>=' + bucket.min + ')*(TicketData!R:R<=' + bucket.max + ')*((' + teamCriteria + ')>0))';
+          row.push('=SUMPRODUCT((TicketData!I:I="Open")*(TicketData!R:R>=' + bucket.min + ')*(TicketData!R:R<=' + bucket.max + ')*((' + teamCriteria + ')>0))');
         } else {
-          formula = '=SUMPRODUCT((TicketData!I:I="Open")*(TicketData!R:R>=' + bucket.min + ')*((' + teamCriteria + ')>0))';
+          row.push('=SUMPRODUCT((TicketData!I:I="Open")*(TicketData!R:R>=' + bucket.min + ')*((' + teamCriteria + ')>0))');
         }
-        row.push(formula);
       }
     }
 
-    // Total column: sum of FA columns in this row
-    const firstCol = 'B';
-    const lastCol = String.fromCharCode(65 + uniqueFAs.length); // A=65, so col index = 1 + uniqueFAs.length
-    row.push(`=SUM(B${rowNum}:${lastCol}${rowNum})`);
+    row.push(`=SUM(B${rowNum}:E${rowNum})`);
     dataRows.push(row);
   }
 
-  // TOTAL row
-  const totalRowNum = buckets.length + 2;
-  const totalRow = ['TOTAL'];
-  for (let c = 0; c < uniqueFAs.length; c++) {
-    const col = String.fromCharCode(66 + c); // B, C, D, ...
-    totalRow.push(`=SUM(${col}2:${col}${totalRowNum - 1})`);
+  if (dataRows.length > 0) {
+    sheet.getRange(2, 1, dataRows.length, 6).setValues(dataRows);
   }
-  const lastDataCol = String.fromCharCode(66 + uniqueFAs.length);
-  totalRow.push(`=SUM(${lastDataCol}2:${lastDataCol}${totalRowNum - 1})`);
-  dataRows.push(totalRow);
 
-  sheet.getRange(2, 1, dataRows.length, headers.length).setValues(dataRows);
+  formatBacklogAgingCrossTab(sheet, headers, dataRows.length, '#ea4335',
+    'Backlog Aging by Functional Area\n\n' +
+    'Shows how long open tickets have been sitting, broken down by department.\n' +
+    'Functional Areas are derived from the Teams sheet (column C).\n' +
+    'FAs are listed alphabetically. Use Google Sheets built-in sort to re-sort.\n\n' +
+    'To recreate: iiQ Data > Add Analytics Sheet > Backlog & Quality > Backlog Aging by FA');
 
+  return true;
+}
+
+/**
+ * Setup BacklogAgingByTeam sheet — Teams as rows, age buckets as columns
+ * Uses a single LET formula since TeamName is a direct column in TicketData
+ */
+function setupBacklogAgingByTeamSheet(ss) {
+  deleteSheetIfExists(ss, 'BacklogAgingByTeam');
+  const sheet = ss.insertSheet('BacklogAgingByTeam');
+
+  const headers = ['Team', '0-7 days', '8-14 days', '15-30 days', '30+ days', 'Total', 'Sort Col#', 'Desc?'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // Single LET formula: entities as rows, age buckets as columns
+  const mainFormula =
+    '=LET(' +
+    'teams, UNIQUE(FILTER(TicketData!L2:L, TicketData!L2:L<>"", TicketData!L2:L<>"TeamName")),' +
+    'col_a, teams,' +
+    'col_b, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "Open", TicketData!R:R, ">=0", TicketData!R:R, "<=7"))),' +
+    'col_c, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "Open", TicketData!R:R, ">=8", TicketData!R:R, "<=14"))),' +
+    'col_d, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "Open", TicketData!R:R, ">=15", TicketData!R:R, "<=30"))),' +
+    'col_e, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "Open", TicketData!R:R, ">=31"))),' +
+    'col_f, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "Open"))),' +
+    'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f),' +
+    'SORT(data, $G$2, $H$2))';
+
+  sheet.getRange('A2').setValue(mainFormula);
+
+  // Default sort settings (column 6 = Total, descending)
+  sheet.getRange('G2').setValue(6);
+  sheet.getRange('H2').setValue('FALSE');
+
+  formatBacklogAgingCrossTab(sheet, headers, -1, '#673ab7',
+    'Backlog Aging by Team\n\n' +
+    'Shows how long open tickets have been sitting, broken down by team.\n' +
+    'Uses TeamName (column L) from TicketData.\n\n' +
+    'To recreate: iiQ Data > Add Analytics Sheet > Backlog & Quality > Backlog Aging by Team');
+
+  // Sort column validation
+  const sortColRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['1', '2', '3', '4', '5', '6'], true)
+    .setHelpText('1=Team, 2=0-7d, 3=8-14d, 4=15-30d, 5=30+, 6=Total')
+    .build();
+  sheet.getRange('G2').setDataValidation(sortColRule);
+
+  const sortOrderRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['FALSE', 'TRUE'], true)
+    .setHelpText('FALSE=Descending, TRUE=Ascending')
+    .build();
+  sheet.getRange('H2').setDataValidation(sortOrderRule);
+
+  sheet.getRange('G2').setNote('Sort column: 1=Team, 2=0-7d, 3=8-14d, 4=15-30d, 5=30+, 6=Total');
+  sheet.getRange('H2').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
+
+  return true;
+}
+
+/**
+ * Setup BacklogAgingByLocationType sheet — Location types as rows, age buckets as columns
+ * Uses a single LET formula since LocationType is a direct column in TicketData
+ */
+function setupBacklogAgingByLocationTypeSheet(ss) {
+  deleteSheetIfExists(ss, 'BacklogAgingByLocationType');
+  const sheet = ss.insertSheet('BacklogAgingByLocationType');
+
+  const headers = ['Location Type', '0-7 days', '8-14 days', '15-30 days', '30+ days', 'Total', 'Sort Col#', 'Desc?'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  const mainFormula =
+    '=LET(' +
+    'types, UNIQUE(FILTER(TicketData!O2:O, TicketData!O2:O<>"", TicketData!O2:O<>"LocationType")),' +
+    'col_a, types,' +
+    'col_b, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open", TicketData!R:R, ">=0", TicketData!R:R, "<=7"))),' +
+    'col_c, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open", TicketData!R:R, ">=8", TicketData!R:R, "<=14"))),' +
+    'col_d, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open", TicketData!R:R, ">=15", TicketData!R:R, "<=30"))),' +
+    'col_e, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open", TicketData!R:R, ">=31"))),' +
+    'col_f, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open"))),' +
+    'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f),' +
+    'SORT(data, $G$2, $H$2))';
+
+  sheet.getRange('A2').setValue(mainFormula);
+
+  // Default sort settings (column 6 = Total, descending)
+  sheet.getRange('G2').setValue(6);
+  sheet.getRange('H2').setValue('FALSE');
+
+  formatBacklogAgingCrossTab(sheet, headers, -1, '#0f9d58',
+    'Backlog Aging by Location Type\n\n' +
+    'Shows how long open tickets have been sitting by school type (Elementary, Middle, High, etc.).\n' +
+    'Uses LocationType (column O) from TicketData.\n\n' +
+    'To recreate: iiQ Data > Add Analytics Sheet > Backlog & Quality > Backlog Aging by Location Type');
+
+  const sortColRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['1', '2', '3', '4', '5', '6'], true)
+    .setHelpText('1=Type, 2=0-7d, 3=8-14d, 4=15-30d, 5=30+, 6=Total')
+    .build();
+  sheet.getRange('G2').setDataValidation(sortColRule);
+
+  const sortOrderRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['FALSE', 'TRUE'], true)
+    .setHelpText('FALSE=Descending, TRUE=Ascending')
+    .build();
+  sheet.getRange('H2').setDataValidation(sortOrderRule);
+
+  sheet.getRange('G2').setNote('Sort column: 1=Type, 2=0-7d, 3=8-14d, 4=15-30d, 5=30+, 6=Total');
+  sheet.getRange('H2').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
+
+  return true;
+}
+
+/**
+ * Setup BacklogAgingByPriority sheet — Priorities as rows, age buckets as columns
+ * Uses a single LET formula since Priority is a direct column in TicketData
+ */
+function setupBacklogAgingByPrioritySheet(ss) {
+  deleteSheetIfExists(ss, 'BacklogAgingByPriority');
+  const sheet = ss.insertSheet('BacklogAgingByPriority');
+
+  const headers = ['Priority', '0-7 days', '8-14 days', '15-30 days', '30+ days', 'Total', 'Sort Col#', 'Desc?'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  const mainFormula =
+    '=LET(' +
+    'pris, UNIQUE(FILTER(TicketData!S2:S, TicketData!S2:S<>"", TicketData!S2:S<>"Priority")),' +
+    'col_a, pris,' +
+    'col_b, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Open", TicketData!R:R, ">=0", TicketData!R:R, "<=7"))),' +
+    'col_c, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Open", TicketData!R:R, ">=8", TicketData!R:R, "<=14"))),' +
+    'col_d, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Open", TicketData!R:R, ">=15", TicketData!R:R, "<=30"))),' +
+    'col_e, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Open", TicketData!R:R, ">=31"))),' +
+    'col_f, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Open"))),' +
+    'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f),' +
+    'SORT(data, $G$2, $H$2))';
+
+  sheet.getRange('A2').setValue(mainFormula);
+
+  // Default sort settings (column 6 = Total, descending)
+  sheet.getRange('G2').setValue(6);
+  sheet.getRange('H2').setValue('FALSE');
+
+  formatBacklogAgingCrossTab(sheet, headers, -1, '#e65100',
+    'Backlog Aging by Priority\n\n' +
+    'Shows how long open tickets have been sitting by priority level.\n' +
+    'Uses Priority (column S) from TicketData.\n\n' +
+    'To recreate: iiQ Data > Add Analytics Sheet > Backlog & Quality > Backlog Aging by Priority');
+
+  const sortColRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['1', '2', '3', '4', '5', '6'], true)
+    .setHelpText('1=Priority, 2=0-7d, 3=8-14d, 4=15-30d, 5=30+, 6=Total')
+    .build();
+  sheet.getRange('G2').setDataValidation(sortColRule);
+
+  const sortOrderRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['FALSE', 'TRUE'], true)
+    .setHelpText('FALSE=Descending, TRUE=Ascending')
+    .build();
+  sheet.getRange('H2').setDataValidation(sortOrderRule);
+
+  sheet.getRange('G2').setNote('Sort column: 1=Priority, 2=0-7d, 3=8-14d, 4=15-30d, 5=30+, 6=Total');
+  sheet.getRange('H2').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
+
+  return true;
+}
+
+/**
+ * Shared formatting for all BacklogAging cross-tab sheets.
+ * @param {Sheet} sheet - The sheet to format
+ * @param {string[]} headers - Header row values
+ * @param {number} dataRowCount - Number of data rows (-1 for dynamic LET formulas)
+ * @param {string} headerColor - Header background color hex
+ * @param {string} noteText - Note to add to A1
+ */
+function formatBacklogAgingCrossTab(sheet, headers, dataRowCount, headerColor, noteText) {
   // Format header
   sheet.getRange(1, 1, 1, headers.length)
     .setFontWeight('bold')
-    .setBackground('#ea4335')
+    .setBackground(headerColor)
     .setFontColor('white');
 
-  // Format TOTAL row
-  sheet.getRange(totalRowNum, 1, 1, headers.length).setFontWeight('bold');
-
-  // Format Age Bucket column bold
-  sheet.getRange(2, 1, buckets.length, 1).setFontWeight('bold');
-
-  // Conditional formatting: highlight cells > 0 with light red
-  if (dataRows.length > 1) {
-    const dataRange = sheet.getRange(2, 2, buckets.length, uniqueFAs.length);
-    const rule = SpreadsheetApp.newConditionalFormatRule()
-      .whenNumberGreaterThan(0)
-      .setBackground('#fce8e6')
-      .setRanges([dataRange])
-      .build();
-    sheet.setConditionalFormatRules([rule]);
-  }
-
   // Column widths
-  sheet.setColumnWidth(1, 100);
-  for (let c = 2; c <= headers.length; c++) {
-    sheet.setColumnWidth(c, 90);
-  }
+  sheet.setColumnWidth(1, 180);  // Entity name
+  sheet.setColumnWidth(2, 80);   // 0-7 days
+  sheet.setColumnWidth(3, 80);   // 8-14 days
+  sheet.setColumnWidth(4, 85);   // 15-30 days
+  sheet.setColumnWidth(5, 80);   // 30+ days
+  sheet.setColumnWidth(6, 70);   // Total
+  sheet.setColumnWidth(7, 80);   // Sort Col#
+  sheet.setColumnWidth(8, 60);   // Desc?
 
   sheet.setFrozenRows(1);
-  sheet.setFrozenColumns(1);
+
+  // Conditional formatting: highlight 30+ days cells with light red background
+  // For dynamic sheets, use a large range that covers expected data
+  const maxRows = (dataRowCount > 0) ? dataRowCount : 100;
+  const agingRange = sheet.getRange(2, 5, maxRows, 1); // Column E = 30+ days
+  const rule = SpreadsheetApp.newConditionalFormatRule()
+    .whenNumberGreaterThan(0)
+    .setBackground('#fce8e6')
+    .setRanges([agingRange])
+    .build();
+  sheet.setConditionalFormatRules([rule]);
 
   // Add note
-  sheet.getRange('A1').setNote(
-    'Backlog Aging by Functional Area\n\n' +
-    'Shows how long open tickets have been sitting, broken down by department.\n' +
-    'Functional Areas are derived from the Teams sheet (column C).\n\n' +
-    'To update: iiQ Data > Add Analytics Sheet > Backlog & Quality > Backlog Aging by FA'
-  );
-
-  return true;
+  sheet.getRange('A1').setNote(noteText);
 }
 
 /**
@@ -2170,11 +2350,16 @@ function setupMonthlyVolumeByFASheet(ss) {
       if (teams.length === 0) {
         row.push(0, 0);
       } else {
-        const teamCriteria = teams.map(t => '(TicketData!L:L="' + t.replace(/"/g, '""') + '")').join('+');
-        // Created formula
-        row.push(`=SUMPRODUCT((TicketData!E:E>=` + startDate + `)*(TicketData!E:E<` + endDate + `)*((` + teamCriteria + `)>0))`);
-        // Closed formula
-        row.push(`=SUMPRODUCT((TicketData!H:H>=` + startDate + `)*(TicketData!H:H<` + endDate + `)*((` + teamCriteria + `)>0))`);
+        // Sum COUNTIFS per team — COUNTIFS handles date string comparison correctly
+        // unlike SUMPRODUCT which fails when comparing date cells to TEXT() strings
+        const createdParts = teams.map(t =>
+          'COUNTIFS(TicketData!E:E,">="&' + startDate + ',TicketData!E:E,"<"&' + endDate + ',TicketData!L:L,"' + t.replace(/"/g, '""') + '")'
+        );
+        const closedParts = teams.map(t =>
+          'COUNTIFS(TicketData!H:H,">="&' + startDate + ',TicketData!H:H,"<"&' + endDate + ',TicketData!L:L,"' + t.replace(/"/g, '""') + '")'
+        );
+        row.push('=' + createdParts.join('+'));
+        row.push('=' + closedParts.join('+'));
       }
     }
 

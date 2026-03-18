@@ -49,7 +49,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively). Skips if loading incomplete. |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
 | `Triggers.gs` | Time-driven trigger functions (no UI dialogs) |
-| `OptionalMetrics.gs` | Additional analytics sheets added via menu (20 optional KPI sheets) |
+| `OptionalMetrics.gs` | Additional analytics sheets added via menu (23 optional KPI sheets) |
 
 **Key Dependencies:**
 - `ApiClient.gs` → `Config.gs`
@@ -186,7 +186,10 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | Sheet | Question Answered | Key Metrics |
 |-------|-------------------|-------------|
 | BacklogAging ★ | "How old are our open tickets?" | Distribution by age bucket (0-15, 16-30, 31-60, 61-90, 90+) |
-| BacklogAgingByFA | "Where is backlog accumulating by department?" | Age buckets crossed with Functional Area columns |
+| BacklogAgingByFA | "Where is backlog accumulating by department?" | FAs as rows, age buckets as columns |
+| BacklogAgingByTeam | "Which teams have the oldest tickets?" | Teams as rows, age buckets as columns |
+| BacklogAgingByLocationType | "Do elementary schools have worse backlog than high schools?" | Location types as rows, age buckets as columns |
+| BacklogAgingByPriority | "Are high-priority tickets aging?" | Priorities as rows, age buckets as columns |
 | StaleTickets | "Which tickets have no recent activity?" | Open tickets with no update in X days |
 | ReopenRate | "Are we truly resolving issues?" | Reopened ticket detection and quality indicators |
 
