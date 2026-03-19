@@ -49,7 +49,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively). Skips if loading incomplete. |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
 | `Triggers.gs` | Time-driven trigger functions (no UI dialogs) |
-| `OptionalMetrics.gs` | Additional analytics sheets added via menu (23 optional KPI sheets) |
+| `OptionalMetrics.gs` | Additional analytics sheets added via menu (23 optional + 8 default KPI sheets) |
 
 **Key Dependencies:**
 - `ApiClient.gs` → `Config.gs`
@@ -161,6 +161,7 @@ Workflow for destructive operations:
 |-------|------|---------|
 | MonthlyVolume | Formula | Ticket creation/closure by month |
 | BacklogAging | Formula | Current open ticket distribution by age |
+| ResolutionAging | Formula | Days-to-resolve distribution for closed tickets |
 | TeamWorkload | Formula | Open tickets and aging by team |
 | SLACompliance | Formula | Monthly SLA breach rates and avg response/resolution times |
 | PerformanceTrends | Formula | "Are we getting better?" trending metrics |
@@ -186,6 +187,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | Sheet | Question Answered | Key Metrics |
 |-------|-------------------|-------------|
 | BacklogAging ★ | "How old are our open tickets?" | Distribution by age bucket (0-15, 16-30, 31-60, 61-90, 90+) |
+| ResolutionAging ★ | "How quickly are we resolving tickets?" | Closed ticket distribution by days-to-resolve (0-15, 16-30, 31-60, 61-90, 90+) |
 | BacklogAgingByFA | "Where is backlog accumulating by department?" | FAs as rows, age buckets as columns |
 | BacklogAgingByTeam | "Which teams have the oldest tickets?" | Teams as rows, age buckets as columns |
 | BacklogAgingByLocationType | "Do elementary schools have worse backlog than high schools?" | Location types as rows, age buckets as columns |

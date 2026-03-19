@@ -7,6 +7,7 @@
  * DEFAULT SHEETS (created by Setup Spreadsheet):
  * - MonthlyVolume: Ticket creation/closure by month
  * - BacklogAging: Current open ticket distribution by age
+ * - ResolutionAging: Days-to-resolve distribution for closed tickets
  * - TeamWorkload: Tickets by team with aging metrics
  * - SLACompliance: Monthly SLA breach rates
  * - PerformanceTrends: "Are we getting better?" trending
@@ -33,6 +34,7 @@
  * - BacklogAgingByTeam: Open ticket aging by Team
  * - BacklogAgingByLocationType: Open ticket aging by Location Type
  * - BacklogAgingByPriority: Open ticket aging by Priority
+ * - ResolutionAging: Days-to-resolve distribution for closed tickets
  * - MonthlyVolumeByFA: Monthly Created/Closed crossed with Functional Area
  */
 
@@ -124,6 +126,15 @@ function addBacklogAgingByPrioritySheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   setupBacklogAgingByPrioritySheet(ss);
   SpreadsheetApp.getUi().alert('Created', 'BacklogAgingByPriority sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Add Resolution Aging sheet (deletes and recreates if exists)
+ */
+function addResolutionAgingSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  setupResolutionAgingSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'ResolutionAging sheet has been created.\n\nShows days-to-resolve distribution for closed tickets.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 // --- SLA & Response ---

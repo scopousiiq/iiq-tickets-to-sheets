@@ -133,6 +133,7 @@ function setupSpreadsheet() {
   // Additional sheets can be added via iiQ Data > Add Analytics Sheet menu
   setupMonthlyVolumeSheet(ss); created.push('MonthlyVolume');
   setupBacklogAgingSheet(ss); created.push('BacklogAging');
+  setupResolutionAgingSheet(ss); created.push('ResolutionAging');
   setupTeamWorkloadSheet(ss); created.push('TeamWorkload');
   setupSLAComplianceSheet(ss); created.push('SLACompliance');
   setupPerformanceTrendsSheet(ss); created.push('PerformanceTrends');
@@ -915,6 +916,105 @@ function setupBacklogAgingSheet(ss) {
 
   // Add note
   sheet.getRange('D1').setNote('Shows the oldest ticket number in each age bucket (sorted by AgeDays descending)');
+
+  return true;
+}
+
+/**
+ * Setup ResolutionAging sheet — "Days to Resolve" distribution for closed tickets
+ * Shows how quickly tickets are being resolved, bucketed by age at closure.
+ * Uses AgeDays (column R) which stores days-from-creation-to-closure for closed tickets.
+ * Deletes existing sheet if present for clean slate.
+ */
+function setupResolutionAgingSheet(ss) {
+  deleteSheetIfExists(ss, 'ResolutionAging');
+  const sheet = ss.insertSheet('ResolutionAging');
+
+  const headers = ['Resolution Time', 'Count', '% of Total', 'Sample Ticket', 'Last Refreshed'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // Buckets match BacklogAging: 0-15, 16-30, 31-60, 61-90, 90+
+  const bucketData = [
+    // Row 2: 0-15 days
+    [
+      '0-15 days',
+      '=COUNTIFS(TicketData!I:I, "Closed", TicketData!R:R, ">=0", TicketData!R:R, "<=15")',
+      '=IF($B$7>0, B2/$B$7, 0)',
+      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Closed")*(TicketData!R2:R>=0)*(TicketData!R2:R<=15)),2,FALSE),1,1),"")',
+      '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
+    ],
+    // Row 3: 16-30 days
+    [
+      '16-30 days',
+      '=COUNTIFS(TicketData!I:I, "Closed", TicketData!R:R, ">=16", TicketData!R:R, "<=30")',
+      '=IF($B$7>0, B3/$B$7, 0)',
+      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Closed")*(TicketData!R2:R>=16)*(TicketData!R2:R<=30)),2,FALSE),1,1),"")',
+      '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
+    ],
+    // Row 4: 31-60 days
+    [
+      '31-60 days',
+      '=COUNTIFS(TicketData!I:I, "Closed", TicketData!R:R, ">=31", TicketData!R:R, "<=60")',
+      '=IF($B$7>0, B4/$B$7, 0)',
+      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Closed")*(TicketData!R2:R>=31)*(TicketData!R2:R<=60)),2,FALSE),1,1),"")',
+      '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
+    ],
+    // Row 5: 61-90 days
+    [
+      '61-90 days',
+      '=COUNTIFS(TicketData!I:I, "Closed", TicketData!R:R, ">=61", TicketData!R:R, "<=90")',
+      '=IF($B$7>0, B5/$B$7, 0)',
+      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Closed")*(TicketData!R2:R>=61)*(TicketData!R2:R<=90)),2,FALSE),1,1),"")',
+      '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
+    ],
+    // Row 6: 90+ days
+    [
+      '90+ days',
+      '=COUNTIFS(TicketData!I:I, "Closed", TicketData!R:R, ">90")',
+      '=IF($B$7>0, B6/$B$7, 0)',
+      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Closed")*(TicketData!R2:R>90)),2,FALSE),1,1),"")',
+      '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
+    ],
+    // Row 7: TOTAL
+    [
+      'TOTAL',
+      '=SUM(B2:B6)',
+      '100%',
+      '',
+      ''
+    ]
+  ];
+
+  sheet.getRange(2, 1, bucketData.length, 5).setValues(bucketData);
+
+  // Format header
+  sheet.getRange(1, 1, 1, headers.length)
+    .setFontWeight('bold')
+    .setBackground('#1565c0')
+    .setFontColor('white');
+
+  // Format TOTAL row
+  sheet.getRange(7, 1, 1, 5).setFontWeight('bold');
+
+  // Format percentage column
+  sheet.getRange('C:C').setNumberFormat('0.0%');
+
+  // Column widths
+  sheet.setColumnWidth(1, 120);  // Resolution Time
+  sheet.setColumnWidth(2, 80);   // Count
+  sheet.setColumnWidth(3, 90);   // % of Total
+  sheet.setColumnWidth(4, 120);  // Sample Ticket
+  sheet.setColumnWidth(5, 180);  // Last Refreshed
+
+  sheet.setFrozenRows(1);
+
+  // Add notes
+  sheet.getRange('A1').setNote(
+    'Days to Resolve Aging Report\n\n' +
+    'Shows how long it takes to resolve tickets, bucketed by days from creation to closure.\n' +
+    'Uses AgeDays (column R) for closed tickets only.\n\n' +
+    'To recreate: iiQ Data > Add Analytics Sheet > Backlog & Quality > Resolution Aging');
+  sheet.getRange('D1').setNote('Shows the slowest-resolved ticket number in each bucket (sorted by AgeDays descending)');
 
   return true;
 }

@@ -90,6 +90,7 @@ Go to Extensions > Apps Script > Triggers (clock icon) and add these triggers:
 |-------|---------------|
 | `MonthlyVolume` | Tickets created vs. closed by month, with closure rate |
 | `BacklogAging` | Open tickets grouped by age (0-15, 16-30, 31-60, 61-90, 90+ days) |
+| `ResolutionAging` | Closed tickets grouped by days-to-resolve (same buckets as BacklogAging) |
 | `TeamWorkload` | Open tickets, created/closed this month, and aging by team |
 | `SLACompliance` | Monthly SLA breach rates and average response/resolution times |
 | `PerformanceTrends` | "Are we getting better?" — key metrics over time |

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.1",
-  "released": "2026-03-18",
+  "version": "1.0.2",
+  "released": "2026-03-19",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
   "message": "Add Backlog Aging cross-tabs (by Team, Location Type, Priority, FA) and fix MonthlyVolumeByFA date comparison"
 }

@@ -18,7 +18,7 @@
  * - Weekly: "Full Reload" catches deletions and corrections
  *
  * Analytics Sheets:
- * - 7 default sheets created by Setup Spreadsheet
+ * - 8 default sheets created by Setup Spreadsheet
  * - 23 additional sheets available via "Add Analytics Sheet" menu
  * - All sheets can be deleted and recreated as needed
  * - Organized by category: Volume, Backlog, SLA, Team, Location, Issue
@@ -68,7 +68,8 @@ function onOpen() {
         .addItem('Backlog Aging by FA', 'addBacklogAgingByFASheet')
         .addItem('Backlog Aging by Team', 'addBacklogAgingByTeamSheet')
         .addItem('Backlog Aging by Location Type', 'addBacklogAgingByLocationTypeSheet')
-        .addItem('Backlog Aging by Priority', 'addBacklogAgingByPrioritySheet'))
+        .addItem('Backlog Aging by Priority', 'addBacklogAgingByPrioritySheet')
+        .addItem('Resolution Aging ★', 'addResolutionAgingSheet'))
       .addSubMenu(ui.createMenu('SLA & Response')
         .addItem('SLA Compliance ★', 'addSLAComplianceSheet')
         .addItem('At-Risk Response ★', 'addAtRiskResponseSheet')

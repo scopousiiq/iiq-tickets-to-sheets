@@ -42,6 +42,7 @@ Create a new Google Sheet. The **Setup Spreadsheet** function will create all re
 |------------|---------|
 | `MonthlyVolume` | Created/Closed/Open by month |
 | `BacklogAging` | Current open tickets by age bucket |
+| `ResolutionAging` | Closed tickets by days-to-resolve bucket |
 | `TeamWorkload` | Per-team metrics for FA rollup |
 | `SLACompliance` | SLA breaches, response & resolution times |
 | `PerformanceTrends` | "Are we getting better?" trending metrics |
@@ -194,6 +195,49 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
    - **E2:** `=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")` (drag down)
 
 > **How it works:** Uses TicketData column I (IsClosed) and R (AgeDays) to count open tickets by age bucket. Sample Ticket formula filters, sorts by age descending, and returns the oldest ticket number in each bucket.
+
+#### Sheet: `ResolutionAging`
+
+| A | B | C | D | E |
+|---|---|---|---|---|
+| **Resolution Time** | **Count** | **% of Total** | **Sample Ticket** | **Last Refreshed** |
+| 0-15 days | (formula) | (formula) | (formula) | (formula) |
+| 16-30 days | (formula) | (formula) | (formula) | (formula) |
+| 31-60 days | (formula) | (formula) | (formula) | (formula) |
+| 61-90 days | (formula) | (formula) | (formula) | (formula) |
+| 90+ days | (formula) | (formula) | (formula) | (formula) |
+| **TOTAL** | (formula) | 100% | | |
+
+> **Note:** This sheet uses formulas to calculate from TicketData - no script required. Uses the same age buckets as BacklogAging for consistency.
+
+**Setup Instructions:**
+
+1. **Row 1 (Headers):** Enter the column headers manually
+2. **Column A (Resolution Time):** Enter the bucket labels manually: `0-15 days`, `16-30 days`, `31-60 days`, `61-90 days`, `90+ days`, `TOTAL`
+
+3. **Column B (Count):** Enter these formulas for each row:
+   - **B2 (0-15 days):** `=COUNTIFS(TicketData!I:I, "Closed", TicketData!R:R, ">=0", TicketData!R:R, "<=15")`
+   - **B3 (16-30 days):** `=COUNTIFS(TicketData!I:I, "Closed", TicketData!R:R, ">=16", TicketData!R:R, "<=30")`
+   - **B4 (31-60 days):** `=COUNTIFS(TicketData!I:I, "Closed", TicketData!R:R, ">=31", TicketData!R:R, "<=60")`
+   - **B5 (61-90 days):** `=COUNTIFS(TicketData!I:I, "Closed", TicketData!R:R, ">=61", TicketData!R:R, "<=90")`
+   - **B6 (90+ days):** `=COUNTIFS(TicketData!I:I, "Closed", TicketData!R:R, ">90")`
+   - **B7 (TOTAL):** `=SUM(B2:B6)`
+
+4. **Column C (% of Total):** Enter for each row (format as percentage):
+   - **C2-C6:** `=IF($B$7>0, B2/$B$7, 0)` (drag down for each bucket row)
+   - **C7:** Enter `100%` or `=1`
+
+5. **Column D (Sample Ticket):** Slowest-resolved ticket in each bucket:
+   - **D2:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Closed")*(TicketData!R2:R>=0)*(TicketData!R2:R<=15)),2,FALSE),1,1),"")`
+   - **D3:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Closed")*(TicketData!R2:R>=16)*(TicketData!R2:R<=30)),2,FALSE),1,1),"")`
+   - **D4:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Closed")*(TicketData!R2:R>=31)*(TicketData!R2:R<=60)),2,FALSE),1,1),"")`
+   - **D5:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Closed")*(TicketData!R2:R>=61)*(TicketData!R2:R<=90)),2,FALSE),1,1),"")`
+   - **D6:** `=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Closed")*(TicketData!R2:R>90)),2,FALSE),1,1),"")`
+
+6. **Column E (Last Refreshed):**
+   - **E2:** `=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")` (drag down)
+
+> **How it works:** Uses TicketData column I (IsClosed="Closed") and R (AgeDays) to count resolved tickets by how long they took to close. Sample Ticket formula filters, sorts by AgeDays descending, and returns the slowest-resolved ticket number in each bucket. This is the companion to BacklogAging — one shows how old open tickets are, the other shows how long resolved tickets took.
 
 #### Sheet: `Teams`
 
@@ -586,6 +630,7 @@ iiQ Data > Add Analytics Sheet >
 │   └── Temporal Patterns
 ├── Backlog & Quality
 │   ├── Backlog Aging ★
+│   ├── Resolution Aging ★
 │   ├── Stale Tickets
 │   └── Reopen Rate
 ├── SLA & Response
@@ -748,7 +793,7 @@ The Apps Script source code is in the `scripts/` folder of this repository.
 | [`Menu.gs`](scripts/Menu.gs) | iiQ Data menu for data loader and analytics functions |
 | [`Triggers.gs`](scripts/Triggers.gs) | Time-driven trigger functions for automated updates |
 | [`Setup.gs`](scripts/Setup.gs) | Spreadsheet setup and default sheet creation |
-| [`OptionalMetrics.gs`](scripts/OptionalMetrics.gs) | Optional analytics sheets (30 total, added via menu) |
+| [`OptionalMetrics.gs`](scripts/OptionalMetrics.gs) | Optional analytics sheets (31 total, added via menu) |
 
 > **Note:** Analytics sheets use formulas (see Part 1). Scripts handle data loading (TicketData with SLA, Teams), daily snapshots (DailySnapshot), and orchestration (Menu, Triggers). OptionalMetrics.gs provides menu functions to add/recreate any analytics sheet.
 
@@ -773,16 +818,17 @@ Triggers.gs (Automated Updates)
     └── Data loader and analytics scripts above
 
 Setup.gs (Spreadsheet Setup)
-    └── Creates data sheets and 7 default analytics sheets
+    └── Creates data sheets and 8 default analytics sheets
 
 OptionalMetrics.gs (Optional Analytics)
-    └── Creates any of 30 analytics sheets via menu
+    └── Creates any of 31 analytics sheets via menu
     └── Uses setup functions from Setup.gs for default sheets
 
-Formula-based analytics sheets (30 total, no scripts needed):
+Formula-based analytics sheets (31 total, no scripts needed):
     DEFAULT (created by Setup):
     ├── MonthlyVolume           → reads from TicketData
     ├── BacklogAging            → reads from TicketData and Config
+    ├── ResolutionAging         → reads from TicketData and Config
     ├── TeamWorkload            → reads from TicketData and Teams
     ├── SLACompliance           → reads from TicketData (SLA columns AD-AJ)
     ├── PerformanceTrends       → reads from TicketData, SLACompliance, DailySnapshot
@@ -825,7 +871,7 @@ Formula-based analytics sheets (30 total, no scripts needed):
 2. **Recommended:** Run **iiQ Data > Setup > Setup Spreadsheet** to auto-create all required sheets
    - Prompts for school year (e.g., `2023-2024` for historical data, or leave blank for the current year based on July-June cycle)
    - Creates data sheets: Config, TicketData, Teams, DailySnapshot, Logs
-   - Creates 7 default analytics sheets with formulas configured for the specified school year's month range
+   - Creates 8 default analytics sheets with formulas configured for the specified school year's month range
 3. **Or create manually:** Set up each sheet with headers as shown in Part 1
 4. **Add more analytics later:** Use **iiQ Data > Add Analytics Sheet** to add any of the 23 optional analytics sheets
 
@@ -980,6 +1026,19 @@ In Apps Script, go to **Triggers** (clock icon) and add these triggers:
 | **TOTAL** | **312** | **100%** | | |
 
 > **Formula-Based:** This sheet calculates automatically from TicketData using COUNTIFS on the AgeDays column. Updates when TicketData is refreshed.
+
+### ResolutionAging Sheet (Formula-Calculated)
+
+| Resolution Time | Count | % of Total | Sample Ticket | Last Refreshed |
+|-----------------|-------|------------|---------------|----------------|
+| 0-15 days | 3,842 | 72.1% | | 2026-01-21T14:30:00Z |
+| 16-30 days | 876 | 16.4% | TKT-45201 | 2026-01-21T14:30:00Z |
+| 31-60 days | 412 | 7.7% | TKT-44102 | 2026-01-21T14:30:00Z |
+| 61-90 days | 134 | 2.5% | TKT-43567 | 2026-01-21T14:30:00Z |
+| 90+ days | 67 | 1.3% | TKT-41203 | 2026-01-21T14:30:00Z |
+| **TOTAL** | **5,331** | **100%** | | |
+
+> **Formula-Based:** This sheet calculates automatically from TicketData using COUNTIFS on the AgeDays column for closed tickets. Shows the distribution of resolution speed — the dashboard leaders want for at-a-glance performance understanding.
 
 ### TeamWorkload Sheet (Formula-Calculated, Sortable)
 
@@ -1225,6 +1284,7 @@ Once your data is flowing, here are some ideas for getting more value:
 | Net Backlog Change | MonthlyVolume | Default |
 | Closure Rate | MonthlyVolume, PerformanceTrends | Default |
 | Backlog Aging (0-15, 16-30, 31-60, 61-90, 90+) | BacklogAging | Default |
+| Resolution Aging (days-to-resolve distribution) | ResolutionAging | Default |
 | SLA Breaches and Breach Rate | SLACompliance, PerformanceTrends | Default |
 | Avg Response/Resolution Time | SLACompliance, PerformanceTrends | Default |
 | Team-level Metrics | TeamWorkload | Default |
@@ -1261,7 +1321,7 @@ Once your data is flowing, here are some ideas for getting more value:
 | Backlog Aging by Priority | BacklogAgingByPriority | Backlog & Quality |
 | Monthly Volume by Functional Area | MonthlyVolumeByFA | Volume & Trends |
 
-> **30 Total Analytics Sheets:** 7 default + 23 optional. All can be deleted and recreated via **iiQ Data > Add Analytics Sheet** menu.
+> **31 Total Analytics Sheets:** 8 default + 23 optional. All can be deleted and recreated via **iiQ Data > Add Analytics Sheet** menu.
 
 ---
 
