@@ -1,6 +1,6 @@
 {
-  "version": "1.0.2",
-  "released": "2026-03-19",
+  "version": "1.1.0",
+  "released": "2026-03-20",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "Add Backlog Aging cross-tabs (by Team, Location Type, Priority, FA) and fix MonthlyVolumeByFA date comparison"
+  "message": "Add AssignedToUser (technician) columns, fix TechnicianPerformance to use assigned tech instead of Owner, fix StaleTickets/BacklogAging/ReopenRate column references"
 }

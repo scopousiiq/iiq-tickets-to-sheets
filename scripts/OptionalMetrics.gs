@@ -715,20 +715,20 @@ function setupTechnicianPerformanceSheet(ss) {
   const headers = ['Technician', 'Team', 'Open', 'Created (MTD)', 'Closed (MTD)', 'Aged 30+', 'Avg Resolution (days)', 'Breach Rate', 'Last Refreshed', 'Sort Col#', 'Desc?'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  // Main formula - aggregates by OwnerName (column Q), with dynamic sorting
+  // Main formula - aggregates by AssignedToUserName (column AO = assigned technician), with dynamic sorting
   const mainFormula =
     '=LET(' +
-    'techs, UNIQUE(FILTER(TicketData!Q2:Q, TicketData!Q2:Q<>"", TicketData!Q2:Q<>"OwnerName")),' +
+    'techs, UNIQUE(FILTER(TicketData!AO2:AO, TicketData!AO2:AO<>"", TicketData!AO2:AO<>"AssignedToUserName")),' +
     'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
     'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
     'col_a, techs,' +
-    'col_b, BYROW(techs, LAMBDA(t, IFERROR(INDEX(TicketData!L:L, MATCH(t, TicketData!Q:Q, 0)), ""))),' +
-    'col_c, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Open"))),' +
-    'col_d, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
-    'col_e, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
-    'col_f, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Open", TicketData!R:R, ">=30"))),' +
-    'col_g, BYROW(techs, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!Q:Q, t, TicketData!I:I, "Closed"), "N/A"))),' +
-    'col_h, BYROW(techs, LAMBDA(t, LET(total, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Closed"), breached, COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Closed", TicketData!AF:AF, 1)+COUNTIFS(TicketData!Q:Q, t, TicketData!I:I, "Closed", TicketData!AI:AI, 1), IF(total>0, breached/total, "N/A")))),' +
+    'col_b, BYROW(techs, LAMBDA(t, IFERROR(INDEX(TicketData!L:L, MATCH(t, TicketData!AO:AO, 0)), ""))),' +
+    'col_c, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Open"))),' +
+    'col_d, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
+    'col_e, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
+    'col_f, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Open", TicketData!R:R, ">=30"))),' +
+    'col_g, BYROW(techs, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AO:AO, t, TicketData!I:I, "Closed"), "N/A"))),' +
+    'col_h, BYROW(techs, LAMBDA(t, LET(total, COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Closed"), breached, COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Closed", TicketData!AF:AF, 1)+COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Closed", TicketData!AI:AI, 1), IF(total>0, breached/total, "N/A")))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h),' +
     'SORT(data, $J$2, $K$2))';
 
@@ -1010,7 +1010,7 @@ function setupReopenRateSheet(ss) {
   // Formula to list reopened tickets
   const listFormula =
     '=IFERROR(SORT(FILTER({TicketData!B2:B, LEFT(TicketData!C2:C,60), TicketData!L2:L, ' +
-    'LEFT(TicketData!G2:G,10), TicketData!Q2:Q, TicketData!I2:I}, ' +
+    'LEFT(TicketData!G2:G,10), TicketData!R2:R, TicketData!I2:I}, ' +
     '(TicketData!I2:I="Open")*(TicketData!H2:H<>"")), 5, FALSE), "No reopened tickets found")';
 
   sheet.getRange('A15').setValue(listFormula);

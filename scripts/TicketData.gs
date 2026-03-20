@@ -19,6 +19,7 @@
  * - Columns 30-36 (AD-AJ): ResponseThreshold, ResponseActual, ResponseBreach,
  *   ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning
  * - Columns 37-39 (AK-AM): AssetTag, ModelName, SerialNumber
+ * - Columns 40-41 (AN-AO): AssignedToUserId, AssignedToUserName (technician/agent)
  */
 
 // Safe runtime limit (5.5 minutes to allow for cleanup before 6 min Apps Script limit)
@@ -131,7 +132,7 @@ function refreshTicketDataFull() {
     // Clear all data (keep header row)
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
-      sheet.getRange(2, 1, lastRow - 1, 39).clear();
+      sheet.getRange(2, 1, lastRow - 1, 41).clear();
     }
 
     // Reset school year progress
@@ -455,7 +456,7 @@ function processSchoolYearBatch(sheet, config) {
   const now = new Date();
   const rows = response.Items.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 39).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, 41).setValues(rows);
 
   // Update progress
   updateConfigValue('TICKET_LAST_PAGE', nextPage);
@@ -543,7 +544,7 @@ function processCurrentSchoolYearBatch(sheet, config) {
   const now = new Date();
   const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 39).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, 41).setValues(rows);
 
   // Update last fetch timestamp
   const lastTicket = tickets[tickets.length - 1];
@@ -613,7 +614,7 @@ function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages) {
   const now = new Date();
   const rows = response.Items.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 39).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, 41).setValues(rows);
 
   // Check if complete
   let lastPageIndex = newTotalPages;
@@ -710,7 +711,7 @@ function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch) {
   const now = new Date();
   const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 39).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, 41).setValues(rows);
 
   // Get last fetch timestamp from written tickets
   const lastTicket = tickets[tickets.length - 1];
@@ -726,7 +727,7 @@ function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch) {
 
 /**
  * Extract a row of data from a ticket object
- * Returns 39 columns for comprehensive analytics (including SLA metrics and device/asset info)
+ * Returns 41 columns for comprehensive analytics (including SLA metrics, device/asset, and assigned technician)
  *
  * @param {Object} ticket - Ticket object from API
  * @param {Date} now - Current timestamp for age calculation
@@ -817,7 +818,10 @@ function extractTicketRow(ticket, now, year, slaMap) {
     // AK-AM: Device/Asset (from first asset if available)
     (ticket.Assets && ticket.Assets.length > 0) ? (ticket.Assets[0].AssetTag || '') : '',
     (ticket.Assets && ticket.Assets.length > 0) ? (ticket.Assets[0].ModelName || '') : '',
-    (ticket.Assets && ticket.Assets.length > 0) ? (ticket.Assets[0].SerialNumber || '') : ''
+    (ticket.Assets && ticket.Assets.length > 0) ? (ticket.Assets[0].SerialNumber || '') : '',
+    // AN-AO: Assigned Technician (API "AssignedToUser" = agent working the ticket)
+    ticket.AssignedToUser ? (ticket.AssignedToUser.UserId || '') : '',
+    ticket.AssignedToUser ? (ticket.AssignedToUser.Name || '') : ''
   ];
 }
 
@@ -1682,7 +1686,7 @@ function processTicketBatch(sheet, tickets, ticketIdToRow, now, options) {
 
     if (existingRow) {
       // Update existing row
-      sheet.getRange(existingRow, 1, 1, 39).setValues([rowData]);
+      sheet.getRange(existingRow, 1, 1, 41).setValues([rowData]);
       updated++;
     } else if (updateOnly) {
       // Skip - don't append tickets not already in sheet (e.g., from different school year)
@@ -1697,7 +1701,7 @@ function processTicketBatch(sheet, tickets, ticketIdToRow, now, options) {
   // Batch append new rows
   if (rowsToAppend.length > 0) {
     const lastRow = sheet.getLastRow();
-    sheet.getRange(lastRow + 1, 1, rowsToAppend.length, 39).setValues(rowsToAppend);
+    sheet.getRange(lastRow + 1, 1, rowsToAppend.length, 41).setValues(rowsToAppend);
 
     // Update the map with new rows (for subsequent batches)
     for (let i = 0; i < rowsToAppend.length; i++) {

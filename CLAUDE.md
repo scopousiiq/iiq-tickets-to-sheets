@@ -16,7 +16,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 
 **Data Flow:**
 1. Scripts fetch data from iiQ API using Bearer token authentication
-2. Raw data lands in `TicketData` sheet (39 columns including consolidated SLA metrics and device/asset info)
+2. Raw data lands in `TicketData` sheet (41 columns including consolidated SLA metrics, device/asset, and assigned technician)
 3. Analytics sheets (`MonthlyVolume`, `BacklogAging`, `TeamWorkload`, etc.) calculate via Google Sheets formulas - no scripts needed
 4. Power BI connects to Google Sheets for dashboards
 
@@ -44,7 +44,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `Setup.gs` | Initial spreadsheet setup - creates all sheets, headers, and formulas |
 | `Config.gs` | Reads settings from Config sheet, school year date calculation, logging utilities, concurrency control (LockService helpers) |
 | `ApiClient.gs` | HTTP client with retry/exponential backoff (429, 503, network errors) |
-| `TicketData.gs` | Bulk ticket loader - 39 columns (28 ticket + 7 SLA + 3 device/asset), fetches SLA per-batch, school year pagination, 5.5min timeout with resume |
+| `TicketData.gs` | Bulk ticket loader - 41 columns (28 ticket + 7 SLA + 3 device/asset + 2 assigned technician), fetches SLA per-batch, school year pagination, 5.5min timeout with resume |
 | `Teams.gs` | Team directory loader, preserves Functional Area mappings |
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively). Skips if loading incomplete. |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
@@ -151,7 +151,7 @@ Workflow for destructive operations:
 |-------|------|---------|
 | Instructions | Static | Setup and usage guide |
 | Config | Manual | API settings, progress tracking |
-| TicketData | Data | Main ticket data (39 columns with SLA + device) |
+| TicketData | Data | Main ticket data (41 columns with SLA + device + assigned technician) |
 | Teams | Data | Team directory with Functional Area mapping |
 | DailySnapshot | Data | Daily backlog metrics for trending |
 | Logs | Data | Operation logs |
@@ -233,7 +233,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 |-------|-------------------|-------------|
 | DeviceReliability | "Which device models generate the most tickets?" | Total/Open/Closed by model, avg resolution, breach rate |
 
-## TicketData Column Layout (39 columns)
+## TicketData Column Layout (41 columns)
 
 | Columns | Description |
 |---------|-------------|
@@ -242,7 +242,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | J | Status (WorkflowStep) |
 | K-L | Team: TeamId, TeamName |
 | M-O | Location: LocationId, LocationName, LocationType |
-| P-Q | Owner: OwnerId, OwnerName |
+| P-Q | Owner: OwnerId, OwnerName (staff member responsible for tracking the ticket) |
 | R | AgeDays |
 | S-U | Priority: Priority, IsPastDue ("Overdue"/"On Track"), DueDate |
 | V-W | SLA (basic): SlaId, SlaName |
@@ -250,6 +250,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | AB-AC | Requester: RequesterId, RequesterName |
 | AD-AJ | SLA Metrics: ResponseThreshold, ResponseActual, ResponseBreach (1/0), ResolutionThreshold, ResolutionActual, ResolutionBreach (1/0), IsRunning (1/0) |
 | AK-AM | Device/Asset: AssetTag, ModelName, SerialNumber (from first asset, blank if no asset) |
+| AN-AO | Assigned Technician: AssignedToUserId, AssignedToUserName (agent assigned to work the ticket, nullable) |
 
 ### Analytics Formula Column Reference
 
@@ -261,6 +262,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | Location | M (LocationId) | **N (LocationName)** |
 | LocationType | - | **O (LocationType)** |
 | Owner | P (OwnerId) | **Q (OwnerName)** |
+| Technician | AN (AssignedToUserId) | **AO (AssignedToUserName)** |
 | Priority | - | **S (Priority)** |
 | IssueCategory | X (IssueCategoryId) | **Y (IssueCategoryName)** |
 | IssueType | Z (IssueTypeId) | **AA (IssueTypeName)** |

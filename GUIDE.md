@@ -31,7 +31,7 @@ Create a new Google Sheet. The **Setup Spreadsheet** function will create all re
 | Sheet Name | Purpose |
 |------------|---------|
 | `Config` | API credentials and settings |
-| `TicketData` | Raw ticket dump with SLA metrics and device info (39 columns) |
+| `TicketData` | Raw ticket dump with SLA metrics, device info, and assigned technician (41 columns) |
 | `Teams` | Team directory with FA mapping |
 | `DailySnapshot` | Daily backlog metrics for trending |
 | `Logs` | API call logs and errors |
@@ -602,12 +602,12 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
 1. **Row 1 (Headers):** Enter the column headers manually
 2. **Cell A2:** Single formula that returns all stale tickets, sorted by days since update
    ```
-   =IFERROR(SORT(FILTER({TicketData!B2:B, LEFT(TicketData!C2:C,80), TicketData!L2:L, INT(TODAY()-DATEVALUE(LEFT(TicketData!F2:F,10))), LEFT(TicketData!F2:F,10), LEFT(TicketData!E2:E,10), TicketData!I2:I}, (TicketData!I2:I="Open")*(INT(TODAY()-DATEVALUE(LEFT(TicketData!G2:G,10)))>=IFERROR(VLOOKUP("STALE_DAYS",Config!A:B,2,FALSE),7))), 4, FALSE), "No stale tickets found")
+   =IFERROR(SORT(FILTER({TicketData!B2:B, LEFT(TicketData!C2:C,80), TicketData!L2:L, INT(TODAY()-DATEVALUE(LEFT(TicketData!G2:G,10))), LEFT(TicketData!G2:G,10), LEFT(TicketData!E2:E,10), TicketData!I2:I}, (TicketData!I2:I="Open")*(INT(TODAY()-DATEVALUE(LEFT(TicketData!G2:G,10)))>=IFERROR(VLOOKUP("STALE_DAYS",Config!A:B,2,FALSE),7))), 4, FALSE), "No stale tickets found")
    ```
 
 > **How it works:**
 > - Filters TicketData where IsClosed="Open" AND days since ModifiedDate (col G) >= STALE_DAYS from Config
-> - Returns 7 columns: TicketNumber, Subject (truncated), TeamName (col L), DaysSinceUpdate, LastUpdate (StartedDate), CreatedDate, Status
+> - Returns 7 columns: TicketNumber, Subject (truncated), TeamName (col L), DaysSinceUpdate, LastUpdate (ModifiedDate), CreatedDate, Status
 > - Sorts by DaysSinceUpdate (column 4) in descending order (oldest first)
 > - Uses `LEFT(...,10)` to extract date portion from ISO timestamps
 >
@@ -717,8 +717,8 @@ iiQ Data > Add Analytics Sheet >
 | M | **LocationId** | Location UUID |
 | N | **LocationName** | Location name |
 | O | **LocationType** | Location type (School, Department, etc.) |
-| P | **OwnerId** | Ticket owner UUID |
-| Q | **OwnerName** | Ticket owner name |
+| P | **OwnerId** | Ticket owner UUID (staff member responsible for tracking) |
+| Q | **OwnerName** | Ticket owner name (staff member responsible for tracking) |
 | R | **AgeDays** | Days open (or days between created and closed) |
 | S | **Priority** | Priority weight (integer) |
 | T | **IsPastDue** | "Overdue" or "On Track" |
@@ -741,8 +741,10 @@ iiQ Data > Add Analytics Sheet >
 | AK | **AssetTag** | Asset tag of the first attached device (blank if no asset) |
 | AL | **ModelName** | Model name of the first attached device (blank if no asset) |
 | AM | **SerialNumber** | Serial number of the first attached device (blank if no asset) |
+| AN | **AssignedToUserId** | Assigned technician UUID (agent working the ticket, blank if unassigned) |
+| AO | **AssignedToUserName** | Assigned technician name (agent working the ticket, blank if unassigned) |
 
-> **Note:** Raw ticket data dump with consolidated SLA metrics and device info for Power BI analysis. Data is loaded by year with automatic resume capability. 39 columns total.
+> **Note:** Raw ticket data dump with consolidated SLA metrics, device info, and assigned technician for Power BI analysis. Data is loaded by year with automatic resume capability. 41 columns total.
 >
 > **Loading Strategy:**
 > - **Historical school years**: Standard pagination with page tracking. Once complete and all tickets closed, triggers are auto-removed.
@@ -788,7 +790,7 @@ The Apps Script source code is in the `scripts/` folder of this repository.
 | [`Config.gs`](scripts/Config.gs) | Configuration reading from Config sheet, logging utilities |
 | [`ApiClient.gs`](scripts/ApiClient.gs) | HTTP requests with retry/exponential backoff for rate limiting |
 | [`Teams.gs`](scripts/Teams.gs) | Team data loading from API |
-| [`TicketData.gs`](scripts/TicketData.gs) | Bulk ticket data loader with consolidated SLA and device info (39 columns, year-based pagination) |
+| [`TicketData.gs`](scripts/TicketData.gs) | Bulk ticket data loader with consolidated SLA, device info, and assigned technician (41 columns, year-based pagination) |
 | [`DailySnapshot.gs`](scripts/DailySnapshot.gs) | Daily backlog metrics capture for trending |
 | [`Menu.gs`](scripts/Menu.gs) | iiQ Data menu for data loader and analytics functions |
 | [`Triggers.gs`](scripts/Triggers.gs) | Time-driven trigger functions for automated updates |
@@ -1161,7 +1163,7 @@ These two sheets filter tickets approaching their respective SLA thresholds. Sam
 
 ### TicketData Sheet (After Refresh)
 
-The TicketData sheet includes 39 columns (A-AM) with consolidated SLA metrics and device info. Sample rows:
+The TicketData sheet includes 41 columns (A-AO) with consolidated SLA metrics, device info, and assigned technician. Sample rows:
 
 | Column | Row 1 | Row 2 | Row 3 |
 |--------|-------|-------|-------|
@@ -1204,8 +1206,10 @@ The TicketData sheet includes 39 columns (A-AM) with consolidated SLA metrics an
 | AK: AssetTag | AT-12345 | AT-67890 | |
 | AL: ModelName | HP Chromebook 14 G7 | Dell Latitude 5520 | |
 | AM: SerialNumber | 5CD1234ABC | FXYZ9876543 | |
+| AN: AssignedToUserId | tech-111... | tech-222... | tech-333... |
+| AO: AssignedToUserName | Mike Tech | Sarah Admin | Bob Support |
 
-> **Raw Data Export:** This sheet contains all 39 columns including consolidated SLA metrics and device info for custom analysis, pivot tables, or Power BI integration.
+> **Raw Data Export:** This sheet contains all 41 columns including consolidated SLA metrics, device info, and assigned technician for custom analysis, pivot tables, or Power BI integration.
 >
 > **SLA Columns (AD-AJ):**
 > - Threshold values are in minutes (240 = 4 hours)
@@ -1219,6 +1223,11 @@ The TicketData sheet includes 39 columns (A-AM) with consolidated SLA metrics an
 > - AssetTag: District-assigned tag (e.g., "AT-12345")
 > - ModelName: Device model (e.g., "HP Chromebook 14 G7")
 > - SerialNumber: Manufacturer serial number
+>
+> **Assigned Technician Columns (AN-AO):**
+> - The agent/technician assigned to work the ticket (`AssignedToUser`)
+> - Blank if no technician is assigned yet
+> - Distinct from Owner (P-Q), which is the staff member responsible for tracking the ticket
 >
 > **Formula-Based Analytics:** With this data, build metrics using COUNTIFS, SUMIFS, and pivot tables without additional API calls:
 > - Volume: `=COUNTIFS(E:E, ">=2026-01-01", E:E, "<2026-02-01")` for monthly created

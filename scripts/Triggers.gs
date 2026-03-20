@@ -283,7 +283,7 @@ function triggerWeeklyFullRefresh() {
       if (ticketSheet) {
         const lastRow = ticketSheet.getLastRow();
         if (lastRow > 1) {
-          ticketSheet.getRange(2, 1, lastRow - 1, 39).clear();
+          ticketSheet.getRange(2, 1, lastRow - 1, 41).clear();
           logOperation('Trigger', 'WEEKLY_RESET', `Cleared ${lastRow - 1} ticket rows`);
         }
       }
@@ -591,7 +591,7 @@ function runNewTicketsCheck(sheet, config) {
   tickets.sort((a, b) => new Date(a.CreatedDate) - new Date(b.CreatedDate));
   const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 39).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, 41).setValues(rows);
 
   // Update last fetch timestamp
   const lastTicket = tickets[tickets.length - 1];
@@ -612,11 +612,11 @@ function filterAndRewriteTicketData(sheet, historicalCutoff) {
 }
 
 /**
- * Create the TicketData sheet with headers (39 columns including SLA metrics and device/asset)
+ * Create the TicketData sheet with headers (41 columns including SLA metrics, device/asset, and assigned technician)
  */
 function createTicketSheet(ss) {
   const sheet = ss.insertSheet('TicketData');
-  sheet.getRange(1, 1, 1, 39).setValues([[
+  sheet.getRange(1, 1, 1, 41).setValues([[
     'TicketId', 'TicketNumber', 'Subject', 'Year',
     'CreatedDate', 'StartedDate', 'ModifiedDate', 'ClosedDate', 'IsClosed',
     'Status', 'TeamId', 'TeamName', 'LocationId', 'LocationName', 'LocationType',
@@ -625,7 +625,8 @@ function createTicketSheet(ss) {
     'IssueTypeId', 'IssueTypeName', 'RequesterId', 'RequesterName',
     'ResponseThreshold', 'ResponseActual', 'ResponseBreach',
     'ResolutionThreshold', 'ResolutionActual', 'ResolutionBreach', 'IsRunning',
-    'AssetTag', 'ModelName', 'SerialNumber'
+    'AssetTag', 'ModelName', 'SerialNumber',
+    'AssignedToUserId', 'AssignedToUserName'
   ]]);
   sheet.setFrozenRows(1);
   return sheet;

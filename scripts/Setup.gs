@@ -7,7 +7,7 @@
  * Data Sheets (always created):
  * - Instructions: Setup and usage guide
  * - Config: API settings and progress tracking
- * - TicketData: Main data (39 columns including SLA metrics and device/asset)
+ * - TicketData: Main data (41 columns including SLA metrics, device/asset, and assigned technician)
  * - Teams: Team directory with Functional Area mapping
  * - DailySnapshot: Daily backlog metrics for trending
  * - Logs: Operation logs
@@ -65,7 +65,7 @@ function setupSpreadsheet() {
     'DATA SHEETS:\n' +
     '- Instructions (setup guide)\n' +
     '- Config (API settings) - CREDENTIALS WILL BE LOST!\n' +
-    '- TicketData (39 columns) - ALL DATA WILL BE LOST!\n' +
+    '- TicketData (41 columns) - ALL DATA WILL BE LOST!\n' +
     '- Teams (directory) - ALL DATA WILL BE LOST!\n' +
     '- DailySnapshot (trending) - ALL DATA WILL BE LOST!\n' +
     '- Logs (operations)\n\n' +
@@ -254,7 +254,7 @@ function setupInstructionsSheet(ss) {
     [''],
     ['DATA SHEETS (populated by scripts):'],
     [''],
-    ['• TicketData (39 columns)'],
+    ['• TicketData (41 columns)'],
     ['  Main ticket data including SLA metrics and device info. Columns include:'],
     ['  - Ticket info: ID, Number, Subject, School Year, Status, Priority'],
     ['  - Dates: Created, Started, Modified, Closed, Due'],
@@ -543,7 +543,7 @@ function setupConfigSheet(ss, schoolYear) {
 }
 
 /**
- * Setup TicketData sheet with 39-column header
+ * Setup TicketData sheet with 41-column header
  * Deletes existing sheet if present for clean slate
  */
 function setupTicketDataSheet(ss) {
@@ -559,7 +559,8 @@ function setupTicketDataSheet(ss) {
     'IssueTypeId', 'IssueTypeName', 'RequesterId', 'RequesterName',
     'ResponseThreshold', 'ResponseActual', 'ResponseBreach',
     'ResolutionThreshold', 'ResolutionActual', 'ResolutionBreach', 'IsRunning',
-    'AssetTag', 'ModelName', 'SerialNumber'
+    'AssetTag', 'ModelName', 'SerialNumber',
+    'AssignedToUserId', 'AssignedToUserName'
   ];
 
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -846,7 +847,7 @@ function setupBacklogAgingSheet(ss) {
       '0-15 days',
       '=COUNTIFS(TicketData!I:I, "Open", TicketData!R:R, ">=0", TicketData!R:R, "<=15")',
       '=IF($B$7>0, B2/$B$7, 0)',
-      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!Q2:Q},(TicketData!I2:I="Open")*(TicketData!Q2:Q>=0)*(TicketData!Q2:Q<=15)),2,FALSE),1,1),"")',
+      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Open")*(TicketData!R2:R>=0)*(TicketData!R2:R<=15)),2,FALSE),1,1),"")',
       '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
     ],
     // Row 3: 16-30 days
@@ -854,7 +855,7 @@ function setupBacklogAgingSheet(ss) {
       '16-30 days',
       '=COUNTIFS(TicketData!I:I, "Open", TicketData!R:R, ">=16", TicketData!R:R, "<=30")',
       '=IF($B$7>0, B3/$B$7, 0)',
-      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!Q2:Q},(TicketData!I2:I="Open")*(TicketData!Q2:Q>=16)*(TicketData!Q2:Q<=30)),2,FALSE),1,1),"")',
+      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Open")*(TicketData!R2:R>=16)*(TicketData!R2:R<=30)),2,FALSE),1,1),"")',
       '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
     ],
     // Row 4: 31-60 days
@@ -862,7 +863,7 @@ function setupBacklogAgingSheet(ss) {
       '31-60 days',
       '=COUNTIFS(TicketData!I:I, "Open", TicketData!R:R, ">=31", TicketData!R:R, "<=60")',
       '=IF($B$7>0, B4/$B$7, 0)',
-      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!Q2:Q},(TicketData!I2:I="Open")*(TicketData!Q2:Q>=31)*(TicketData!Q2:Q<=60)),2,FALSE),1,1),"")',
+      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Open")*(TicketData!R2:R>=31)*(TicketData!R2:R<=60)),2,FALSE),1,1),"")',
       '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
     ],
     // Row 5: 61-90 days
@@ -870,7 +871,7 @@ function setupBacklogAgingSheet(ss) {
       '61-90 days',
       '=COUNTIFS(TicketData!I:I, "Open", TicketData!R:R, ">=61", TicketData!R:R, "<=90")',
       '=IF($B$7>0, B5/$B$7, 0)',
-      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!Q2:Q},(TicketData!I2:I="Open")*(TicketData!Q2:Q>=61)*(TicketData!Q2:Q<=90)),2,FALSE),1,1),"")',
+      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Open")*(TicketData!R2:R>=61)*(TicketData!R2:R<=90)),2,FALSE),1,1),"")',
       '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
     ],
     // Row 6: 90+ days
@@ -878,7 +879,7 @@ function setupBacklogAgingSheet(ss) {
       '90+ days',
       '=COUNTIFS(TicketData!I:I, "Open", TicketData!R:R, ">90")',
       '=IF($B$7>0, B6/$B$7, 0)',
-      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!Q2:Q},(TicketData!I2:I="Open")*(TicketData!Q2:Q>90)),2,FALSE),1,1),"")',
+      '=IFERROR(INDEX(SORT(FILTER({TicketData!B2:B,TicketData!R2:R},(TicketData!I2:I="Open")*(TicketData!R2:R>90)),2,FALSE),1,1),"")',
       '=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")'
     ],
     // Row 7: TOTAL
@@ -1468,7 +1469,7 @@ function setupStaleTicketsSheet(ss) {
   // Uses STALE_DAYS from Config (default 7)
   const staleFormula =
     '=IFERROR(SORT(FILTER({TicketData!B2:B, LEFT(TicketData!C2:C,80), TicketData!L2:L, ' +
-    'INT(TODAY()-DATEVALUE(LEFT(TicketData!F2:F,10))), LEFT(TicketData!F2:F,10), ' +
+    'INT(TODAY()-DATEVALUE(LEFT(TicketData!G2:G,10))), LEFT(TicketData!G2:G,10), ' +
     'LEFT(TicketData!E2:E,10), TicketData!I2:I}, ' +
     '(TicketData!I2:I="Open")*(INT(TODAY()-DATEVALUE(LEFT(TicketData!G2:G,10)))>=' +
     'IFERROR(VLOOKUP("STALE_DAYS",Config!A:B,2,FALSE),7))), 4, FALSE), "No stale tickets found")';

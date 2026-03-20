@@ -11,11 +11,12 @@
  * SLA Data:
  * - SLA metrics are consolidated into TicketData (columns 30-36)
  * - Device/asset info from first asset in columns 37-39 (AK-AM)
+ * - Assigned technician in columns 40-41 (AN-AO)
  * - SLA is fetched per-batch during ticket loading, no separate SLA loading phase
  */
 
 /** Current script version — update when releasing new versions */
-const SCRIPT_VERSION = '1.0.2';
+const SCRIPT_VERSION = '1.1.0';
 
 function getConfig() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
