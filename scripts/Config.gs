@@ -16,7 +16,7 @@
  */
 
 /** Current script version — update when releasing new versions */
-const SCRIPT_VERSION = '1.1.0';
+const SCRIPT_VERSION = '1.1.1';
 
 function getConfig() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
