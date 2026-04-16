@@ -156,7 +156,8 @@ function searchTickets(filters, page, pageSize, sortOptions) {
   }
 
   const payload = {
-    Filters: filters || []
+    Filters: filters || [],
+    Includes: ['Assets']
   };
 
   return makeApiRequest(endpoint, 'POST', payload);
@@ -188,4 +189,17 @@ function getAllTeams() {
   const endpoint = '/v1.0/teams/all?$s=1000';
   const response = makeApiRequest(endpoint, 'GET', null);
   return response.Items || response || [];
+}
+
+/**
+ * Get all custom field definitions for tickets
+ * POST /v1.0/custom-fields/for/ticket with empty body returns all ticket custom fields.
+ * Each item has CustomFieldTypeId (UUID) and CustomFieldType.Name (display name).
+ *
+ * @returns {Array} - Array of CustomFieldDetail objects
+ */
+function getTicketCustomFieldDefinitions() {
+  const endpoint = '/v1.0/custom-fields/for/ticket';
+  const response = makeApiRequest(endpoint, 'POST', {});
+  return response.Items || [];
 }

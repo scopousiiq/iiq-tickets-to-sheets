@@ -20,6 +20,8 @@
  *   ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning
  * - Columns 37-39 (AK-AM): AssetTag, ModelName, SerialNumber
  * - Columns 40-41 (AN-AO): AssignedToUserId, AssignedToUserName (technician/agent)
+ * - Columns 42-43 (AP-AQ): AssetId, AssetCategory (for device aggregation/filtering)
+ * - Columns 44-46 (AR-AT): Custom field values (configurable via CUSTOM_FIELD_1/2/3)
  */
 
 // Safe runtime limit (5.5 minutes to allow for cleanup before 6 min Apps Script limit)
@@ -132,7 +134,7 @@ function refreshTicketDataFull() {
     // Clear all data (keep header row)
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
-      sheet.getRange(2, 1, lastRow - 1, 41).clear();
+      sheet.getRange(2, 1, lastRow - 1, TICKET_COLUMN_COUNT).clear();
     }
 
     // Reset school year progress
@@ -280,7 +282,7 @@ function runTicketDataLoader(sheet) {
   let ticketCount = 0;
   let complete = false;
 
-  // Lock configuration on first run (SCHOOL_YEAR, PAGE_SIZE, BATCH_SIZE)
+  // Lock configuration on first run (SCHOOL_YEAR, PAGE_SIZE, BATCH_SIZE, CUSTOM_FIELDS)
   // This prevents accidental changes during data loading
   try {
     lockConfig();
@@ -289,11 +291,27 @@ function runTicketDataLoader(sheet) {
     return { batchCount: 0, ticketCount: 0, complete: false, error: e.message };
   }
 
+  // Ensure custom field config rows exist (non-destructive migration for upgraded sheets)
+  migrateConfigForCustomFields();
+
   // Read config ONCE at start and cache for both config row writes and API calls
   // This avoids repeated Config sheet reads that force flushes and trigger recalculation
   let config = getConfig();
   cacheConfigRowPositions();
   setApiConfig(config);
+
+  // Resolve custom field names to UUIDs if needed (calls API once, writes to Config)
+  resolveCustomFieldIds(config);
+
+  // Re-read config to pick up resolved CUSTOM_FIELD_*_ID values
+  config = getConfig();
+  cacheConfigRowPositions();
+
+  // Build custom field IDs array once — threaded through all extractTicketRow calls
+  const customFieldIds = [config.customField1Id, config.customField2Id, config.customField3Id];
+
+  // Extend TicketData headers if upgrading from older column count
+  updateCustomFieldHeaders(sheet, config);
 
   if (!config.schoolYear) {
     logOperation('Ticket Data', 'ERROR', 'No SCHOOL_YEAR configured');
@@ -315,7 +333,7 @@ function runTicketDataLoader(sheet) {
     if (!ticketComplete) {
       // Still doing initial pagination-based load
       // Pass in-memory progress to avoid re-reading config
-      const result = processSchoolYearBatchOptimized(sheet, config, ticketLastPage, ticketTotalPages);
+      const result = processSchoolYearBatchOptimized(sheet, config, ticketLastPage, ticketTotalPages, customFieldIds);
       batchCount++;
       ticketCount += result.count;
 
@@ -358,7 +376,7 @@ function runTicketDataLoader(sheet) {
 
     } else if (isCurrent) {
       // Pagination complete, do incremental updates for current school year
-      const result = processCurrentSchoolYearBatchOptimized(sheet, config, ticketLastFetch);
+      const result = processCurrentSchoolYearBatchOptimized(sheet, config, ticketLastFetch, customFieldIds);
       batchCount++;
       ticketCount += result.count;
 
@@ -454,9 +472,9 @@ function processSchoolYearBatch(sheet, config) {
 
   // Write tickets to sheet (with merged SLA data) - use school year string for Year column
   const now = new Date();
-  const rows = response.Items.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap));
+  const rows = response.Items.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 41).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, TICKET_COLUMN_COUNT).setValues(rows);
 
   // Update progress
   updateConfigValue('TICKET_LAST_PAGE', nextPage);
@@ -542,9 +560,9 @@ function processCurrentSchoolYearBatch(sheet, config) {
 
   // Write to sheet (with merged SLA data) - use school year string
   const now = new Date();
-  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap));
+  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 41).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, TICKET_COLUMN_COUNT).setValues(rows);
 
   // Update last fetch timestamp
   const lastTicket = tickets[tickets.length - 1];
@@ -568,7 +586,7 @@ function processCurrentSchoolYearBatch(sheet, config) {
  * @param {number} totalPages - Total pages (in-memory, -1 if unknown)
  * @returns {Object} - { count, complete, lastPage, totalPages }
  */
-function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages) {
+function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages, customFieldIds) {
   const batchSize = config.ticketBatchSize;
   const nextPage = lastPage + 1;
 
@@ -612,9 +630,9 @@ function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages) {
 
   // Write tickets to sheet (with merged SLA data)
   const now = new Date();
-  const rows = response.Items.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap));
+  const rows = response.Items.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 41).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, TICKET_COLUMN_COUNT).setValues(rows);
 
   // Check if complete
   let lastPageIndex = newTotalPages;
@@ -646,7 +664,7 @@ function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages) {
  * @param {string} lastFetch - Last fetch timestamp (in-memory)
  * @returns {Object} - { count, hasMore, lastFetch }
  */
-function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch) {
+function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch, customFieldIds) {
   const batchSize = config.ticketBatchSize;
 
   // Get school year date range
@@ -709,9 +727,9 @@ function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch) {
 
   // Write to sheet (with merged SLA data)
   const now = new Date();
-  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap));
+  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 41).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, TICKET_COLUMN_COUNT).setValues(rows);
 
   // Get last fetch timestamp from written tickets
   const lastTicket = tickets[tickets.length - 1];
@@ -726,15 +744,35 @@ function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch) {
 }
 
 /**
+ * Extract the value of a custom field from a ticket's CustomFieldValues array.
+ *
+ * @param {Object} ticket - Ticket object from API (must have CustomFieldValues array)
+ * @param {string} customFieldTypeId - UUID of the custom field type to extract
+ * @returns {string} - The field value, or empty string if not found/not configured
+ */
+function extractCustomFieldValue(ticket, customFieldTypeId) {
+  if (!customFieldTypeId || customFieldTypeId === 'NOT_FOUND') return '';
+  if (!ticket.CustomFieldValues || !ticket.CustomFieldValues.length) return '';
+  const match = ticket.CustomFieldValues.find(
+    cf => cf.CustomFieldTypeId === customFieldTypeId
+  );
+  if (!match) return '';
+  return match.Value != null ? String(match.Value) : '';
+}
+
+/**
  * Extract a row of data from a ticket object
- * Returns 41 columns for comprehensive analytics (including SLA metrics, device/asset, and assigned technician)
+ * Returns TICKET_COLUMN_COUNT columns for comprehensive analytics
+ * (including SLA metrics, device/asset, assigned technician, and custom fields)
  *
  * @param {Object} ticket - Ticket object from API
  * @param {Date} now - Current timestamp for age calculation
  * @param {number} year - Year for the ticket
  * @param {Map} slaMap - Optional map of TicketId -> SLA metrics
+ * @param {Array} customFieldIds - Array of 3 CustomFieldTypeId UUIDs (default: ['','',''])
  */
-function extractTicketRow(ticket, now, year, slaMap) {
+function extractTicketRow(ticket, now, year, slaMap, customFieldIds) {
+  const cfIds = customFieldIds || ['', '', ''];
   const createdDate = ticket.CreatedDate ? new Date(ticket.CreatedDate) : null;
   const closedDate = ticket.ClosedDate ? new Date(ticket.ClosedDate) : null;
 
@@ -821,7 +859,14 @@ function extractTicketRow(ticket, now, year, slaMap) {
     (ticket.Assets && ticket.Assets.length > 0) ? (ticket.Assets[0].SerialNumber || '') : '',
     // AN-AO: Assigned Technician (API "AssignedToUser" = agent working the ticket)
     ticket.AssignedToUser ? (ticket.AssignedToUser.UserId || '') : '',
-    ticket.AssignedToUser ? (ticket.AssignedToUser.Name || '') : ''
+    ticket.AssignedToUser ? (ticket.AssignedToUser.Name || '') : '',
+    // AP-AQ: Asset identifiers (for device aggregation and filtering)
+    (ticket.Assets && ticket.Assets.length > 0) ? (ticket.Assets[0].AssetId || '') : '',
+    (ticket.Assets && ticket.Assets.length > 0 && ticket.Assets[0].Model && ticket.Assets[0].Model.Category) ? (ticket.Assets[0].Model.Category.Name || '') : '',
+    // AR-AT: Custom Fields (configurable via CUSTOM_FIELD_1/2/3 in Config)
+    extractCustomFieldValue(ticket, cfIds[0]),
+    extractCustomFieldValue(ticket, cfIds[1]),
+    extractCustomFieldValue(ticket, cfIds[2])
   ];
 }
 
@@ -1494,6 +1539,9 @@ function runOpenTicketRefresh(sheet) {
   const config = getConfig();
   setApiConfig(config);
 
+  // Build custom field IDs for extractTicketRow threading
+  const customFieldIds = [config.customField1Id, config.customField2Id, config.customField3Id];
+
   // Get last refresh timestamp - if none, use STALE_DAYS as fallback window
   let lastRefreshTime = config.openRefreshLastRun;
   if (!lastRefreshTime) {
@@ -1533,7 +1581,9 @@ function runOpenTicketRefresh(sheet) {
 
   // For historical school years, only update existing tickets (don't append tickets from other school years)
   const isHistorical = !isSchoolYearCurrent(config);
-  const batchOptions = isHistorical ? { updateOnly: true } : {};
+  const batchOptions = isHistorical
+    ? { updateOnly: true, customFieldIds: customFieldIds }
+    : { customFieldIds: customFieldIds };
 
   if (isHistorical) {
     logOperation('Ticket Data', 'REFRESH_MODE', 'Historical school year - update only, no appends');
@@ -1662,9 +1712,11 @@ function buildTicketIdMap(sheet) {
  * @param {Date} now - Current timestamp for age calculation
  * @param {Object} options - Optional settings
  * @param {boolean} options.updateOnly - If true, only update existing tickets, don't append new ones
+ * @param {Array} options.customFieldIds - Array of 3 CustomFieldTypeId UUIDs
  */
 function processTicketBatch(sheet, tickets, ticketIdToRow, now, options) {
   const updateOnly = options && options.updateOnly;
+  const customFieldIds = (options && options.customFieldIds) || ['', '', ''];
   let updated = 0;
   let appended = 0;
   let skipped = 0;
@@ -1680,13 +1732,13 @@ function processTicketBatch(sheet, tickets, ticketIdToRow, now, options) {
 
   for (const ticket of tickets) {
     const ticketId = ticket.TicketId;
-    const rowData = extractTicketRow(ticket, now, schoolYear, slaMap);
+    const rowData = extractTicketRow(ticket, now, schoolYear, slaMap, customFieldIds);
 
     const existingRow = ticketIdToRow.get(ticketId);
 
     if (existingRow) {
       // Update existing row
-      sheet.getRange(existingRow, 1, 1, 41).setValues([rowData]);
+      sheet.getRange(existingRow, 1, 1, TICKET_COLUMN_COUNT).setValues([rowData]);
       updated++;
     } else if (updateOnly) {
       // Skip - don't append tickets not already in sheet (e.g., from different school year)
@@ -1701,7 +1753,7 @@ function processTicketBatch(sheet, tickets, ticketIdToRow, now, options) {
   // Batch append new rows
   if (rowsToAppend.length > 0) {
     const lastRow = sheet.getLastRow();
-    sheet.getRange(lastRow + 1, 1, rowsToAppend.length, 41).setValues(rowsToAppend);
+    sheet.getRange(lastRow + 1, 1, rowsToAppend.length, TICKET_COLUMN_COUNT).setValues(rowsToAppend);
 
     // Update the map with new rows (for subsequent batches)
     for (let i = 0; i < rowsToAppend.length; i++) {

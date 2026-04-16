@@ -4,6 +4,52 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.3.0 — Device Analytics + Improved Custom Fields Workflow (2026-04-16)
+
+### Added
+- **AssetId and AssetCategory columns (AP-AQ)** — TicketData now captures the iiQ AssetId (stable device identifier) and AssetCategory (e.g., "Chromebooks") for reliable device aggregation. 46 columns total.
+- **FrequentFlyers sheet** — New analytics sheet with two sections: user frequent flyers (left, with min tickets + date range filters) and a requester ticket detail drill-down (right, dropdown-driven).
+- **DeviceReliability model detail view** — Right side of sheet now has a model dropdown (sorted by ticket count) that reveals issue category breakdown with percentages and top 3 issue types per category.
+- **CustomFields sheet + dropdown workflow** — Replaces the old "List Available Custom Fields" popup. A sheet lists all available custom fields from the iiQ API, and CUSTOM_FIELD_1/2/3 in Config get dropdown validation populated from that sheet. Use **iiQ Data > Setup > Refresh Custom Fields** to update the list.
+
+### Changed
+- TicketData sheet expanded from 44 to 46 columns
+- `searchTickets` API payload now includes `Includes: ["Assets"]` to get full asset data on each ticket
+- Menu: "List Available Custom Fields" → "Refresh Custom Fields"
+- Menu: "Frequent Flyers (Users & Devices)" → "User Frequent Flyers" (device analysis is now part of DeviceReliability)
+
+### Upgrade Notes
+After updating scripts:
+1. Run **Clear Data + Reset Progress**, then **Continue Loading** to populate AssetId/AssetCategory on existing rows
+2. Run **iiQ Data > Setup > Refresh Custom Fields** to populate the new CustomFields sheet
+3. Recreate FrequentFlyers and DeviceReliability sheets via **iiQ Data > Add Analytics Sheet** to pick up the new layouts
+
+---
+
+## v1.2.0 — Custom Field Extraction (2026-04-14)
+
+### Added
+- **Configurable custom field columns (AP-AR)** — Extract up to 3 custom field values from tickets. Configure field names in Config sheet (`CUSTOM_FIELD_1`, `CUSTOM_FIELD_2`, `CUSTOM_FIELD_3`), and the system auto-resolves them to iiQ CustomFieldTypeIds via the discovery API on the next data load.
+- **`TICKET_COLUMN_COUNT` constant** — All hardcoded column count references replaced with a single constant in Config.gs. Safer for future column additions.
+- **"List Available Custom Fields" menu item** — Discover what custom fields exist in your district directly from the iiQ Data > Setup menu.
+- **Non-destructive Config migration** — Existing spreadsheets automatically gain the new custom field Config rows without re-running Setup.
+- **Warnings in Verify Configuration** — Custom field resolution status (resolved, pending, not found) now displayed alongside blocking issues.
+
+### Changed
+- TicketData sheet expanded from 41 to 44 columns
+- Config lock now includes custom field names (prevents mid-load changes)
+- Unlock/Reset now clears resolved custom field IDs (forces re-resolution)
+- `extractTicketRow()` accepts optional `customFieldIds` parameter (backward-compatible default)
+- `verifyConfiguration()` now shows warnings separately from blocking errors
+
+### Upgrade Notes
+After updating scripts:
+1. Configure custom field names in Config (`CUSTOM_FIELD_1`, `CUSTOM_FIELD_2`, `CUSTOM_FIELD_3`) — use **iiQ Data > Setup > List Available Custom Fields** to find valid names
+2. Run **Clear Data + Reset Progress**, then **Continue Loading** to populate the new columns
+3. Alternatively, new columns auto-extend on the next data load, but existing rows will have empty custom field values until reloaded
+
+---
+
 ## v1.1.0 — Assigned Technician + Formula Fixes
 
 - **New AssignedToUser columns (AN-AO)** — TicketData now includes the assigned technician/agent (`AssignedToUserId`, `AssignedToUserName`) separately from the ticket Owner. Owner (P-Q) is the staff member responsible for tracking the ticket; AssignedToUser is the person actually working it. 41 columns total.

@@ -8,7 +8,7 @@
  * - Configured via SCHOOL_YEAR and SCHOOL_YEAR_START in Config sheet
  *
  * Data Loading:
- * - Ticket Data includes consolidated SLA metrics, device/asset, and assigned technician (41 columns)
+ * - Ticket Data includes consolidated SLA metrics, device/asset, assigned technician, and custom fields (46 columns)
  * - SLA data is fetched per-batch during ticket loading
  *
  * Refresh Strategy:
@@ -34,6 +34,7 @@ function onOpen() {
     .addSubMenu(ui.createMenu('Setup')
       .addItem('Setup Spreadsheet', 'setupSpreadsheet')
       .addItem('Verify Configuration', 'verifyConfiguration')
+      .addItem('Refresh Custom Fields', 'refreshCustomFields')
       .addSeparator()
       .addItem('Setup Automated Triggers', 'setupAutomatedTriggers')
       .addItem('View Trigger Status', 'viewTriggerStatus')
@@ -92,7 +93,8 @@ function onOpen() {
         .addItem('Priority Analysis', 'addPriorityAnalysisSheet')
         .addItem('Frequent Requesters', 'addFrequentRequestersSheet'))
       .addSubMenu(ui.createMenu('Device')
-        .addItem('Device Reliability', 'addDeviceReliabilitySheet'))
+        .addItem('Device Reliability', 'addDeviceReliabilitySheet')
+        .addItem('User Frequent Flyers', 'addFrequentFlyersSheet'))
       .addSeparator()
       .addItem('Regenerate All Monthly Sheets', 'regenerateMonthlyAnalyticsSheets'))
     .addSubMenu(ui.createMenu('Daily Snapshot')

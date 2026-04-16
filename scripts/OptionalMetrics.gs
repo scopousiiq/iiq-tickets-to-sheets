@@ -30,6 +30,7 @@
  * - TemporalPatterns: When do tickets come in? (day/hour analysis)
  * - QueueTimeAnalysis: How long do tickets wait before being picked up?
  * - DeviceReliability: Which device models generate the most tickets?
+ * - FrequentFlyers: Users and devices with recurring issues (configurable filters)
  * - BacklogAgingByFA: Open ticket aging by Functional Area
  * - BacklogAgingByTeam: Open ticket aging by Team
  * - BacklogAgingByLocationType: Open ticket aging by Location Type
@@ -335,7 +336,8 @@ function addDeviceReliabilitySheet() {
   setupDeviceReliabilitySheet(ss);
   SpreadsheetApp.getUi().alert('Created',
     'DeviceReliability sheet has been created.\n\n' +
-    'Groups tickets by device model (column AL) to identify problematic models.',
+    'Groups tickets by device model with issue category breakdown.\n' +
+    'Select a model from K2 dropdown to see issue type percentages.',
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
@@ -1929,7 +1931,7 @@ function setupDeviceReliabilitySheet(ss) {
   deleteSheetIfExists(ss, 'DeviceReliability');
   const sheet = ss.insertSheet('DeviceReliability');
 
-  // Headers - includes sort controls
+  // === MAIN SECTION (Row 1-2 headers, Row 3+ data, Columns A-I) ===
   const headers = ['Model Name', 'Total Tickets', 'Open', 'Closed', 'Avg Resolution (days)', 'Breach Rate', 'Last Refreshed', 'Sort Col#', 'Desc?'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
@@ -1963,14 +1965,6 @@ function setupDeviceReliabilitySheet(ss) {
   sheet.getRange('E:E').setNumberFormat('0.0');   // Avg Resolution
   sheet.getRange('F:F').setNumberFormat('0.0%');  // Breach Rate
 
-  // Column widths
-  sheet.setColumnWidth(1, 200);  // Model Name
-  sheet.setColumnWidth(7, 180);  // Last Refreshed
-  sheet.setColumnWidth(8, 80);   // Sort Col#
-  sheet.setColumnWidth(9, 60);   // Desc?
-
-  sheet.setFrozenRows(1);
-
   // Add data validation for sort column
   const sortColRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(['1', '2', '3', '4', '5', '6'], true)
@@ -1985,18 +1979,98 @@ function setupDeviceReliabilitySheet(ss) {
     .build();
   sheet.getRange('I2').setDataValidation(sortOrderRule);
 
+  // === MODEL DETAIL SECTION (Row 1-2 header, Row 3+ data, Columns K-N) ===
+  // Control header
+  sheet.getRange('K1').setValue('Selected Model');
+  sheet.getRange('K1')
+    .setFontWeight('bold')
+    .setBackground('#ff9800')
+    .setFontColor('white');
+  sheet.getRange('K2').setValue(''); // Selected model (blank = none)
+  sheet.getRange('K1').setNote('Select a model from the dropdown to see issue breakdown');
+
+  // Issue breakdown headers (row 3)
+  const detailHeaders = ['Issue Category', 'Count', '% of Model', 'Top Issue Types'];
+  sheet.getRange(3, 11, 1, 4).setValues([detailHeaders]);
+  sheet.getRange(3, 11, 1, 4)
+    .setFontWeight('bold')
+    .setBackground('#388e3c')
+    .setFontColor('white');
+
+  // Issue breakdown formula - shows issue categories and types for selected model
+  // Columns: IssueCategoryName (Y), count, percentage, top issue types from IssueTypeName (AA)
+  const detailFormula =
+    '=LET(' +
+    'selectedModel, $K$2,' +
+    'IF(selectedModel="",' +
+    '  {"Select a model from K2"},' +
+    '  LET(' +
+    '    totalForModel, COUNTIF(TicketData!AL:AL, selectedModel),' +
+    '    categories, UNIQUE(FILTER(TicketData!Y:Y, TicketData!AL:AL=selectedModel, TicketData!Y:Y<>"")),' +
+    '    counts, BYROW(categories, LAMBDA(c, COUNTIFS(TicketData!AL:AL, selectedModel, TicketData!Y:Y, c))),' +
+    '    pcts, MAP(counts, LAMBDA(c, IFERROR(c/totalForModel, 0))),' +
+    '    topTypes, BYROW(categories, LAMBDA(c, TEXTJOIN(", ", TRUE, ' +
+    '      LET(' +
+    '        types, UNIQUE(FILTER(TicketData!AA:AA, TicketData!AL:AL=selectedModel, TicketData!Y:Y=c, TicketData!AA:AA<>"")),' +
+    '        typeCounts, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!AL:AL, selectedModel, TicketData!Y:Y, c, TicketData!AA:AA, t))),' +
+    '        sorted, SORT(HSTACK(types, typeCounts), 2, FALSE),' +
+    '        topN, IF(ROWS(sorted)>3, CHOOSEROWS(sorted, 1, 2, 3), sorted),' +
+    '        BYROW(topN, LAMBDA(row, INDEX(row, 1)&" ("&INDEX(row, 2)&")"))'  +
+    '      )))),' +
+    '    data, HSTACK(categories, counts, pcts, topTypes),' +
+    '    IF(ROWS(categories)=0, {"No tickets for this model"}, SORT(data, 2, FALSE)))))';
+
+  sheet.getRange('K4').setValue(detailFormula);
+
+  // Model dropdown source (hidden in column P) - sorted by ticket count descending
+  sheet.getRange('P1').setValue('ModelDropdownSource');
+  const modelDropdownFormula =
+    '=LET(' +
+    'models, UNIQUE(FILTER(TicketData!AL2:AL, TicketData!AL2:AL<>"", TicketData!AL2:AL<>"ModelName")),' +
+    'counts, BYROW(models, LAMBDA(m, COUNTIF(TicketData!AL:AL, m))),' +
+    'SORT(models, counts, FALSE))';
+  sheet.getRange('P2').setValue(modelDropdownFormula);
+  sheet.hideColumns(16); // Hide column P
+
+  // Create data validation rule for K2 using the dropdown source
+  const modelDropdownRule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(sheet.getRange('P2:P1000'), true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange('K2').setDataValidation(modelDropdownRule);
+
+  // Format detail columns
+  sheet.getRange('M:M').setNumberFormat('0.0%');  // % of Model
+
+  // Column widths
+  sheet.setColumnWidth(1, 200);  // Model Name
+  sheet.setColumnWidth(7, 120);  // Last Refreshed
+  sheet.setColumnWidth(8, 80);   // Sort Col#
+  sheet.setColumnWidth(9, 60);   // Desc?
+  sheet.setColumnWidth(10, 30);  // Spacer
+  sheet.setColumnWidth(11, 200); // Selected Model / Issue Category
+  sheet.setColumnWidth(12, 80);  // Count
+  sheet.setColumnWidth(13, 100); // % of Model
+  sheet.setColumnWidth(14, 350); // Top Issue Types
+
+  sheet.setFrozenRows(1);
+
   // Add notes
   sheet.getRange('A1').setNote(
     'Device Reliability Analysis\n\n' +
     'Question: "Which device models generate the most tickets?"\n\n' +
+    'MODEL SUMMARY (left):\n' +
+    '- All models ranked by ticket count\n' +
+    '- Use Sort Col# and Desc? to change sorting\n' +
+    '- Breach rate = % of closed tickets that breached SLA\n\n' +
+    'MODEL DETAIL (right):\n' +
+    '- Select a model from K2 dropdown\n' +
+    '- Shows issue category breakdown with percentages\n' +
+    '- Top 3 issue types shown for each category\n\n' +
     'Use this to:\n' +
-    '- Identify unreliable device models with high ticket counts\n' +
-    '- Justify replacement budgets with data\n' +
-    '- Compare breach rates across device models\n' +
-    '- Prioritize bulk replacements or warranty claims\n\n' +
-    'Note: Only shows tickets that have an asset attached.\n' +
-    'Uses ModelName from column AL (TicketData).\n\n' +
-    'Use Sort Col# and Desc? to change sorting.'
+    '- Identify unreliable device models\n' +
+    '- See what types of issues affect each model\n' +
+    '- Justify replacement budgets with data'
   );
   sheet.getRange('H2').setNote('Sort column: 1=Model, 2=Total, 3=Open, 4=Closed, 5=AvgRes, 6=Breach');
   sheet.getRange('I2').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
@@ -2539,4 +2613,213 @@ function regenerateMonthlyAnalyticsSheets() {
       errors.join('\n'),
       ui.ButtonSet.OK);
   }
+}
+
+// ============================================================================
+// FREQUENT FLYERS - Users and Devices with recurring issues
+// ============================================================================
+
+/**
+ * Add Frequent Flyers sheet (deletes and recreates if exists)
+ */
+function addFrequentFlyersSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  setupFrequentFlyersSheet(ss);
+  SpreadsheetApp.getUi().alert('Created',
+    'FrequentFlyers sheet has been created.\n\n' +
+    'Shows users with recurring tickets (left) and ticket details (right).\n' +
+    'Select a requester from H2 dropdown to see their tickets.',
+    SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Setup FrequentFlyers sheet - user frequent flyers with ticket detail drill-down
+ * Question: "Which users have recurring issues?"
+ *
+ * Layout:
+ * - Left: User frequent flyers table (filtered by min tickets, date range)
+ * - Right: Ticket details for selected requester
+ *
+ * Uses:
+ * - RequesterId/RequesterName (AB/AC) for user identification (the "on behalf of" user)
+ *
+ * Controls:
+ * - Min Tickets: Minimum ticket count threshold (default 3)
+ * - Date From/To: Optional date range filter
+ * - Selected Requester: Dropdown to view ticket details
+ */
+function setupFrequentFlyersSheet(ss) {
+  deleteSheetIfExists(ss, 'FrequentFlyers');
+  const sheet = ss.insertSheet('FrequentFlyers');
+
+  // === CONTROLS SECTION (Row 1-2) ===
+  const controlHeaders = ['Min Tickets', 'Date From', 'Date To', '', '', '', '', 'Selected Requester'];
+  sheet.getRange(1, 1, 1, 8).setValues([controlHeaders]);
+
+  // Default control values
+  sheet.getRange('A2').setValue(3);  // Min tickets threshold
+  sheet.getRange('B2').setValue(''); // Date from (blank = all time)
+  sheet.getRange('C2').setValue(''); // Date to (blank = today)
+  sheet.getRange('H2').setValue(''); // Selected requester (blank = none)
+
+  // Format controls header
+  sheet.getRange(1, 1, 1, 3)
+    .setFontWeight('bold')
+    .setBackground('#ff9800')
+    .setFontColor('white');
+  sheet.getRange('H1')
+    .setFontWeight('bold')
+    .setBackground('#ff9800')
+    .setFontColor('white');
+
+  // Add notes to controls
+  sheet.getRange('A1').setNote('Minimum ticket count to appear in results (default: 3)');
+  sheet.getRange('B1').setNote('Start date (YYYY-MM-DD). Leave blank for all time.');
+  sheet.getRange('C1').setNote('End date (YYYY-MM-DD). Leave blank for today.');
+  sheet.getRange('H1').setNote('Select a requester from the list to see their ticket details');
+
+  // === USER FREQUENT FLYERS SECTION (Row 4+, Columns A-G) ===
+  const userHeaders = ['Requester Name', 'Location', 'Total Tickets', 'Open', 'Closed', 'Avg Resolution', 'Last Refreshed'];
+  sheet.getRange(4, 1, 1, 7).setValues([userHeaders]);
+
+  // User formula - filters by min tickets and optional date range
+  // Uses RequesterName (AC) and includes their location from the For user
+  const userFormula =
+    '=LET(' +
+    'minTix, $A$2,' +
+    'dateFrom, $B$2,' +
+    'dateTo, IF($C$2="", TEXT(TODAY(), "YYYY-MM-DD"), $C$2),' +
+    'hasDateFilter, dateFrom<>"",' +
+    // Get all requesters with their ticket counts
+    'allReqs, UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"")),' +
+    // Count tickets per requester (with optional date filter)
+    'counts, IF(hasDateFilter,' +
+    '  BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo))),' +
+    '  BYROW(allReqs, LAMBDA(r, COUNTIF(TicketData!AC:AC, r)))),' +
+    // Filter to those meeting threshold
+    'filtered, FILTER(allReqs, counts>=minTix),' +
+    'filteredCounts, FILTER(counts, counts>=minTix),' +
+    // Build data columns
+    'col_a, filtered,' +
+    'col_b, BYROW(filtered, LAMBDA(r, IFERROR(INDEX(FILTER(TicketData!N:N, TicketData!AC:AC=r), 1), ""))),' +  // Location
+    'col_c, filteredCounts,' +
+    'col_d, IF(hasDateFilter,' +
+    '  BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Open", TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo))),' +
+    '  BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Open")))),' +
+    'col_e, IF(hasDateFilter,' +
+    '  BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Closed", TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo))),' +
+    '  BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Closed")))),' +
+    'col_f, BYROW(filtered, LAMBDA(r, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AC:AC, r, TicketData!I:I, "Closed"), "N/A"))),' +
+    'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f),' +
+    'IF(ROWS(filtered)=0, {"No users meet threshold"}, SORT(data, 3, FALSE)))';
+
+  sheet.getRange('A5').setValue(userFormula);
+  sheet.getRange('G5').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
+
+  // Format user header
+  sheet.getRange(4, 1, 1, 7)
+    .setFontWeight('bold')
+    .setBackground('#1976d2')
+    .setFontColor('white');
+
+  // === REQUESTER DETAIL SECTION (Row 4+, Columns I-M) ===
+  const detailHeaders = ['Created Date', 'Model', 'Ticket #', 'Issue Type', 'Issue Category'];
+  sheet.getRange(4, 9, 1, 5).setValues([detailHeaders]);
+
+  // Detail formula - shows tickets for selected requester within date range
+  // Columns: CreatedDate (E), ModelName (AL), TicketNumber (B), IssueTypeName (AA), IssueCategoryName (Y)
+  const detailFormula =
+    '=LET(' +
+    'selectedReq, $H$2,' +
+    'dateFrom, $B$2,' +
+    'dateTo, IF($C$2="", TEXT(TODAY(), "YYYY-MM-DD"), $C$2),' +
+    'hasDateFilter, dateFrom<>"",' +
+    'IF(selectedReq="",' +
+    '  {"Select a requester from H2"},' +
+    '  IF(hasDateFilter,' +
+    '    IFERROR(SORT(FILTER({TicketData!E:E, TicketData!AL:AL, TicketData!B:B, TicketData!AA:AA, TicketData!Y:Y},' +
+    '      TicketData!AC:AC=selectedReq, TicketData!E:E>=dateFrom, TicketData!E:E<=dateTo), 1, FALSE),' +
+    '      {"No tickets found for this requester in date range"}),' +
+    '    IFERROR(SORT(FILTER({TicketData!E:E, TicketData!AL:AL, TicketData!B:B, TicketData!AA:AA, TicketData!Y:Y},' +
+    '      TicketData!AC:AC=selectedReq), 1, FALSE),' +
+    '      {"No tickets found for this requester"}))))';
+
+  sheet.getRange('I5').setValue(detailFormula);
+
+  // Format detail header
+  sheet.getRange(4, 9, 1, 5)
+    .setFontWeight('bold')
+    .setBackground('#388e3c')
+    .setFontColor('white');
+
+  // Add dropdown for requester selection (populated from frequent flyers list)
+  // This formula creates the dropdown options from the sorted frequent flyers
+  const dropdownFormula =
+    '=LET(' +
+    'minTix, $A$2,' +
+    'dateFrom, $B$2,' +
+    'dateTo, IF($C$2="", TEXT(TODAY(), "YYYY-MM-DD"), $C$2),' +
+    'hasDateFilter, dateFrom<>"",' +
+    'allReqs, UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"")),' +
+    'counts, IF(hasDateFilter,' +
+    '  BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo))),' +
+    '  BYROW(allReqs, LAMBDA(r, COUNTIF(TicketData!AC:AC, r)))),' +
+    'filtered, FILTER(allReqs, counts>=minTix),' +
+    'filteredCounts, FILTER(counts, counts>=minTix),' +
+    'IF(ROWS(filtered)=0, "", SORT(filtered, filteredCounts, FALSE)))';
+
+  // Put dropdown source formula in a hidden area (column P)
+  sheet.getRange('P1').setValue('DropdownSource');
+  sheet.getRange('P2').setValue(dropdownFormula);
+  sheet.hideColumns(16); // Hide column P
+
+  // Create data validation rule for H2 using the dropdown source
+  const dropdownRule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(sheet.getRange('P2:P500'), true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange('H2').setDataValidation(dropdownRule);
+
+  // === FORMATTING ===
+
+  // Section labels
+  sheet.getRange('A3').setValue('USER FREQUENT FLYERS');
+  sheet.getRange('I3').setValue('REQUESTER TICKET DETAILS');
+  sheet.getRange('A3:G3').merge().setFontWeight('bold').setFontSize(11);
+  sheet.getRange('I3:M3').merge().setFontWeight('bold').setFontSize(11);
+
+  // Number formats
+  sheet.getRange('F:F').setNumberFormat('0.0');  // Avg Resolution (users)
+  sheet.getRange('I:I').setNumberFormat('yyyy-mm-dd');  // Created Date
+
+  // Column widths
+  sheet.setColumnWidth(1, 180);  // Requester Name
+  sheet.setColumnWidth(2, 150);  // Location
+  sheet.setColumnWidth(7, 120);  // Last Refreshed
+  sheet.setColumnWidth(8, 180);  // Selected Requester
+  sheet.setColumnWidth(9, 100);  // Created Date
+  sheet.setColumnWidth(10, 180); // Model
+  sheet.setColumnWidth(11, 80);  // Ticket #
+  sheet.setColumnWidth(12, 150); // Issue Type
+  sheet.setColumnWidth(13, 150); // Issue Category
+
+  sheet.setFrozenRows(4);
+
+  // Add main note
+  sheet.getRange('A3').setNote(
+    'User Frequent Flyers\n\n' +
+    'Question: "Which users have recurring issues?"\n\n' +
+    'USER FREQUENT FLYERS (left):\n' +
+    '- Groups by "on behalf of" user (the person the ticket was submitted for)\n' +
+    '- Use to identify students/staff who may need training or equipment replacement\n\n' +
+    'REQUESTER TICKET DETAILS (right):\n' +
+    '- Select a requester from H2 dropdown to see their tickets\n' +
+    '- Shows ticket details within the date range filter\n\n' +
+    'CONTROLS (row 2):\n' +
+    '- Min Tickets: Only show users with this many+ tickets\n' +
+    '- Date From/To: Filter to a specific date range\n' +
+    '- Selected Requester: Pick from dropdown to see ticket details'
+  );
+
+  return true;
 }

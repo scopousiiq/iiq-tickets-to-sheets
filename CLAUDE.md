@@ -16,7 +16,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 
 **Data Flow:**
 1. Scripts fetch data from iiQ API using Bearer token authentication
-2. Raw data lands in `TicketData` sheet (41 columns including consolidated SLA metrics, device/asset, and assigned technician)
+2. Raw data lands in `TicketData` sheet (46 columns including consolidated SLA metrics, device/asset, assigned technician, and custom fields)
 3. Analytics sheets (`MonthlyVolume`, `BacklogAging`, `TeamWorkload`, etc.) calculate via Google Sheets formulas - no scripts needed
 4. Power BI connects to Google Sheets for dashboards
 
@@ -44,7 +44,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `Setup.gs` | Initial spreadsheet setup - creates all sheets, headers, and formulas |
 | `Config.gs` | Reads settings from Config sheet, school year date calculation, logging utilities, concurrency control (LockService helpers) |
 | `ApiClient.gs` | HTTP client with retry/exponential backoff (429, 503, network errors) |
-| `TicketData.gs` | Bulk ticket loader - 41 columns (28 ticket + 7 SLA + 3 device/asset + 2 assigned technician), fetches SLA per-batch, school year pagination, 5.5min timeout with resume |
+| `TicketData.gs` | Bulk ticket loader - 46 columns (28 ticket + 7 SLA + 3 device/asset + 2 assigned technician + 2 asset ID + 3 custom fields), fetches SLA per-batch, school year pagination, 5.5min timeout with resume |
 | `Teams.gs` | Team directory loader, preserves Functional Area mappings |
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively). Skips if loading incomplete. |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
@@ -151,7 +151,7 @@ Workflow for destructive operations:
 |-------|------|---------|
 | Instructions | Static | Setup and usage guide |
 | Config | Manual | API settings, progress tracking |
-| TicketData | Data | Main ticket data (41 columns with SLA + device + assigned technician) |
+| TicketData | Data | Main ticket data (46 columns with SLA + device + assigned technician + custom fields) |
 | Teams | Data | Team directory with Functional Area mapping |
 | DailySnapshot | Data | Daily backlog metrics for trending |
 | Logs | Data | Operation logs |
@@ -232,8 +232,9 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | Sheet | Question Answered | Key Metrics |
 |-------|-------------------|-------------|
 | DeviceReliability | "Which device models generate the most tickets?" | Total/Open/Closed by model, avg resolution, breach rate |
+| FrequentFlyers | "Which users or devices have recurring issues?" | Users and devices exceeding ticket threshold, with date/category filters |
 
-## TicketData Column Layout (41 columns)
+## TicketData Column Layout (46 columns)
 
 | Columns | Description |
 |---------|-------------|
@@ -247,10 +248,12 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | S-U | Priority: Priority, IsPastDue ("Overdue"/"On Track"), DueDate |
 | V-W | SLA (basic): SlaId, SlaName |
 | X-AA | Issue: IssueCategoryId, IssueCategoryName, IssueTypeId, IssueTypeName |
-| AB-AC | Requester: RequesterId, RequesterName |
+| AB-AC | Requester: RequesterId, RequesterName (the "on behalf of" user from ticket.For) |
 | AD-AJ | SLA Metrics: ResponseThreshold, ResponseActual, ResponseBreach (1/0), ResolutionThreshold, ResolutionActual, ResolutionBreach (1/0), IsRunning (1/0) |
 | AK-AM | Device/Asset: AssetTag, ModelName, SerialNumber (from first asset, blank if no asset) |
 | AN-AO | Assigned Technician: AssignedToUserId, AssignedToUserName (agent assigned to work the ticket, nullable) |
+| AP-AQ | Asset Identifiers: AssetId, AssetCategory (for device aggregation and filtering, e.g., "Chromebooks") |
+| AR-AT | Custom Fields: CustomField1, CustomField2, CustomField3 (configurable via CUSTOM_FIELD_1/2/3 in Config) |
 
 ### Analytics Formula Column Reference
 
@@ -267,7 +270,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | IssueCategory | X (IssueCategoryId) | **Y (IssueCategoryName)** |
 | IssueType | Z (IssueTypeId) | **AA (IssueTypeName)** |
 | Requester | AB (RequesterId) | **AC (RequesterName)** |
-| Asset/Device | - | **AL (ModelName)** |
+| Asset/Device | AP (AssetId) | **AL (ModelName)** or **AQ (AssetCategory)** |
 
 Example pattern for aggregating by team:
 ```javascript
@@ -380,6 +383,9 @@ Optional:
 - `TICKET_BATCH_SIZE`: Tickets per page for bulk load (default 2000)
 - `STALE_DAYS`: Days to look back for recently closed tickets (default 7)
 - `SLA_RISK_PERCENT`: Percentage threshold for SLA risk warnings (default 75)
+- `CUSTOM_FIELD_1`: Custom field name for column AP (from iiQ custom field definitions)
+- `CUSTOM_FIELD_2`: Custom field name for column AQ
+- `CUSTOM_FIELD_3`: Custom field name for column AR
 
 Progress Tracking (managed automatically):
 - `TICKET_LAST_PAGE`: Last completed page index (0-indexed, -1 = not started)
@@ -388,14 +394,16 @@ Progress Tracking (managed automatically):
 - `TICKET_LAST_FETCH`: Incremental sync timestamp (for current school year only)
 - `OPEN_REFRESH_LAST_RUN`: Timestamp of last successful refresh (used for ModifiedDate filter)
 - `OPEN_REFRESH_PAGE`, `OPEN_REFRESH_COMPLETE`: Current refresh cycle progress
+- `CUSTOM_FIELD_1_ID`, `CUSTOM_FIELD_2_ID`, `CUSTOM_FIELD_3_ID`: Resolved CustomFieldTypeId UUIDs (auto-managed)
 
 Config Lock (set when loading starts, cleared by "Clear Data + Reset"):
 - `SCHOOL_YEAR_LOADED`: Locks the school year value
 - `PAGE_SIZE_LOADED`: Locks the page size value
 - `BATCH_SIZE_LOADED`: Locks the batch size value
 - `MODULE_LOADED`: Locks the module value
+- `CUSTOM_FIELD_1_LOADED`, `CUSTOM_FIELD_2_LOADED`, `CUSTOM_FIELD_3_LOADED`: Locks the custom field names
 
-**Configuration Lock:** Once data loading starts, critical configuration values are locked to prevent accidental changes that would cause data inconsistency. Locked values include `SCHOOL_YEAR`, `PAGE_SIZE`, `TICKET_BATCH_SIZE`, and `MODULE`. To change these values, use "Clear Data + Reset Progress" which unlocks the configuration.
+**Configuration Lock:** Once data loading starts, critical configuration values are locked to prevent accidental changes that would cause data inconsistency. Locked values include `SCHOOL_YEAR`, `PAGE_SIZE`, `TICKET_BATCH_SIZE`, `MODULE`, and `CUSTOM_FIELD_1/2/3`. To change these values, use "Clear Data + Reset Progress" which unlocks the configuration.
 
 **Pagination Note:** All page tracking uses 0-indexed values. For a school year with 6 pages of data, after completion both `LAST_PAGE` and `TOTAL_PAGES` will be `5`. The UI displays 1-indexed values ("Page 6 of 6").
 

@@ -283,7 +283,7 @@ function triggerWeeklyFullRefresh() {
       if (ticketSheet) {
         const lastRow = ticketSheet.getLastRow();
         if (lastRow > 1) {
-          ticketSheet.getRange(2, 1, lastRow - 1, 41).clear();
+          ticketSheet.getRange(2, 1, lastRow - 1, TICKET_COLUMN_COUNT).clear();
           logOperation('Trigger', 'WEEKLY_RESET', `Cleared ${lastRow - 1} ticket rows`);
         }
       }
@@ -589,9 +589,10 @@ function runNewTicketsCheck(sheet, config) {
   // Write to sheet using school year string
   const now = new Date();
   tickets.sort((a, b) => new Date(a.CreatedDate) - new Date(b.CreatedDate));
-  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap));
+  const customFieldIds = [config.customField1Id, config.customField2Id, config.customField3Id];
+  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds));
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, 41).setValues(rows);
+  sheet.getRange(lastRow + 1, 1, rows.length, TICKET_COLUMN_COUNT).setValues(rows);
 
   // Update last fetch timestamp
   const lastTicket = tickets[tickets.length - 1];
@@ -612,11 +613,11 @@ function filterAndRewriteTicketData(sheet, historicalCutoff) {
 }
 
 /**
- * Create the TicketData sheet with headers (41 columns including SLA metrics, device/asset, and assigned technician)
+ * Create the TicketData sheet with headers (TICKET_COLUMN_COUNT columns)
  */
 function createTicketSheet(ss) {
   const sheet = ss.insertSheet('TicketData');
-  sheet.getRange(1, 1, 1, 41).setValues([[
+  const headers = [
     'TicketId', 'TicketNumber', 'Subject', 'Year',
     'CreatedDate', 'StartedDate', 'ModifiedDate', 'ClosedDate', 'IsClosed',
     'Status', 'TeamId', 'TeamName', 'LocationId', 'LocationName', 'LocationType',
@@ -626,8 +627,11 @@ function createTicketSheet(ss) {
     'ResponseThreshold', 'ResponseActual', 'ResponseBreach',
     'ResolutionThreshold', 'ResolutionActual', 'ResolutionBreach', 'IsRunning',
     'AssetTag', 'ModelName', 'SerialNumber',
-    'AssignedToUserId', 'AssignedToUserName'
-  ]]);
+    'AssignedToUserId', 'AssignedToUserName',
+    'AssetId', 'AssetCategory',
+    'CustomField1', 'CustomField2', 'CustomField3'
+  ];
+  sheet.getRange(1, 1, 1, TICKET_COLUMN_COUNT).setValues([headers]);
   sheet.setFrozenRows(1);
   return sheet;
 }

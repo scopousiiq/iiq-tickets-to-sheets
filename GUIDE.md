@@ -31,7 +31,7 @@ Create a new Google Sheet. The **Setup Spreadsheet** function will create all re
 | Sheet Name | Purpose |
 |------------|---------|
 | `Config` | API credentials and settings |
-| `TicketData` | Raw ticket dump with SLA metrics, device info, and assigned technician (41 columns) |
+| `TicketData` | Raw ticket dump with SLA metrics, device info, assigned technician, and custom fields (46 columns) |
 | `Teams` | Team directory with FA mapping |
 | `DailySnapshot` | Daily backlog metrics for trending |
 | `Logs` | API call logs and errors |
@@ -743,8 +743,13 @@ iiQ Data > Add Analytics Sheet >
 | AM | **SerialNumber** | Serial number of the first attached device (blank if no asset) |
 | AN | **AssignedToUserId** | Assigned technician UUID (agent working the ticket, blank if unassigned) |
 | AO | **AssignedToUserName** | Assigned technician name (agent working the ticket, blank if unassigned) |
+| AP | **AssetId** | UUID of the first attached asset (for reliable aggregation) |
+| AQ | **AssetCategory** | Asset category name (e.g., "Chromebooks", "Laptops") for device type filtering |
+| AR | **CustomField1** | Configurable custom field value (set CUSTOM_FIELD_1 in Config) |
+| AS | **CustomField2** | Configurable custom field value (set CUSTOM_FIELD_2 in Config) |
+| AT | **CustomField3** | Configurable custom field value (set CUSTOM_FIELD_3 in Config) |
 
-> **Note:** Raw ticket data dump with consolidated SLA metrics, device info, and assigned technician for Power BI analysis. Data is loaded by year with automatic resume capability. 41 columns total.
+> **Note:** Raw ticket data dump with consolidated SLA metrics, device info, assigned technician, and custom fields for Power BI analysis. Data is loaded by year with automatic resume capability. 46 columns total.
 >
 > **Loading Strategy:**
 > - **Historical school years**: Standard pagination with page tracking. Once complete and all tickets closed, triggers are auto-removed.
@@ -760,6 +765,11 @@ iiQ Data > Add Analytics Sheet >
 > **Device/Asset Columns (AK-AM):**
 > - AssetTag, ModelName, SerialNumber from the first attached asset
 > - Blank if no asset is attached to the ticket
+>
+> **Asset Identifier Columns (AP-AQ):**
+> - **AssetId**: UUID of the first attached asset — use for reliable aggregation (asset tags can change)
+> - **AssetCategory**: Device category name (e.g., "Chromebooks", "Laptops", "Projectors") — use for filtering by device type
+> - These columns enable "frequent flyer" analysis: finding users or devices with recurring issues
 >
 > **Formula-Based Analytics:** With these columns, you can build all common IT metrics using sheet formulas:
 > - **Volume/Throughput**: COUNTIFS on CreatedDate, ClosedDate by month/year
@@ -790,7 +800,7 @@ The Apps Script source code is in the `scripts/` folder of this repository.
 | [`Config.gs`](scripts/Config.gs) | Configuration reading from Config sheet, logging utilities |
 | [`ApiClient.gs`](scripts/ApiClient.gs) | HTTP requests with retry/exponential backoff for rate limiting |
 | [`Teams.gs`](scripts/Teams.gs) | Team data loading from API |
-| [`TicketData.gs`](scripts/TicketData.gs) | Bulk ticket data loader with consolidated SLA, device info, and assigned technician (41 columns, year-based pagination) |
+| [`TicketData.gs`](scripts/TicketData.gs) | Bulk ticket data loader with consolidated SLA, device info, assigned technician, and custom fields (46 columns, year-based pagination) |
 | [`DailySnapshot.gs`](scripts/DailySnapshot.gs) | Daily backlog metrics capture for trending |
 | [`Menu.gs`](scripts/Menu.gs) | iiQ Data menu for data loader and analytics functions |
 | [`Triggers.gs`](scripts/Triggers.gs) | Time-driven trigger functions for automated updates |
@@ -1163,7 +1173,7 @@ These two sheets filter tickets approaching their respective SLA thresholds. Sam
 
 ### TicketData Sheet (After Refresh)
 
-The TicketData sheet includes 41 columns (A-AO) with consolidated SLA metrics, device info, and assigned technician. Sample rows:
+The TicketData sheet includes 46 columns (A-AT) with consolidated SLA metrics, device info, assigned technician, and custom fields. Sample rows:
 
 | Column | Row 1 | Row 2 | Row 3 |
 |--------|-------|-------|-------|
@@ -1208,8 +1218,13 @@ The TicketData sheet includes 41 columns (A-AO) with consolidated SLA metrics, d
 | AM: SerialNumber | 5CD1234ABC | FXYZ9876543 | |
 | AN: AssignedToUserId | tech-111... | tech-222... | tech-333... |
 | AO: AssignedToUserName | Mike Tech | Sarah Admin | Bob Support |
+| AP: AssetId | asset-111... | asset-222... | |
+| AQ: AssetCategory | Chromebooks | Laptops | |
+| AR: CustomField1 | | | |
+| AS: CustomField2 | | | |
+| AT: CustomField3 | | | |
 
-> **Raw Data Export:** This sheet contains all 41 columns including consolidated SLA metrics, device info, and assigned technician for custom analysis, pivot tables, or Power BI integration.
+> **Raw Data Export:** This sheet contains all 46 columns including consolidated SLA metrics, device info, assigned technician, and custom fields for custom analysis, pivot tables, or Power BI integration.
 >
 > **SLA Columns (AD-AJ):**
 > - Threshold values are in minutes (240 = 4 hours)
@@ -1228,6 +1243,11 @@ The TicketData sheet includes 41 columns (A-AO) with consolidated SLA metrics, d
 > - The agent/technician assigned to work the ticket (`AssignedToUser`)
 > - Blank if no technician is assigned yet
 > - Distinct from Owner (P-Q), which is the staff member responsible for tracking the ticket
+>
+> **Asset Identifier Columns (AP-AQ):**
+> - **AssetId**: UUID of the first attached asset — use for reliable device aggregation (asset tags can change)
+> - **AssetCategory**: Device category (e.g., "Chromebooks", "Laptops", "Projectors") — use for filtering by device type
+> - These columns enable "frequent flyer" analysis: find users (via RequesterId/RequesterName) or devices (via AssetId) with multiple tickets
 >
 > **Formula-Based Analytics:** With this data, build metrics using COUNTIFS, SUMIFS, and pivot tables without additional API calls:
 > - Volume: `=COUNTIFS(E:E, ">=2026-01-01", E:E, "<2026-02-01")` for monthly created

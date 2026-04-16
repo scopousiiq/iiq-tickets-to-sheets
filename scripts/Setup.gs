@@ -7,7 +7,7 @@
  * Data Sheets (always created):
  * - Instructions: Setup and usage guide
  * - Config: API settings and progress tracking
- * - TicketData: Main data (41 columns including SLA metrics, device/asset, and assigned technician)
+ * - TicketData: Main data (46 columns including SLA metrics, device/asset, assigned technician, and custom fields)
  * - Teams: Team directory with Functional Area mapping
  * - DailySnapshot: Daily backlog metrics for trending
  * - Logs: Operation logs
@@ -65,7 +65,7 @@ function setupSpreadsheet() {
     'DATA SHEETS:\n' +
     '- Instructions (setup guide)\n' +
     '- Config (API settings) - CREDENTIALS WILL BE LOST!\n' +
-    '- TicketData (41 columns) - ALL DATA WILL BE LOST!\n' +
+    '- TicketData (46 columns) - ALL DATA WILL BE LOST!\n' +
     '- Teams (directory) - ALL DATA WILL BE LOST!\n' +
     '- DailySnapshot (trending) - ALL DATA WILL BE LOST!\n' +
     '- Logs (operations)\n\n' +
@@ -126,6 +126,7 @@ function setupSpreadsheet() {
   setupConfigSheet(ss, schoolYear); created.push('Config');
   setupTicketDataSheet(ss); created.push('TicketData');
   setupTeamsSheet(ss); created.push('Teams');
+  setupCustomFieldsSheet(ss); created.push('CustomFields');
   setupDailySnapshotSheet(ss); created.push('DailySnapshot');
   setupLogsSheet(ss); created.push('Logs');
 
@@ -150,7 +151,8 @@ function setupSpreadsheet() {
   message.push('1. Fill in Config sheet with API credentials');
   message.push('2. Run "Verify Configuration" to check settings');
   message.push('3. Run "Refresh Teams" to load team directory');
-  message.push('4. Run "Continue Loading" to start loading ticket data');
+  message.push('4. (Optional) Run "Refresh Custom Fields" to enable custom field dropdowns');
+  message.push('5. Run "Continue Loading" to start loading ticket data');
 
   ui.alert('Setup Complete', message.join('\n'), ui.ButtonSet.OK);
 }
@@ -254,7 +256,7 @@ function setupInstructionsSheet(ss) {
     [''],
     ['DATA SHEETS (populated by scripts):'],
     [''],
-    ['• TicketData (41 columns)'],
+    ['• TicketData (46 columns)'],
     ['  Main ticket data including SLA metrics and device info. Columns include:'],
     ['  - Ticket info: ID, Number, Subject, School Year, Status, Priority'],
     ['  - Dates: Created, Started, Modified, Closed, Due'],
@@ -476,43 +478,54 @@ function setupConfigSheet(ss, schoolYear) {
 
   // Headers and initial config values
   const configData = [
-    ['Key', 'Value'],
-    ['', ''],
-    ['# API Configuration (Required)', ''],
-    ['API_BASE_URL', 'https://YOUR-DISTRICT.incidentiq.com'],
-    ['BEARER_TOKEN', ''],
-    ['SITE_ID', ''],
-    ['MODULE', 'Ticketing'],
-    ['', ''],
-    ['# School Year Configuration', ''],
-    ['SCHOOL_YEAR', defaultSchoolYear],
-    ['SCHOOL_YEAR_START', '07-01'],
-    ['', ''],
-    ['# Performance Settings (Optional)', ''],
-    ['PAGE_SIZE', '100'],
-    ['THROTTLE_MS', '1000'],
-    ['TICKET_BATCH_SIZE', '2000'],
-    ['STALE_DAYS', '7'],
-    ['SLA_RISK_PERCENT', '75'],
-    ['', ''],
-    ['# Progress Tracking - Managed Automatically', ''],
-    ['TICKET_TOTAL_PAGES', ''],
-    ['TICKET_LAST_PAGE', '-1'],
-    ['TICKET_COMPLETE', 'FALSE'],
-    ['TICKET_LAST_FETCH', ''],
-    ['', ''],
-    ['# Config Lock - Set when loading starts, cleared by "Clear Data + Reset"', ''],
-    ['SCHOOL_YEAR_LOADED', ''],
-    ['PAGE_SIZE_LOADED', ''],
-    ['BATCH_SIZE_LOADED', ''],
-    ['MODULE_LOADED', ''],
-    ['', ''],
-    ['LAST_REFRESH', ''],
-    ['', ''],
-    ['# Version Information', ''],
-    ['SCRIPT_VERSION', SCRIPT_VERSION],
-    ['LATEST_VERSION', ''],
-    ['VERSION_CHECK_DATE', '']
+    ['Key', 'Value'],                                                          // 1
+    ['', ''],                                                                  // 2
+    ['# API Configuration (Required)', ''],                                    // 3
+    ['API_BASE_URL', 'https://YOUR-DISTRICT.incidentiq.com'],                  // 4
+    ['BEARER_TOKEN', ''],                                                      // 5
+    ['SITE_ID', ''],                                                           // 6
+    ['MODULE', 'Ticketing'],                                                   // 7
+    ['', ''],                                                                  // 8
+    ['# School Year Configuration', ''],                                       // 9
+    ['SCHOOL_YEAR', defaultSchoolYear],                                        // 10
+    ['SCHOOL_YEAR_START', '07-01'],                                            // 11
+    ['', ''],                                                                  // 12
+    ['# Performance Settings (Optional)', ''],                                 // 13
+    ['PAGE_SIZE', '100'],                                                      // 14
+    ['THROTTLE_MS', '1000'],                                                   // 15
+    ['TICKET_BATCH_SIZE', '2000'],                                             // 16
+    ['STALE_DAYS', '7'],                                                       // 17
+    ['SLA_RISK_PERCENT', '75'],                                                // 18
+    ['', ''],                                                                  // 19
+    ['# Custom Field Columns (Optional - up to 3)', ''],                       // 20
+    ['CUSTOM_FIELD_1', ''],                                                    // 21
+    ['CUSTOM_FIELD_2', ''],                                                    // 22
+    ['CUSTOM_FIELD_3', ''],                                                    // 23
+    ['', ''],                                                                  // 24
+    ['# Progress Tracking - Managed Automatically', ''],                       // 25
+    ['TICKET_TOTAL_PAGES', ''],                                                // 26
+    ['TICKET_LAST_PAGE', '-1'],                                                // 27
+    ['TICKET_COMPLETE', 'FALSE'],                                              // 28
+    ['TICKET_LAST_FETCH', ''],                                                 // 29
+    ['CUSTOM_FIELD_1_ID', ''],                                                 // 30
+    ['CUSTOM_FIELD_2_ID', ''],                                                 // 31
+    ['CUSTOM_FIELD_3_ID', ''],                                                 // 32
+    ['', ''],                                                                  // 33
+    ['# Config Lock - Set when loading starts, cleared by "Clear Data + Reset"', ''], // 34
+    ['SCHOOL_YEAR_LOADED', ''],                                                // 35
+    ['PAGE_SIZE_LOADED', ''],                                                  // 36
+    ['BATCH_SIZE_LOADED', ''],                                                 // 37
+    ['MODULE_LOADED', ''],                                                     // 38
+    ['CUSTOM_FIELD_1_LOADED', ''],                                             // 39
+    ['CUSTOM_FIELD_2_LOADED', ''],                                             // 40
+    ['CUSTOM_FIELD_3_LOADED', ''],                                             // 41
+    ['', ''],                                                                  // 42
+    ['LAST_REFRESH', ''],                                                      // 43
+    ['', ''],                                                                  // 44
+    ['# Version Information', ''],                                             // 45
+    ['SCRIPT_VERSION', SCRIPT_VERSION],                                        // 46
+    ['LATEST_VERSION', ''],                                                    // 47
+    ['VERSION_CHECK_DATE', '']                                                 // 48
   ];
 
   sheet.getRange(1, 1, configData.length, 2).setValues(configData);
@@ -521,7 +534,7 @@ function setupConfigSheet(ss, schoolYear) {
   sheet.getRange(1, 1, 1, 2).setFontWeight('bold').setBackground('#4285f4').setFontColor('white');
 
   // Format section headers (rows starting with #)
-  const sectionRows = [3, 9, 13, 20, 27, 34];
+  const sectionRows = [3, 9, 13, 20, 25, 34, 45];
   sectionRows.forEach(row => {
     sheet.getRange(row, 1, 1, 2).setFontWeight('bold').setBackground('#e8f0fe');
   });
@@ -543,7 +556,7 @@ function setupConfigSheet(ss, schoolYear) {
 }
 
 /**
- * Setup TicketData sheet with 41-column header
+ * Setup TicketData sheet with TICKET_COLUMN_COUNT-column header
  * Deletes existing sheet if present for clean slate
  */
 function setupTicketDataSheet(ss) {
@@ -560,7 +573,9 @@ function setupTicketDataSheet(ss) {
     'ResponseThreshold', 'ResponseActual', 'ResponseBreach',
     'ResolutionThreshold', 'ResolutionActual', 'ResolutionBreach', 'IsRunning',
     'AssetTag', 'ModelName', 'SerialNumber',
-    'AssignedToUserId', 'AssignedToUserName'
+    'AssignedToUserId', 'AssignedToUserName',
+    'AssetId', 'AssetCategory',
+    'CustomField1', 'CustomField2', 'CustomField3'
   ];
 
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -1548,6 +1563,268 @@ function addSetupMenu() {
     .addToUi();
 }
 
+// =============================================================================
+// CUSTOM FIELD MIGRATION + DISCOVERY
+// =============================================================================
+
+/**
+ * Non-destructive migration: add custom field config rows to existing Config sheets.
+ * Safe to call repeatedly — checks if CUSTOM_FIELD_1 already exists before modifying.
+ * Called from: runTicketDataLoader, verifyConfiguration, listAvailableCustomFields.
+ */
+function migrateConfigForCustomFields() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Config');
+  if (!sheet) return;
+
+  const data = sheet.getDataRange().getValues();
+
+  // Check if already migrated
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][0] === 'CUSTOM_FIELD_1') return; // Already has custom field rows
+  }
+
+  // Find insertion points by looking for known anchor keys
+  let slaRiskRow = -1;       // After Performance Settings
+  let ticketLastFetchRow = -1; // After Progress Tracking
+  let moduleLoadedRow = -1;  // After Config Lock
+
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][0] === 'SLA_RISK_PERCENT') slaRiskRow = i + 1; // 1-indexed
+    if (data[i][0] === 'TICKET_LAST_FETCH') ticketLastFetchRow = i + 1;
+    if (data[i][0] === 'MODULE_LOADED') moduleLoadedRow = i + 1;
+  }
+
+  // Insert in reverse order (bottom to top) so row numbers don't shift
+  // 1. Config Lock section: add _LOADED keys after MODULE_LOADED
+  if (moduleLoadedRow > 0) {
+    sheet.insertRowsAfter(moduleLoadedRow, 3);
+    sheet.getRange(moduleLoadedRow + 1, 1, 3, 2).setValues([
+      ['CUSTOM_FIELD_1_LOADED', ''],
+      ['CUSTOM_FIELD_2_LOADED', ''],
+      ['CUSTOM_FIELD_3_LOADED', '']
+    ]);
+  }
+
+  // Re-read data since rows shifted
+  const data2 = sheet.getDataRange().getValues();
+  ticketLastFetchRow = -1;
+  for (let i = 0; i < data2.length; i++) {
+    if (data2[i][0] === 'TICKET_LAST_FETCH') ticketLastFetchRow = i + 1;
+  }
+
+  // 2. Progress Tracking section: add _ID keys after TICKET_LAST_FETCH
+  if (ticketLastFetchRow > 0) {
+    sheet.insertRowsAfter(ticketLastFetchRow, 3);
+    sheet.getRange(ticketLastFetchRow + 1, 1, 3, 2).setValues([
+      ['CUSTOM_FIELD_1_ID', ''],
+      ['CUSTOM_FIELD_2_ID', ''],
+      ['CUSTOM_FIELD_3_ID', '']
+    ]);
+  }
+
+  // Re-read data since rows shifted again
+  const data3 = sheet.getDataRange().getValues();
+  slaRiskRow = -1;
+  for (let i = 0; i < data3.length; i++) {
+    if (data3[i][0] === 'SLA_RISK_PERCENT') slaRiskRow = i + 1;
+  }
+
+  // 3. User-facing section: add CUSTOM_FIELD names after SLA_RISK_PERCENT
+  if (slaRiskRow > 0) {
+    sheet.insertRowsAfter(slaRiskRow, 5); // blank + header + 3 fields
+    sheet.getRange(slaRiskRow + 1, 1, 5, 2).setValues([
+      ['', ''],
+      ['# Custom Field Columns (Optional - up to 3)', ''],
+      ['CUSTOM_FIELD_1', ''],
+      ['CUSTOM_FIELD_2', ''],
+      ['CUSTOM_FIELD_3', '']
+    ]);
+    // Format section header
+    sheet.getRange(slaRiskRow + 2, 1, 1, 2).setFontWeight('bold').setBackground('#e8f0fe');
+  }
+
+  logOperation('Config', 'MIGRATED', 'Added custom field configuration rows');
+}
+
+/**
+ * Update TicketData header row to include asset ID and custom field columns.
+ * Extends older headers to TICKET_COLUMN_COUNT (46) if needed.
+ * Handles upgrades from 41-column (pre-custom-fields) or 44-column (pre-asset-id) sheets.
+ *
+ * @param {Sheet} sheet - TicketData sheet
+ * @param {Object} config - Config object (unused currently, reserved for future dynamic naming)
+ */
+function updateCustomFieldHeaders(sheet, config) {
+  if (!sheet) return;
+  const lastCol = sheet.getLastColumn();
+  if (lastCol >= TICKET_COLUMN_COUNT) return; // Already has enough columns
+
+  const newHeaders = ['AssetId', 'AssetCategory', 'CustomField1', 'CustomField2', 'CustomField3'];
+  const colsToAdd = TICKET_COLUMN_COUNT - lastCol;
+  if (colsToAdd > 0 && colsToAdd <= 5) {
+    const headers = newHeaders.slice(newHeaders.length - colsToAdd);
+    sheet.getRange(1, lastCol + 1, 1, colsToAdd).setValues([headers]);
+    sheet.getRange(1, lastCol + 1, 1, colsToAdd)
+      .setFontWeight('bold')
+      .setBackground('#4285f4')
+      .setFontColor('white')
+      .setWrap(false);
+  }
+}
+
+/**
+ * Setup CustomFields sheet with headers
+ * This sheet stores available custom field definitions for dropdown selection
+ */
+function setupCustomFieldsSheet(ss) {
+  deleteSheetIfExists(ss, 'CustomFields');
+  const sheet = ss.insertSheet('CustomFields');
+
+  const headers = ['Name', 'CustomFieldTypeId', 'EditorType'];
+  sheet.getRange(1, 1, 1, 3).setValues([headers]);
+
+  // Format header
+  sheet.getRange(1, 1, 1, 3)
+    .setFontWeight('bold')
+    .setBackground('#7b1fa2')
+    .setFontColor('white');
+
+  // Column widths
+  sheet.setColumnWidth(1, 250);  // Name
+  sheet.setColumnWidth(2, 300);  // CustomFieldTypeId
+  sheet.setColumnWidth(3, 100);  // EditorType
+
+  sheet.setFrozenRows(1);
+
+  // Add note explaining the sheet
+  sheet.getRange('A1').setNote(
+    'Custom Fields Reference\n\n' +
+    'This sheet lists all custom fields available in your district.\n\n' +
+    'To use a custom field:\n' +
+    '1. Run "Refresh Custom Fields" from the menu to populate this sheet\n' +
+    '2. In Config sheet, select from CUSTOM_FIELD_1/2/3 dropdowns\n\n' +
+    'The dropdown options come from this sheet\'s Name column.'
+  );
+
+  return true;
+}
+
+/**
+ * Refresh the CustomFields sheet from the API
+ * Populates available custom field definitions and updates Config dropdowns
+ */
+function refreshCustomFields() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Ensure Config rows exist
+  migrateConfigForCustomFields();
+
+  try {
+    const definitions = getTicketCustomFieldDefinitions();
+
+    if (!definitions || definitions.length === 0) {
+      ui.alert('No Custom Fields', 'No ticket custom fields are defined in your district.', ui.ButtonSet.OK);
+      return;
+    }
+
+    // Create or get CustomFields sheet
+    let sheet = ss.getSheetByName('CustomFields');
+    if (!sheet) {
+      setupCustomFieldsSheet(ss);
+      sheet = ss.getSheetByName('CustomFields');
+    }
+
+    // Clear existing data (keep header)
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      sheet.getRange(2, 1, lastRow - 1, 3).clear();
+    }
+
+    // Editor type labels
+    const editorTypes = {
+      0: 'Complex', 1: 'Text', 2: 'Number', 3: 'Date', 4: 'Dropdown',
+      5: 'Checkbox', 6: 'MultiSelect', 7: 'TextArea'
+    };
+
+    // Build data rows
+    const rows = [];
+    for (const def of definitions) {
+      const name = (def.CustomFieldType && def.CustomFieldType.Name) || '';
+      if (!name) continue; // Skip unnamed fields
+
+      const uuid = def.CustomFieldTypeId || '';
+      const editorTypeId = def.EditorTypeId || (def.CustomFieldType && def.CustomFieldType.EditorType) || 0;
+      const typeLabel = editorTypes[editorTypeId] || 'Type ' + editorTypeId;
+
+      rows.push([name, uuid, typeLabel]);
+    }
+
+    // Sort by name
+    rows.sort((a, b) => a[0].localeCompare(b[0]));
+
+    // Write data
+    if (rows.length > 0) {
+      sheet.getRange(2, 1, rows.length, 3).setValues(rows);
+    }
+
+    // Update Config sheet dropdowns
+    updateCustomFieldDropdowns(ss);
+
+    ui.alert('Custom Fields Refreshed',
+      `Found ${rows.length} custom fields.\n\n` +
+      'The CustomFields sheet has been updated and Config dropdowns are now active.\n\n' +
+      'Select custom fields from the CUSTOM_FIELD_1/2/3 dropdowns in the Config sheet.',
+      ui.ButtonSet.OK);
+
+  } catch (e) {
+    ui.alert('Error', 'Failed to fetch custom fields: ' + e.message + '\n\nMake sure API_BASE_URL and BEARER_TOKEN are configured.', ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Update the Config sheet CUSTOM_FIELD_1/2/3 cells with dropdown validation
+ * from the CustomFields sheet
+ */
+function updateCustomFieldDropdowns(ss) {
+  const configSheet = ss.getSheetByName('Config');
+  const customFieldsSheet = ss.getSheetByName('CustomFields');
+
+  if (!configSheet || !customFieldsSheet) return;
+
+  const lastRow = customFieldsSheet.getLastRow();
+  if (lastRow < 2) return; // No custom fields
+
+  // Get custom field names for dropdown
+  const names = customFieldsSheet.getRange(2, 1, lastRow - 1, 1).getValues()
+    .map(row => row[0])
+    .filter(name => name && name.trim() !== '');
+
+  if (names.length === 0) return;
+
+  // Find CUSTOM_FIELD_1/2/3 rows in Config
+  const configData = configSheet.getRange(1, 1, configSheet.getLastRow(), 1).getValues();
+  const customFieldRows = [];
+  for (let i = 0; i < configData.length; i++) {
+    const key = String(configData[i][0]).trim();
+    if (key === 'CUSTOM_FIELD_1' || key === 'CUSTOM_FIELD_2' || key === 'CUSTOM_FIELD_3') {
+      customFieldRows.push(i + 1); // 1-indexed
+    }
+  }
+
+  // Add dropdown validation to each custom field config cell
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(names, true)
+    .setAllowInvalid(true) // Allow empty or manual entry
+    .setHelpText('Select a custom field from the list, or leave blank')
+    .build();
+
+  for (const row of customFieldRows) {
+    configSheet.getRange(row, 2).setDataValidation(rule);
+  }
+}
+
 /**
  * Verify configuration is complete
  */
@@ -1555,6 +1832,10 @@ function verifyConfiguration() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const issues = [];
+  const warnings = [];
+
+  // Ensure custom field config rows exist for upgraded sheets
+  migrateConfigForCustomFields();
 
   // Get all sheet names at once (faster than checking each individually)
   const sheetNames = ss.getSheets().map(s => s.getName());
@@ -1614,7 +1895,7 @@ function verifyConfiguration() {
         }
       }
 
-      // Check for config lock mismatches (school year, page size, batch size)
+      // Check for config lock mismatches (school year, page size, batch size, custom fields)
       const lockStatus = checkConfigLock(config);
       if (lockStatus.locked && !lockStatus.matches) {
         lockStatus.mismatches.forEach(m => {
@@ -1623,6 +1904,20 @@ function verifyConfiguration() {
             `Use "Clear Data + Reset Progress" to change locked values.`
           );
         });
+      }
+
+      // Check custom field configuration
+      const cfFields = [
+        { name: config.customField1, id: config.customField1Id, label: '1' },
+        { name: config.customField2, id: config.customField2Id, label: '2' },
+        { name: config.customField3, id: config.customField3Id, label: '3' }
+      ];
+      for (const cf of cfFields) {
+        if (cf.name && cf.id === 'NOT_FOUND') {
+          warnings.push(`Custom Field ${cf.label} "${cf.name}" was not found in your district. Check spelling or use "List Available Custom Fields" to see valid names.`);
+        } else if (cf.name && !cf.id) {
+          warnings.push(`Custom Field ${cf.label} "${cf.name}" will be resolved on the next data load.`);
+        }
       }
 
     } catch (e) {
@@ -1651,16 +1946,44 @@ function verifyConfiguration() {
       lockMessage = `\n\nConfig Lock: Unlocked (can change settings)`;
     }
 
+    // Custom fields summary
+    let cfMessage = '\n\nCustom Fields:';
+    const cfFields = [
+      { name: config.customField1, id: config.customField1Id, label: '1' },
+      { name: config.customField2, id: config.customField2Id, label: '2' },
+      { name: config.customField3, id: config.customField3Id, label: '3' }
+    ];
+    for (const cf of cfFields) {
+      if (!cf.name) {
+        cfMessage += `\n  ${cf.label}: (not configured)`;
+      } else if (cf.id === 'NOT_FOUND') {
+        cfMessage += `\n  ${cf.label}: ${cf.name} (not found)`;
+      } else if (cf.id) {
+        cfMessage += `\n  ${cf.label}: ${cf.name} (resolved)`;
+      } else {
+        cfMessage += `\n  ${cf.label}: ${cf.name} (pending resolution)`;
+      }
+    }
+
+    let warningMessage = '';
+    if (warnings.length > 0) {
+      warningMessage = `\n\nWarnings:\n- ${warnings.join('\n- ')}`;
+    }
+
     ui.alert('Configuration Valid',
       `All required settings are configured.\n\n` +
       `School Year: ${config.schoolYear}\n` +
       `Module: ${config.module}\n` +
       `Date Range: ${dateRange}\n` +
       `Status: ${isCurrent ? 'Current (incremental updates enabled)' : 'Historical'}` +
-      lockMessage + `\n\n` +
+      lockMessage + cfMessage + warningMessage + `\n\n` +
       `You can now run "Continue Loading" to start loading data.`,
       ui.ButtonSet.OK);
   } else {
-    ui.alert('Configuration Issues', 'Please fix the following issues:\n\n- ' + issues.join('\n- '), ui.ButtonSet.OK);
+    let warningMessage = '';
+    if (warnings.length > 0) {
+      warningMessage = '\n\nWarnings:\n- ' + warnings.join('\n- ');
+    }
+    ui.alert('Configuration Issues', 'Please fix the following issues:\n\n- ' + issues.join('\n- ') + warningMessage, ui.ButtonSet.OK);
   }
 }

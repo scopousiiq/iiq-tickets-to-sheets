@@ -12,11 +12,16 @@
  * - SLA metrics are consolidated into TicketData (columns 30-36)
  * - Device/asset info from first asset in columns 37-39 (AK-AM)
  * - Assigned technician in columns 40-41 (AN-AO)
+ * - Asset identifiers in columns 42-43 (AP-AQ)
+ * - Custom field values in columns 44-46 (AR-AT)
  * - SLA is fetched per-batch during ticket loading, no separate SLA loading phase
  */
 
 /** Current script version — update when releasing new versions */
-const SCRIPT_VERSION = '1.1.1';
+const SCRIPT_VERSION = '1.3.0';
+
+/** Number of columns in TicketData sheet (41 base + 2 asset ID + 3 custom field slots) */
+const TICKET_COLUMN_COUNT = 46;
 
 function getConfig() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');
@@ -142,11 +147,21 @@ function getConfig() {
     // School year configuration
     schoolYear: schoolYear,
     schoolYearStart: schoolYearStart,
+    // Custom field columns (optional, up to 3)
+    customField1: getStringValue(rawConfig['CUSTOM_FIELD_1']) || '',
+    customField2: getStringValue(rawConfig['CUSTOM_FIELD_2']) || '',
+    customField3: getStringValue(rawConfig['CUSTOM_FIELD_3']) || '',
+    customField1Id: getStringValue(rawConfig['CUSTOM_FIELD_1_ID']) || '',
+    customField2Id: getStringValue(rawConfig['CUSTOM_FIELD_2_ID']) || '',
+    customField3Id: getStringValue(rawConfig['CUSTOM_FIELD_3_ID']) || '',
     // Locked values (set when data loading starts, cleared by "Clear Data + Reset")
     schoolYearLoaded: schoolYearLoaded,
     pageSizeLoaded: pageSizeLoaded,
     batchSizeLoaded: batchSizeLoaded,
-    moduleLoaded: moduleLoaded
+    moduleLoaded: moduleLoaded,
+    customField1Loaded: getStringValue(rawConfig['CUSTOM_FIELD_1_LOADED']) || '',
+    customField2Loaded: getStringValue(rawConfig['CUSTOM_FIELD_2_LOADED']) || '',
+    customField3Loaded: getStringValue(rawConfig['CUSTOM_FIELD_3_LOADED']) || ''
   };
 
   // Simplified progress tracking (no year suffix)
@@ -280,6 +295,29 @@ function checkConfigLock(config) {
     });
   }
 
+  // Check custom fields — no truthy guard: blank→non-blank must be caught
+  if (config.customField1 !== config.customField1Loaded) {
+    mismatches.push({
+      key: 'CUSTOM_FIELD_1',
+      current: config.customField1 || '(blank)',
+      locked: config.customField1Loaded || '(blank)'
+    });
+  }
+  if (config.customField2 !== config.customField2Loaded) {
+    mismatches.push({
+      key: 'CUSTOM_FIELD_2',
+      current: config.customField2 || '(blank)',
+      locked: config.customField2Loaded || '(blank)'
+    });
+  }
+  if (config.customField3 !== config.customField3Loaded) {
+    mismatches.push({
+      key: 'CUSTOM_FIELD_3',
+      current: config.customField3 || '(blank)',
+      locked: config.customField3Loaded || '(blank)'
+    });
+  }
+
   return {
     locked: true,
     matches: mismatches.length === 0,
@@ -333,6 +371,9 @@ function lockConfig() {
   setConfigValue('PAGE_SIZE_LOADED', config.pageSize);
   setConfigValue('BATCH_SIZE_LOADED', config.ticketBatchSize);
   setConfigValue('MODULE_LOADED', config.module);
+  setConfigValue('CUSTOM_FIELD_1_LOADED', config.customField1);
+  setConfigValue('CUSTOM_FIELD_2_LOADED', config.customField2);
+  setConfigValue('CUSTOM_FIELD_3_LOADED', config.customField3);
   logOperation('Config', 'LOCKED',
     `Configuration locked: SCHOOL_YEAR=${config.schoolYear}, PAGE_SIZE=${config.pageSize}, BATCH_SIZE=${config.ticketBatchSize}, MODULE=${config.module}`);
 }
@@ -353,7 +394,14 @@ function unlockConfig() {
   setConfigValue('PAGE_SIZE_LOADED', '');
   setConfigValue('BATCH_SIZE_LOADED', '');
   setConfigValue('MODULE_LOADED', '');
-  logOperation('Config', 'UNLOCKED', 'Configuration unlocked (SCHOOL_YEAR, PAGE_SIZE, BATCH_SIZE, MODULE)');
+  // Clear custom field locks AND resolved IDs (forces re-resolution on next load)
+  setConfigValue('CUSTOM_FIELD_1_LOADED', '');
+  setConfigValue('CUSTOM_FIELD_2_LOADED', '');
+  setConfigValue('CUSTOM_FIELD_3_LOADED', '');
+  setConfigValue('CUSTOM_FIELD_1_ID', '');
+  setConfigValue('CUSTOM_FIELD_2_ID', '');
+  setConfigValue('CUSTOM_FIELD_3_ID', '');
+  logOperation('Config', 'UNLOCKED', 'Configuration unlocked (SCHOOL_YEAR, PAGE_SIZE, BATCH_SIZE, MODULE, CUSTOM_FIELDS)');
 }
 
 /**
@@ -361,6 +409,70 @@ function unlockConfig() {
  */
 function unlockSchoolYear() {
   unlockConfig();
+}
+
+// =============================================================================
+// CUSTOM FIELD RESOLUTION
+// =============================================================================
+
+/**
+ * Resolve custom field names to CustomFieldTypeId UUIDs via the discovery API.
+ * Only calls the API if at least one field needs resolution (name set, ID empty or NOT_FOUND).
+ * Writes resolved IDs back to Config sheet via setConfigValue().
+ *
+ * @param {Object} config - Config object from getConfig()
+ * @returns {Object} - { resolved: number, notFound: string[] }
+ */
+function resolveCustomFieldIds(config) {
+  const fields = [
+    { name: config.customField1, id: config.customField1Id, key: 'CUSTOM_FIELD_1_ID', label: '1' },
+    { name: config.customField2, id: config.customField2Id, key: 'CUSTOM_FIELD_2_ID', label: '2' },
+    { name: config.customField3, id: config.customField3Id, key: 'CUSTOM_FIELD_3_ID', label: '3' }
+  ];
+
+  // Check which fields need resolution
+  const needsResolution = fields.filter(f => f.name && (!f.id || f.id === 'NOT_FOUND'));
+  if (needsResolution.length === 0) {
+    return { resolved: 0, notFound: [] };
+  }
+
+  // Call discovery endpoint once
+  logOperation('CustomFields', 'RESOLVING', `Resolving ${needsResolution.length} custom field name(s)`);
+  let definitions;
+  try {
+    definitions = getTicketCustomFieldDefinitions();
+  } catch (e) {
+    logOperation('CustomFields', 'ERROR', 'Failed to fetch custom field definitions: ' + e.message);
+    return { resolved: 0, notFound: needsResolution.map(f => f.name) };
+  }
+
+  // Build lowercase name → CustomFieldTypeId map
+  const nameToId = new Map();
+  for (const def of definitions) {
+    const typeName = def.CustomFieldType && def.CustomFieldType.Name;
+    if (typeName && def.CustomFieldTypeId) {
+      nameToId.set(typeName.trim().toLowerCase(), def.CustomFieldTypeId);
+    }
+  }
+
+  let resolved = 0;
+  const notFound = [];
+
+  for (const field of needsResolution) {
+    const lookupKey = field.name.trim().toLowerCase();
+    const uuid = nameToId.get(lookupKey);
+    if (uuid) {
+      setConfigValue(field.key, uuid);
+      logOperation('CustomFields', 'RESOLVED', `Custom Field ${field.label} "${field.name}" → ${uuid}`);
+      resolved++;
+    } else {
+      setConfigValue(field.key, 'NOT_FOUND');
+      logOperation('CustomFields', 'WARNING', `Custom Field ${field.label} "${field.name}" not found in district`);
+      notFound.push(field.name);
+    }
+  }
+
+  return { resolved, notFound };
 }
 
 /**
