@@ -2722,12 +2722,12 @@ function setupFrequentFlyersSheet(ss) {
     .setBackground('#1976d2')
     .setFontColor('white');
 
-  // === REQUESTER DETAIL SECTION (Row 4+, Columns I-M) ===
-  const detailHeaders = ['Created Date', 'Model', 'Ticket #', 'Issue Type', 'Issue Category'];
-  sheet.getRange(4, 9, 1, 5).setValues([detailHeaders]);
+  // === REQUESTER DETAIL SECTION (Row 4+, Columns I-N) ===
+  const detailHeaders = ['Created Date', 'Asset Tag', 'Model', 'Ticket #', 'Issue Type', 'Issue Category'];
+  sheet.getRange(4, 9, 1, 6).setValues([detailHeaders]);
 
   // Detail formula - shows tickets for selected requester within date range
-  // Columns: CreatedDate (E), ModelName (AL), TicketNumber (B), IssueTypeName (AA), IssueCategoryName (Y)
+  // Columns: CreatedDate (E), AssetTag (AK), ModelName (AL), TicketNumber (B), IssueTypeName (AA), IssueCategoryName (Y)
   const detailFormula =
     '=LET(' +
     'selectedReq, $H$2,' +
@@ -2737,17 +2737,17 @@ function setupFrequentFlyersSheet(ss) {
     'IF(selectedReq="",' +
     '  {"Select a requester from H2"},' +
     '  IF(hasDateFilter,' +
-    '    IFERROR(SORT(FILTER({TicketData!E:E, TicketData!AL:AL, TicketData!B:B, TicketData!AA:AA, TicketData!Y:Y},' +
+    '    IFERROR(SORT(FILTER({TicketData!E:E, TicketData!AK:AK, TicketData!AL:AL, TicketData!B:B, TicketData!AA:AA, TicketData!Y:Y},' +
     '      TicketData!AC:AC=selectedReq, TicketData!E:E>=dateFrom, TicketData!E:E<=dateTo), 1, FALSE),' +
     '      {"No tickets found for this requester in date range"}),' +
-    '    IFERROR(SORT(FILTER({TicketData!E:E, TicketData!AL:AL, TicketData!B:B, TicketData!AA:AA, TicketData!Y:Y},' +
+    '    IFERROR(SORT(FILTER({TicketData!E:E, TicketData!AK:AK, TicketData!AL:AL, TicketData!B:B, TicketData!AA:AA, TicketData!Y:Y},' +
     '      TicketData!AC:AC=selectedReq), 1, FALSE),' +
     '      {"No tickets found for this requester"}))))';
 
   sheet.getRange('I5').setValue(detailFormula);
 
   // Format detail header
-  sheet.getRange(4, 9, 1, 5)
+  sheet.getRange(4, 9, 1, 6)
     .setFontWeight('bold')
     .setBackground('#388e3c')
     .setFontColor('white');
@@ -2786,7 +2786,7 @@ function setupFrequentFlyersSheet(ss) {
   sheet.getRange('A3').setValue('USER FREQUENT FLYERS');
   sheet.getRange('I3').setValue('REQUESTER TICKET DETAILS');
   sheet.getRange('A3:G3').merge().setFontWeight('bold').setFontSize(11);
-  sheet.getRange('I3:M3').merge().setFontWeight('bold').setFontSize(11);
+  sheet.getRange('I3:N3').merge().setFontWeight('bold').setFontSize(11);
 
   // Number formats
   sheet.getRange('F:F').setNumberFormat('0.0');  // Avg Resolution (users)
@@ -2798,10 +2798,11 @@ function setupFrequentFlyersSheet(ss) {
   sheet.setColumnWidth(7, 120);  // Last Refreshed
   sheet.setColumnWidth(8, 180);  // Selected Requester
   sheet.setColumnWidth(9, 100);  // Created Date
-  sheet.setColumnWidth(10, 180); // Model
-  sheet.setColumnWidth(11, 80);  // Ticket #
-  sheet.setColumnWidth(12, 150); // Issue Type
-  sheet.setColumnWidth(13, 150); // Issue Category
+  sheet.setColumnWidth(10, 120); // Asset Tag
+  sheet.setColumnWidth(11, 180); // Model
+  sheet.setColumnWidth(12, 80);  // Ticket #
+  sheet.setColumnWidth(13, 150); // Issue Type
+  sheet.setColumnWidth(14, 150); // Issue Category
 
   sheet.setFrozenRows(4);
 

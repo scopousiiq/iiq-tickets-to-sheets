@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.3.1 — Small fixes and tweaks (2026-04-16)
+
+### Added
+- **Asset Tag column in FrequentFlyers requester detail** — Requester ticket details now include the asset tag alongside Model, making it easier to identify the specific device tied to each ticket.
+
+### Fixed
+- **DeviceReliability % of Model calculation** — Percentages were inconsistently calculating due to array/scalar broadcasting behavior in Google Sheets. Replaced `counts/totalForModel` with `MAP(counts, LAMBDA(c, c/totalForModel))` for reliable per-row division.
+
+### Changed
+- **DeviceReliability model dropdown** — K2 "Selected Model" dropdown now sorts by ticket count descending (highest-ticket models first), matching the left-side data table's default sort.
+
+---
+
 ## v1.3.0 — Device Analytics + Improved Custom Fields Workflow (2026-04-16)
 
 ### Added
