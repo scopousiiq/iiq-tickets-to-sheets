@@ -329,6 +329,21 @@ function addTemporalPatternsSheet() {
 // --- Device ---
 
 /**
+ * Add Devices by Role sheet (deletes and recreates if exists)
+ */
+function addDevicesByRoleSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  setupDevicesByRoleSheet(ss);
+  SpreadsheetApp.getUi().alert(
+    'Created',
+    'DevicesByRole sheet has been created.\n\n' +
+    'Use the "User Role" dropdown (K2) to filter by Student, Staff, Agent, or All.\n\n' +
+    'Note: Requires a Full Reload to populate the RequesterRole column on existing rows.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+
+/**
  * Add Device Reliability sheet (deletes and recreates if exists)
  */
 function addDeviceReliabilitySheet() {
@@ -1918,6 +1933,124 @@ function setupQueueTimeTrendSheet(ss) {
     '- Red: > 8 hours (needs attention)\n\n' +
     'Tip: Set Sort by=1 and Ascending=FALSE to see recent months first.'
   );
+
+  return true;
+}
+
+/**
+ * Setup DevicesByRole sheet — device model metrics filterable by requester role
+ * Question: "Which device models are generating tickets for students vs staff?"
+ * Deletes existing sheet if present for clean slate
+ */
+function setupDevicesByRoleSheet(ss) {
+  deleteSheetIfExists(ss, 'DevicesByRole');
+  const sheet = ss.insertSheet('DevicesByRole');
+
+  // === ROLE FILTER CONTROL (row 1-2, columns K-L) ===
+  sheet.getRange('K1').setValue('User Role');
+  sheet.getRange('K1')
+    .setFontWeight('bold')
+    .setBackground('#1565c0')
+    .setFontColor('white');
+  sheet.getRange('K2').setValue('All');
+  sheet.getRange('K1').setNote('Filter the device table by the role of the ticket requester (the "For" user)');
+
+  const roleDropdownRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['All', 'Student', 'Staff', 'Agent', 'Guest'], true)
+    .setAllowInvalid(false)
+    .setHelpText('Filter by requester role: All, Student, Staff, Agent, or Guest')
+    .build();
+  sheet.getRange('K2').setDataValidation(roleDropdownRule);
+
+  // === MAIN TABLE (row 1-2 headers, row 3+ data, columns A-I) ===
+  const headers = ['Model Name', 'Category', 'Total Tickets', 'Open', 'Closed', 'Avg Resolution (days)', 'Breach Rate', 'Sort Col#', 'Desc?'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // Main formula — aggregates by ModelName (AL), filtered by RequesterRole (AU)
+  // When role = "All" every ticket counts; otherwise COUNTIFS adds the role criteria.
+  const mainFormula =
+    '=LET(' +
+    'selectedRole, $K$2,' +
+    'models, IF(selectedRole="All",' +
+    '  UNIQUE(FILTER(TicketData!AL2:AL, TicketData!AL2:AL<>"")),' +
+    '  UNIQUE(FILTER(TicketData!AL2:AL, TicketData!AL2:AL<>"", TicketData!AU2:AU=selectedRole))),' +
+    'col_a, models,' +
+    'col_b, BYROW(models, LAMBDA(m, IFERROR(INDEX(TicketData!AQ:AQ, MATCH(m, TicketData!AL:AL, 0)), ""))),' +
+    'col_c, BYROW(models, LAMBDA(m, IF(selectedRole="All",' +
+    '  COUNTIF(TicketData!AL:AL, m),' +
+    '  COUNTIFS(TicketData!AL:AL, m, TicketData!AU:AU, selectedRole)))),' +
+    'col_d, BYROW(models, LAMBDA(m, IF(selectedRole="All",' +
+    '  COUNTIFS(TicketData!AL:AL, m, TicketData!I:I, "Open"),' +
+    '  COUNTIFS(TicketData!AL:AL, m, TicketData!AU:AU, selectedRole, TicketData!I:I, "Open")))),' +
+    'col_e, BYROW(models, LAMBDA(m, IF(selectedRole="All",' +
+    '  COUNTIFS(TicketData!AL:AL, m, TicketData!I:I, "Closed"),' +
+    '  COUNTIFS(TicketData!AL:AL, m, TicketData!AU:AU, selectedRole, TicketData!I:I, "Closed")))),' +
+    'col_f, BYROW(models, LAMBDA(m, IFERROR(' +
+    '  IF(selectedRole="All",' +
+    '    AVERAGEIFS(TicketData!R:R, TicketData!AL:AL, m, TicketData!I:I, "Closed"),' +
+    '    AVERAGEIFS(TicketData!R:R, TicketData!AL:AL, m, TicketData!AU:AU, selectedRole, TicketData!I:I, "Closed")), "N/A"))),' +
+    'col_g, BYROW(models, LAMBDA(m, LET(' +
+    '  total, IF(selectedRole="All",' +
+    '    COUNTIFS(TicketData!AL:AL, m, TicketData!I:I, "Closed"),' +
+    '    COUNTIFS(TicketData!AL:AL, m, TicketData!AU:AU, selectedRole, TicketData!I:I, "Closed")),' +
+    '  breached, IF(selectedRole="All",' +
+    '    COUNTIFS(TicketData!AL:AL, m, TicketData!I:I, "Closed", TicketData!AF:AF, 1)+COUNTIFS(TicketData!AL:AL, m, TicketData!I:I, "Closed", TicketData!AI:AI, 1),' +
+    '    COUNTIFS(TicketData!AL:AL, m, TicketData!AU:AU, selectedRole, TicketData!I:I, "Closed", TicketData!AF:AF, 1)+COUNTIFS(TicketData!AL:AL, m, TicketData!AU:AU, selectedRole, TicketData!I:I, "Closed", TicketData!AI:AI, 1)),' +
+    '  IF(total>0, breached/total, "N/A")))),' +
+    'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g),' +
+    'SORT(data, $H$2, $I$2))';
+
+  sheet.getRange('A2').setValue(mainFormula);
+
+  // Default sort settings (column 3 = Total Tickets, descending)
+  sheet.getRange('H2').setValue(3);
+  sheet.getRange('I2').setValue('FALSE');
+
+  // Format header
+  sheet.getRange(1, 1, 1, headers.length)
+    .setFontWeight('bold')
+    .setBackground('#1565c0')
+    .setFontColor('white');
+
+  // Format columns
+  sheet.getRange('F:F').setNumberFormat('0.0');   // Avg Resolution
+  sheet.getRange('G:G').setNumberFormat('0.0%');  // Breach Rate
+
+  // Column widths
+  sheet.setColumnWidth(1, 220);  // Model Name
+  sheet.setColumnWidth(2, 130);  // Category
+  sheet.setColumnWidth(8, 80);   // Sort Col#
+  sheet.setColumnWidth(9, 60);   // Desc?
+  sheet.setColumnWidth(10, 30);  // Spacer
+  sheet.setColumnWidth(11, 100); // Role filter label/value
+
+  // Sort column validation
+  const sortColRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['1', '2', '3', '4', '5', '6', '7'], true)
+    .setHelpText('1=Model, 2=Category, 3=Total, 4=Open, 5=Closed, 6=AvgRes, 7=Breach')
+    .build();
+  sheet.getRange('H2').setDataValidation(sortColRule);
+
+  const sortOrderRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['FALSE', 'TRUE'], true)
+    .setHelpText('FALSE=Descending, TRUE=Ascending')
+    .build();
+  sheet.getRange('I2').setDataValidation(sortOrderRule);
+
+  sheet.setFrozenRows(1);
+
+  sheet.getRange('A1').setNote(
+    'Devices by Role\n\n' +
+    'Question: "Which device models are generating tickets for students vs staff?"\n\n' +
+    '• Use the User Role dropdown (K2) to switch between Student, Staff, Agent, or All\n' +
+    '• Category = asset category (e.g., Chromebooks, Staff Laptops)\n' +
+    '• Role is determined by the "For" user on each ticket (the person the ticket is for)\n' +
+    '• Breach rate = % of closed tickets that breached SLA\n\n' +
+    'IMPORTANT: Requires a Full Reload after updating to v1.3.4 to populate\n' +
+    'the RequesterRole column on existing rows.'
+  );
+  sheet.getRange('H2').setNote('Sort column: 1=Model, 2=Category, 3=Total, 4=Open, 5=Closed, 6=AvgRes, 7=Breach');
+  sheet.getRange('I2').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
 
   return true;
 }

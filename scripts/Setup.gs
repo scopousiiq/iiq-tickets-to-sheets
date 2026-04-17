@@ -575,7 +575,8 @@ function setupTicketDataSheet(ss) {
     'AssetTag', 'ModelName', 'SerialNumber',
     'AssignedToUserId', 'AssignedToUserName',
     'AssetId', 'AssetCategory',
-    'CustomField1', 'CustomField2', 'CustomField3'
+    'CustomField1', 'CustomField2', 'CustomField3',
+    'RequesterRole'
   ];
 
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -1648,9 +1649,9 @@ function migrateConfigForCustomFields() {
 }
 
 /**
- * Update TicketData header row to include asset ID and custom field columns.
- * Extends older headers to TICKET_COLUMN_COUNT (46) if needed.
- * Handles upgrades from 41-column (pre-custom-fields) or 44-column (pre-asset-id) sheets.
+ * Update TicketData header row to include newer columns.
+ * Extends older headers to TICKET_COLUMN_COUNT (47) if needed.
+ * Handles upgrades from 41-column, 44-column, 46-column, and earlier sheets.
  *
  * @param {Sheet} sheet - TicketData sheet
  * @param {Object} config - Config object (unused currently, reserved for future dynamic naming)
@@ -1660,9 +1661,9 @@ function updateCustomFieldHeaders(sheet, config) {
   const lastCol = sheet.getLastColumn();
   if (lastCol >= TICKET_COLUMN_COUNT) return; // Already has enough columns
 
-  const newHeaders = ['AssetId', 'AssetCategory', 'CustomField1', 'CustomField2', 'CustomField3'];
+  const newHeaders = ['AssetId', 'AssetCategory', 'CustomField1', 'CustomField2', 'CustomField3', 'RequesterRole'];
   const colsToAdd = TICKET_COLUMN_COUNT - lastCol;
-  if (colsToAdd > 0 && colsToAdd <= 5) {
+  if (colsToAdd > 0 && colsToAdd <= 6) {
     const headers = newHeaders.slice(newHeaders.length - colsToAdd);
     sheet.getRange(1, lastCol + 1, 1, colsToAdd).setValues([headers]);
     sheet.getRange(1, lastCol + 1, 1, colsToAdd)

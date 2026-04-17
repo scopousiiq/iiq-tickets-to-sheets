@@ -94,6 +94,7 @@ function onOpen() {
         .addItem('Frequent Requesters', 'addFrequentRequestersSheet'))
       .addSubMenu(ui.createMenu('Device')
         .addItem('Device Reliability', 'addDeviceReliabilitySheet')
+        .addItem('Devices by Role', 'addDevicesByRoleSheet')
         .addItem('User Frequent Flyers', 'addFrequentFlyersSheet'))
       .addSeparator()
       .addItem('Regenerate All Monthly Sheets', 'regenerateMonthlyAnalyticsSheets'))

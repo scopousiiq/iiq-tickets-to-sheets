@@ -922,7 +922,9 @@ function extractTicketRow(ticket, now, year, slaMap, customFieldIds) {
     // AR-AT: Custom Fields (configurable via CUSTOM_FIELD_1/2/3 in Config)
     extractCustomFieldValue(ticket, cfIds[0]),
     extractCustomFieldValue(ticket, cfIds[1]),
-    extractCustomFieldValue(ticket, cfIds[2])
+    extractCustomFieldValue(ticket, cfIds[2]),
+    // AU: Requester Role (role of the "for" user — Student, Staff, Agent, Guest, etc.)
+    ticket.For ? (ticket.For.Role ? (ticket.For.Role.Name || '') : '') : ''
   ];
 }
 

@@ -644,7 +644,8 @@ function createTicketSheet(ss) {
     'AssetTag', 'ModelName', 'SerialNumber',
     'AssignedToUserId', 'AssignedToUserName',
     'AssetId', 'AssetCategory',
-    'CustomField1', 'CustomField2', 'CustomField3'
+    'CustomField1', 'CustomField2', 'CustomField3',
+    'RequesterRole'
   ];
   sheet.getRange(1, 1, 1, TICKET_COLUMN_COUNT).setValues([headers]);
   sheet.setFrozenRows(1);

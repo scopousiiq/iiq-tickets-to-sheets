@@ -4,6 +4,22 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.3.4 — RequesterRole column + Devices by Role analytics sheet (2026-04-17)
+
+### Added
+- **RequesterRole column (AU)** — TicketData now captures the role of the ticket's "For" user (`ticket.For.Role.Name`). Possible values: `Student`, `Staff`, `Agent`, `Guest`, `No Access`, `iiQ Administrator`. 47 columns total. The value is already present in every `searchTickets` API response — no extra API calls needed.
+- **DevicesByRole analytics sheet** — New sheet under iiQ Data > Add Analytics Sheet > Device > Devices by Role. Shows device model metrics (Total, Open, Closed, Avg Resolution, Breach Rate) with a role dropdown (All / Student / Staff / Agent / Guest) so faculty/staff device issues can be viewed separately from student device issues.
+
+### Changed
+- `updateCustomFieldHeaders` migration function extended to cover the 46→47 column upgrade (adds `RequesterRole` header to existing sheets automatically on next data load).
+
+### Upgrade Notes
+1. Update all scripts to v1.3.4
+2. Run **iiQ Data > Ticket Data > Full Reload** to populate `RequesterRole` on existing rows (requires removing triggers first — the column is blank for any rows loaded before this version)
+3. Add the new sheet via **iiQ Data > Add Analytics Sheet > Device > Devices by Role**
+
+---
+
 ## v1.3.3 — Duplicate ticket fix + MTD formula reliability (2026-04-17)
 
 ### Fixed
