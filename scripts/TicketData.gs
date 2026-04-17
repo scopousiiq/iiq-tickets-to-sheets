@@ -746,6 +746,13 @@ function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch, custom
 /**
  * Extract the value of a custom field from a ticket's CustomFieldValues array.
  *
+ * For simple fields (text/number/date) the API returns `Value` as a scalar
+ * string. For complex fields (Select/MultiSelect/IiqUser/IiqAsset/etc.) the
+ * API returns `Value` as a JSON-encoded string containing either an array of
+ * GUIDs, an array of objects, or a single object. This function unwraps those
+ * shapes and produces a human-readable string, joining multiple entries with
+ * a comma.
+ *
  * @param {Object} ticket - Ticket object from API (must have CustomFieldValues array)
  * @param {string} customFieldTypeId - UUID of the custom field type to extract
  * @returns {string} - The field value, or empty string if not found/not configured
@@ -756,8 +763,57 @@ function extractCustomFieldValue(ticket, customFieldTypeId) {
   const match = ticket.CustomFieldValues.find(
     cf => cf.CustomFieldTypeId === customFieldTypeId
   );
-  if (!match) return '';
-  return match.Value != null ? String(match.Value) : '';
+  if (!match || match.Value == null) return '';
+
+  const raw = String(match.Value);
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+
+  const firstChar = trimmed.charAt(0);
+  if (firstChar !== '[' && firstChar !== '{') return raw;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (e) {
+    return raw;
+  }
+
+  if (Array.isArray(parsed)) {
+    return parsed.map(formatCustomFieldEntry).filter(s => s !== '').join(', ');
+  }
+  return formatCustomFieldEntry(parsed);
+}
+
+/**
+ * Format a single entry from a parsed custom field Value.
+ * Entries may be primitives (GUIDs, numbers, booleans) or objects containing
+ * a display field (Name/Text/Label/DisplayValue/Value) alongside ID fields.
+ */
+function formatCustomFieldEntry(entry) {
+  if (entry == null) return '';
+  if (typeof entry !== 'object') return String(entry);
+
+  const displayKeys = [
+    'Name', 'DisplayName', 'DisplayValue', 'Text', 'Label',
+    'Title', 'Caption', 'Value'
+  ];
+  for (let i = 0; i < displayKeys.length; i++) {
+    const v = entry[displayKeys[i]];
+    if (v != null && typeof v !== 'object' && String(v) !== '') {
+      return String(v);
+    }
+  }
+
+  const idKeys = [
+    'UserId', 'AssetId', 'LocationId', 'TicketId', 'ModelId',
+    'TeamId', 'CustomFieldOptionId', 'Id'
+  ];
+  for (let i = 0; i < idKeys.length; i++) {
+    const v = entry[idKeys[i]];
+    if (v != null && String(v) !== '') return String(v);
+  }
+  return '';
 }
 
 /**

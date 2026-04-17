@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.3.2 — Custom field value parsing (2026-04-17)
+
+### Fixed
+- **Custom field values pulling raw JSON with GUIDs** — For complex custom field types (dropdowns, user pickers, multi-selects, asset/location selectors), the iiQ API returns `Value` as a JSON-encoded string (e.g. `[{"Id":"...","Name":"..."}]` or `["guid","guid"]`). The extractor was writing that JSON directly into the cell. It now parses the JSON and emits the human-readable display text (Name/Text/Label/DisplayValue), falling back to the ID only when no display field is present. Multiple selections are joined with a comma.
+
+---
+
 ## v1.3.1 — Small fixes and tweaks (2026-04-16)
 
 ### Added
