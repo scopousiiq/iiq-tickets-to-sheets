@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.3.3 — Duplicate ticket fix + MTD formula reliability (2026-04-17)
+
+### Fixed
+- **Duplicate ticket rows from triggerNewTickets** — `runNewTicketsCheck` was calling `updateConfigValue('TICKET_LAST_FETCH', ...)` without a subsequent `SpreadsheetApp.flush()`. The write buffered and never persisted before the trigger exited, so every 30-minute run re-read the stale timestamp and appended the same recent tickets again. Fixed by adding `SpreadsheetApp.flush()` after both `updateConfigValue` call sites in the function. Also added a `buildTicketIdMap` deduplication check before appending, so existing tickets are never double-written even if the timestamp stalls for any reason.
+- **MTD "Created/Closed" columns showing wrong counts** — All analytics sheets (LocationBreakdown, IssueCategoryVolume, FunctionalAreaSummary, PriorityAnalysis, and others) used `TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD")` as COUNTIFS criteria. When TicketData date columns store actual date-time values (which GAS `setValues` with ISO 8601 strings auto-converts to), comparing with a text string is unreliable in Sheets. Replaced with `DATE(YEAR(TODAY()),MONTH(TODAY()),1)` — a numeric date value — for reliable date-to-date comparison.
+
+### Upgrade Notes
+1. Update all scripts to v1.3.3
+2. Run **iiQ Data > Ticket Data > Full Reload** to clear the ~220 duplicate rows that accumulated before this fix (requires removing triggers first)
+3. Regenerate affected analytics sheets via **iiQ Data > Add Analytics Sheet** to pick up the MTD formula fix
+
+---
+
 ## v1.3.2 — Custom field value parsing (2026-04-17)
 
 ### Fixed

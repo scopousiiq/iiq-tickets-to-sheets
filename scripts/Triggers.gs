@@ -578,6 +578,20 @@ function runNewTicketsCheck(sheet, config) {
     // Update timestamp even if no new tickets
     const lastTicket = response.Items[response.Items.length - 1];
     updateConfigValue('TICKET_LAST_FETCH', lastTicket.CreatedDate);
+    SpreadsheetApp.flush(); // Ensure TICKET_LAST_FETCH persists before trigger exits
+    clearApiConfig();
+    return { count: 0, runtime: Date.now() - startTime };
+  }
+
+  // Deduplicate: skip tickets already in the sheet (guards against repeated trigger misfires)
+  const ticketIdToRow = buildTicketIdMap(sheet);
+  tickets = tickets.filter(t => !ticketIdToRow.has(t.TicketId));
+
+  if (tickets.length === 0) {
+    // All "new" tickets already exist — advance the timestamp to prevent future misfires
+    const lastTicket = response.Items[response.Items.length - 1];
+    updateConfigValue('TICKET_LAST_FETCH', lastTicket.CreatedDate);
+    SpreadsheetApp.flush();
     clearApiConfig();
     return { count: 0, runtime: Date.now() - startTime };
   }
@@ -594,9 +608,10 @@ function runNewTicketsCheck(sheet, config) {
   const lastRow = sheet.getLastRow();
   sheet.getRange(lastRow + 1, 1, rows.length, TICKET_COLUMN_COUNT).setValues(rows);
 
-  // Update last fetch timestamp
+  // Update last fetch timestamp and flush immediately so next trigger run sees the new value
   const lastTicket = tickets[tickets.length - 1];
   updateConfigValue('TICKET_LAST_FETCH', lastTicket.CreatedDate);
+  SpreadsheetApp.flush(); // Critical: persists TICKET_LAST_FETCH before trigger exits
 
   clearApiConfig();
   return { count: tickets.length, runtime: Date.now() - startTime };

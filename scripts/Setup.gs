@@ -1054,8 +1054,8 @@ function setupTeamWorkloadSheet(ss) {
   const mainFormula =
     '=LET(' +
     'teams, UNIQUE(FILTER(TicketData!L2:L, TicketData!L2:L<>"", TicketData!L2:L<>"TeamName")),' +
-    'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
-    'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
+    'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
+    'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
     'col_a, teams,' +
     'col_b, BYROW(teams, LAMBDA(t, IFERROR(VLOOKUP(t, Teams!B:C, 2, FALSE), ""))),' +
     'col_c, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "Open"))),' +
@@ -1128,8 +1128,8 @@ function setupLocationBreakdownSheet(ss) {
   const mainFormula =
     '=LET(' +
     'locs, UNIQUE(FILTER(TicketData!N2:N, TicketData!N2:N<>"", TicketData!N2:N<>"LocationName")),' +
-    'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
-    'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
+    'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
+    'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
     'col_a, locs,' +
     'col_b, BYROW(locs, LAMBDA(l, IFERROR(INDEX(TicketData!O:O, MATCH(l, TicketData!N:N, 0)), ""))),' +
     'col_c, BYROW(locs, LAMBDA(l, COUNTIFS(TicketData!N:N, l, TicketData!I:I, "Open"))),' +

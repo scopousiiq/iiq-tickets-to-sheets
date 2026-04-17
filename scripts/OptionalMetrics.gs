@@ -457,8 +457,8 @@ function setupIssueCategoryVolumeSheet(ss) {
   const mainFormula =
     '=LET(' +
     'cats, UNIQUE(FILTER(TicketData!Y2:Y, TicketData!Y2:Y<>"", TicketData!Y2:Y<>"IssueCategoryName")),' +
-    'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
-    'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
+    'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
+    'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
     'col_a, cats,' +
     'col_b, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Open"))),' +
     'col_c, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
@@ -541,8 +541,8 @@ function setupPriorityAnalysisSheet(ss) {
   const mainFormula =
     '=LET(' +
     'pris, UNIQUE(FILTER(TicketData!S2:S, TicketData!S2:S<>"", TicketData!S2:S<>"Priority")),' +
-    'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
-    'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
+    'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
+    'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
     'col_a, pris,' +
     'col_b, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Open"))),' +
     'col_c, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
@@ -605,16 +605,16 @@ function setupFirstContactResolutionSheet(ss) {
     ['', '', ''],
     ['--- Current Month ---', '', ''],
     ['Total Closed (MTD)',
-     '=LET(mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"), mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"), COUNTIFS(TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))',
+     '=LET(mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1), mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), COUNTIFS(TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))',
      'Tickets closed this month'],
     ['Resolved Same Day (<24 hrs)',
-     '=LET(mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"), mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"), COUNTIFS(TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd, TicketData!R:R, "<=1"))',
+     '=LET(mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1), mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), COUNTIFS(TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd, TicketData!R:R, "<=1"))',
      'Closed within 1 day of creation'],
     ['Same Day Rate',
      '=IF(B4>0, B5/B4, "N/A")',
      'FCR target: 40-60%'],
     ['Resolved Within 4 Hours',
-     '=LET(mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"), mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"), COUNTIFS(TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd, TicketData!AH:AH, "<=240", TicketData!AH:AH, ">0"))',
+     '=LET(mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1), mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), COUNTIFS(TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd, TicketData!AH:AH, "<=240", TicketData!AH:AH, ">0"))',
      'Closed within 4 hours (resolution SLA)'],
     ['4-Hour Resolution Rate',
      '=IF(B4>0, B7/B4, "N/A")',
@@ -721,8 +721,8 @@ function setupTechnicianPerformanceSheet(ss) {
   const mainFormula =
     '=LET(' +
     'techs, UNIQUE(FILTER(TicketData!AO2:AO, TicketData!AO2:AO<>"", TicketData!AO2:AO<>"AssignedToUserName")),' +
-    'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
-    'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
+    'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
+    'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
     'col_a, techs,' +
     'col_b, BYROW(techs, LAMBDA(t, IFERROR(INDEX(TicketData!L:L, MATCH(t, TicketData!AO:AO, 0)), ""))),' +
     'col_c, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Open"))),' +
@@ -918,8 +918,8 @@ function setupLocationTypeComparisonSheet(ss) {
   const mainFormula =
     '=LET(' +
     'types, UNIQUE(FILTER(TicketData!O2:O, TicketData!O2:O<>"", TicketData!O2:O<>"LocationType")),' +
-    'mtdStart, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY()),1), "YYYY-MM-DD"),' +
-    'mtdEnd, TEXT(DATE(YEAR(TODAY()),MONTH(TODAY())+1,1), "YYYY-MM-DD"),' +
+    'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
+    'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
     'col_a, types,' +
     'col_b, BYROW(types, LAMBDA(t, COUNTA(UNIQUE(FILTER(TicketData!N:N, TicketData!O:O=t))))),' +
     'col_c, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open"))),' +
