@@ -203,3 +203,33 @@ function getTicketCustomFieldDefinitions() {
   const response = makeApiRequest(endpoint, 'POST', {});
   return response.Items || [];
 }
+
+/**
+ * Get all locations for the district.
+ * Paginates through locations endpoint. Prefers site-scoped endpoint (returns
+ * all district locations) over user-scoped endpoint (returns only locations
+ * the bearer token's user has access to — may be capped to a subset).
+ * Used to build a lookup map for IiqLocation-type custom fields.
+ *
+ * @returns {Array} - Array of Location objects
+ */
+function getAllLocations() {
+  const config = getApiConfig_();
+  const base = config.siteId
+    ? `/v1.0/locations/all/${config.siteId}`
+    : '/v1.0/locations/all';
+  const all = [];
+  const pageSize = 500;
+  let page = 0;
+  while (true) {
+    const endpoint = `${base}?$p=${page}&$s=${pageSize}`;
+    const response = makeApiRequest(endpoint, 'GET', null);
+    const items = response.Items || [];
+    all.push.apply(all, items);
+    const totalRows = response.Paging ? (response.Paging.TotalRows || response.Paging.Total || 0) : 0;
+    if (items.length === 0 || all.length >= totalRows || items.length < pageSize) break;
+    page++;
+    if (page > 100) break; // safety
+  }
+  return all;
+}

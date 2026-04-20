@@ -310,6 +310,9 @@ function runTicketDataLoader(sheet) {
   // Build custom field IDs array once — threaded through all extractTicketRow calls
   const customFieldIds = [config.customField1Id, config.customField2Id, config.customField3Id];
 
+  // Build lookup maps for resolving UUID values to display names (IiqLocation, Select, etc.)
+  const customFieldLookupMaps = buildCustomFieldLookupMaps(config);
+
   // Extend TicketData headers if upgrading from older column count
   updateCustomFieldHeaders(sheet, config);
 
@@ -333,7 +336,7 @@ function runTicketDataLoader(sheet) {
     if (!ticketComplete) {
       // Still doing initial pagination-based load
       // Pass in-memory progress to avoid re-reading config
-      const result = processSchoolYearBatchOptimized(sheet, config, ticketLastPage, ticketTotalPages, customFieldIds);
+      const result = processSchoolYearBatchOptimized(sheet, config, ticketLastPage, ticketTotalPages, customFieldIds, customFieldLookupMaps);
       batchCount++;
       ticketCount += result.count;
 
@@ -376,7 +379,7 @@ function runTicketDataLoader(sheet) {
 
     } else if (isCurrent) {
       // Pagination complete, do incremental updates for current school year
-      const result = processCurrentSchoolYearBatchOptimized(sheet, config, ticketLastFetch, customFieldIds);
+      const result = processCurrentSchoolYearBatchOptimized(sheet, config, ticketLastFetch, customFieldIds, customFieldLookupMaps);
       batchCount++;
       ticketCount += result.count;
 
@@ -586,7 +589,7 @@ function processCurrentSchoolYearBatch(sheet, config) {
  * @param {number} totalPages - Total pages (in-memory, -1 if unknown)
  * @returns {Object} - { count, complete, lastPage, totalPages }
  */
-function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages, customFieldIds) {
+function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages, customFieldIds, customFieldLookupMaps) {
   const batchSize = config.ticketBatchSize;
   const nextPage = lastPage + 1;
 
@@ -628,9 +631,12 @@ function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages, cu
   const slaMap = fetchSlaForTicketIds(ticketIds);
   logOperation('Ticket Data', 'SLA_FETCH', `Fetched SLA for ${slaMap.size} of ${ticketIds.length} tickets`);
 
+  // Enrich location lookup map from batch tickets (covers gaps in /locations/all API)
+  enrichLocationMapsFromTickets(response.Items, customFieldLookupMaps);
+
   // Write tickets to sheet (with merged SLA data)
   const now = new Date();
-  const rows = response.Items.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds));
+  const rows = response.Items.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds, customFieldLookupMaps));
   const lastRow = sheet.getLastRow();
   sheet.getRange(lastRow + 1, 1, rows.length, TICKET_COLUMN_COUNT).setValues(rows);
 
@@ -664,7 +670,7 @@ function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages, cu
  * @param {string} lastFetch - Last fetch timestamp (in-memory)
  * @returns {Object} - { count, hasMore, lastFetch }
  */
-function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch, customFieldIds) {
+function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch, customFieldIds, customFieldLookupMaps) {
   const batchSize = config.ticketBatchSize;
 
   // Get school year date range
@@ -725,9 +731,12 @@ function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch, custom
   const slaMap = fetchSlaForTicketIds(ticketIds);
   logOperation('Ticket Data', 'SLA_FETCH', `Fetched SLA for ${slaMap.size} of ${ticketIds.length} tickets`);
 
+  // Enrich location lookup map from batch tickets (covers gaps in /locations/all API)
+  enrichLocationMapsFromTickets(tickets, customFieldLookupMaps);
+
   // Write to sheet (with merged SLA data)
   const now = new Date();
-  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds));
+  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds, customFieldLookupMaps));
   const lastRow = sheet.getLastRow();
   sheet.getRange(lastRow + 1, 1, rows.length, TICKET_COLUMN_COUNT).setValues(rows);
 
@@ -757,7 +766,7 @@ function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch, custom
  * @param {string} customFieldTypeId - UUID of the custom field type to extract
  * @returns {string} - The field value, or empty string if not found/not configured
  */
-function extractCustomFieldValue(ticket, customFieldTypeId) {
+function extractCustomFieldValue(ticket, customFieldTypeId, lookupMap) {
   if (!customFieldTypeId || customFieldTypeId === 'NOT_FOUND') return '';
   if (!ticket.CustomFieldValues || !ticket.CustomFieldValues.length) return '';
   const match = ticket.CustomFieldValues.find(
@@ -768,6 +777,9 @@ function extractCustomFieldValue(ticket, customFieldTypeId) {
   const raw = String(match.Value);
   const trimmed = raw.trim();
   if (!trimmed) return '';
+
+  // Resolve entity/option IDs to display names (IiqLocation, Select, etc.)
+  if (lookupMap && lookupMap[trimmed]) return lookupMap[trimmed];
 
   const firstChar = trimmed.charAt(0);
   if (firstChar !== '[' && firstChar !== '{') return raw;
@@ -780,19 +792,25 @@ function extractCustomFieldValue(ticket, customFieldTypeId) {
   }
 
   if (Array.isArray(parsed)) {
-    return parsed.map(formatCustomFieldEntry).filter(s => s !== '').join(', ');
+    return parsed.map(e => formatCustomFieldEntry(e, lookupMap)).filter(s => s !== '').join(', ');
   }
-  return formatCustomFieldEntry(parsed);
+  return formatCustomFieldEntry(parsed, lookupMap);
 }
 
 /**
  * Format a single entry from a parsed custom field Value.
  * Entries may be primitives (GUIDs, numbers, booleans) or objects containing
  * a display field (Name/Text/Label/DisplayValue/Value) alongside ID fields.
+ * If lookupMap is provided, primitive IDs and ID-only objects are resolved to
+ * display names via the map before falling back to the raw ID.
  */
-function formatCustomFieldEntry(entry) {
+function formatCustomFieldEntry(entry, lookupMap) {
   if (entry == null) return '';
-  if (typeof entry !== 'object') return String(entry);
+  if (typeof entry !== 'object') {
+    const s = String(entry);
+    if (lookupMap && lookupMap[s]) return lookupMap[s];
+    return s;
+  }
 
   const displayKeys = [
     'Name', 'DisplayName', 'DisplayValue', 'Text', 'Label',
@@ -811,9 +829,122 @@ function formatCustomFieldEntry(entry) {
   ];
   for (let i = 0; i < idKeys.length; i++) {
     const v = entry[idKeys[i]];
-    if (v != null && String(v) !== '') return String(v);
+    if (v != null && String(v) !== '') {
+      const s = String(v);
+      if (lookupMap && lookupMap[s]) return lookupMap[s];
+      return s;
+    }
   }
   return '';
+}
+
+/**
+ * Build per-field lookup maps for resolving custom field values to display names.
+ * Called once per loading session. Returns an array of 3 plain objects (one per configured
+ * custom field) mapping raw UUID values to human-readable display names.
+ *
+ * Handles two field types:
+ *   EditorType 9/10 (Select/MultiSelect) — parses CustomFieldType.Options JSON
+ *   EditorType 22   (IiqLocation)        — fetches all locations via API
+ *
+ * @param {Object} config - Config object from getConfig()
+ * @returns {Array} - Array of 3 lookup objects: [map1, map2, map3]
+ */
+function buildCustomFieldLookupMaps(config) {
+  const cfIds = [config.customField1Id, config.customField2Id, config.customField3Id];
+  if (!cfIds.some(id => id && id !== 'NOT_FOUND')) return [{}, {}, {}];
+
+  let definitions;
+  try {
+    definitions = getTicketCustomFieldDefinitions();
+  } catch (e) {
+    logOperation('CustomFields', 'WARNING', 'Could not fetch definitions for lookup maps: ' + e.message);
+    return [{}, {}, {}];
+  }
+
+  const defById = {};
+  for (const def of definitions) {
+    if (def.CustomFieldTypeId) defById[def.CustomFieldTypeId] = def;
+  }
+
+  let locationMap = null; // lazy — fetched at most once
+
+  return cfIds.map(function(id) {
+    if (!id || id === 'NOT_FOUND') return {};
+    const def = defById[id];
+    if (!def) return {};
+    const ct = def.CustomFieldType || {};
+    const editorType = ct.EditorType;
+
+    if (editorType === 22) { // IiqLocation
+      if (!locationMap) {
+        locationMap = {};
+        try {
+          const locs = getAllLocations();
+          for (const loc of locs) {
+            if (loc.LocationId && loc.Name) locationMap[loc.LocationId] = loc.Name;
+          }
+          logOperation('CustomFields', 'INFO', 'Built location lookup map with ' + Object.keys(locationMap).length + ' entries');
+        } catch (e) {
+          logOperation('CustomFields', 'WARNING', 'Could not fetch locations for custom field lookup: ' + e.message);
+        }
+      }
+      return locationMap;
+    }
+
+    if (editorType === 9 || editorType === 10) { // Select / MultiSelect
+      const optionsStr = ct.Options || def.Options || '';
+      if (!optionsStr) return {};
+      try {
+        const options = JSON.parse(optionsStr);
+        if (!Array.isArray(options)) return {};
+        const map = {};
+        for (const opt of options) {
+          const optId = opt.Id || opt.CustomFieldOptionId || opt.OptionId;
+          const name = opt.Name || opt.Label || opt.DisplayValue || opt.Text || opt.Value;
+          if (optId && name) map[String(optId)] = String(name);
+        }
+        logOperation('CustomFields', 'INFO', 'Built select lookup map for field ' + id + ' with ' + Object.keys(map).length + ' options');
+        return map;
+      } catch (e) {
+        return {};
+      }
+    }
+
+    return {};
+  });
+}
+
+/**
+ * Enrich custom field lookup maps with LocationId -> LocationName pairs pulled
+ * directly from the tickets being processed. This fills in any locations the
+ * /locations/all API didn't return (common when the bearer token is user-scoped
+ * and doesn't see every campus in the district).
+ *
+ * Safe to call on all cfMaps — non-IiqLocation maps won't have matching UUIDs
+ * queried against them, so extra entries are inert.
+ */
+function enrichLocationMapsFromTickets(tickets, customFieldLookupMaps) {
+  if (!customFieldLookupMaps || !customFieldLookupMaps.length) return;
+  const seen = {};
+  let addedCount = 0;
+  for (const ticket of tickets) {
+    const loc = ticket && ticket.Location;
+    if (!loc || !loc.LocationId || !loc.Name) continue;
+    if (seen[loc.LocationId]) continue;
+    seen[loc.LocationId] = true;
+    for (let i = 0; i < customFieldLookupMaps.length; i++) {
+      const m = customFieldLookupMaps[i];
+      if (m && typeof m === 'object' && !m[loc.LocationId]) {
+        m[loc.LocationId] = loc.Name;
+        if (i === 0) addedCount++;
+      }
+    }
+  }
+  if (addedCount > 0 && customFieldLookupMaps[0] && typeof customFieldLookupMaps[0] === 'object') {
+    const totalSize = Object.keys(customFieldLookupMaps[0]).length;
+    logOperation('CustomFields', 'ENRICH', 'Added ' + addedCount + ' new locations from batch, map now has ' + totalSize + ' entries');
+  }
 }
 
 /**
@@ -826,9 +957,11 @@ function formatCustomFieldEntry(entry) {
  * @param {number} year - Year for the ticket
  * @param {Map} slaMap - Optional map of TicketId -> SLA metrics
  * @param {Array} customFieldIds - Array of 3 CustomFieldTypeId UUIDs (default: ['','',''])
+ * @param {Array} customFieldLookupMaps - Array of 3 lookup objects {uuid: displayName} (default: [{},{},{}])
  */
-function extractTicketRow(ticket, now, year, slaMap, customFieldIds) {
+function extractTicketRow(ticket, now, year, slaMap, customFieldIds, customFieldLookupMaps) {
   const cfIds = customFieldIds || ['', '', ''];
+  const cfMaps = customFieldLookupMaps || [{}, {}, {}];
   const createdDate = ticket.CreatedDate ? new Date(ticket.CreatedDate) : null;
   const closedDate = ticket.ClosedDate ? new Date(ticket.ClosedDate) : null;
 
@@ -920,9 +1053,9 @@ function extractTicketRow(ticket, now, year, slaMap, customFieldIds) {
     (ticket.Assets && ticket.Assets.length > 0) ? (ticket.Assets[0].AssetId || '') : '',
     (ticket.Assets && ticket.Assets.length > 0 && ticket.Assets[0].Model && ticket.Assets[0].Model.Category) ? (ticket.Assets[0].Model.Category.Name || '') : '',
     // AR-AT: Custom Fields (configurable via CUSTOM_FIELD_1/2/3 in Config)
-    extractCustomFieldValue(ticket, cfIds[0]),
-    extractCustomFieldValue(ticket, cfIds[1]),
-    extractCustomFieldValue(ticket, cfIds[2]),
+    extractCustomFieldValue(ticket, cfIds[0], cfMaps[0]),
+    extractCustomFieldValue(ticket, cfIds[1], cfMaps[1]),
+    extractCustomFieldValue(ticket, cfIds[2], cfMaps[2]),
     // AU: Requester Role (role of the "for" user — Student, Staff, Agent, Guest, etc.)
     ticket.For ? (ticket.For.Role ? (ticket.For.Role.Name || '') : '') : ''
   ];
@@ -1597,8 +1730,9 @@ function runOpenTicketRefresh(sheet) {
   const config = getConfig();
   setApiConfig(config);
 
-  // Build custom field IDs for extractTicketRow threading
+  // Build custom field IDs and lookup maps for extractTicketRow threading
   const customFieldIds = [config.customField1Id, config.customField2Id, config.customField3Id];
+  const customFieldLookupMaps = buildCustomFieldLookupMaps(config);
 
   // Get last refresh timestamp - if none, use STALE_DAYS as fallback window
   let lastRefreshTime = config.openRefreshLastRun;
@@ -1640,8 +1774,8 @@ function runOpenTicketRefresh(sheet) {
   // For historical school years, only update existing tickets (don't append tickets from other school years)
   const isHistorical = !isSchoolYearCurrent(config);
   const batchOptions = isHistorical
-    ? { updateOnly: true, customFieldIds: customFieldIds }
-    : { customFieldIds: customFieldIds };
+    ? { updateOnly: true, customFieldIds: customFieldIds, customFieldLookupMaps: customFieldLookupMaps }
+    : { customFieldIds: customFieldIds, customFieldLookupMaps: customFieldLookupMaps };
 
   if (isHistorical) {
     logOperation('Ticket Data', 'REFRESH_MODE', 'Historical school year - update only, no appends');
@@ -1775,6 +1909,7 @@ function buildTicketIdMap(sheet) {
 function processTicketBatch(sheet, tickets, ticketIdToRow, now, options) {
   const updateOnly = options && options.updateOnly;
   const customFieldIds = (options && options.customFieldIds) || ['', '', ''];
+  const customFieldLookupMaps = (options && options.customFieldLookupMaps) || [{}, {}, {}];
   let updated = 0;
   let appended = 0;
   let skipped = 0;
@@ -1788,9 +1923,12 @@ function processTicketBatch(sheet, tickets, ticketIdToRow, now, options) {
   const ticketIds = tickets.map(t => t.TicketId).filter(id => id);
   const slaMap = fetchSlaForTicketIds(ticketIds);
 
+  // Enrich location lookup map from batch tickets (covers gaps in /locations/all API)
+  enrichLocationMapsFromTickets(tickets, customFieldLookupMaps);
+
   for (const ticket of tickets) {
     const ticketId = ticket.TicketId;
-    const rowData = extractTicketRow(ticket, now, schoolYear, slaMap, customFieldIds);
+    const rowData = extractTicketRow(ticket, now, schoolYear, slaMap, customFieldIds, customFieldLookupMaps);
 
     const existingRow = ticketIdToRow.get(ticketId);
 
