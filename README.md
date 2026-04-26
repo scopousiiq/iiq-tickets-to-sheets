@@ -99,7 +99,7 @@ Go to Extensions > Apps Script > Triggers (clock icon) and add these triggers:
 
 ### Additional Analytics (add via menu)
 
-Use **iiQ Data > Add Analytics Sheet** to add any of these 23 optional sheets:
+Use **iiQ Data > Add Analytics Sheet** to add any of these 25 optional sheets:
 
 | Category | Available Sheets |
 |----------|------------------|
@@ -109,7 +109,7 @@ Use **iiQ Data > Add Analytics Sheet** to add any of these 23 optional sheets:
 | Team & Staff | Technician Performance, Functional Area Summary |
 | Location | Location Breakdown, Location Type Comparison |
 | Issue & Requester | Issue Category Volume, Priority Analysis, Frequent Requesters |
-| Device | Device Reliability |
+| Device | Device Reliability, Devices by Role, User Frequent Flyers |
 
 > **Flexible & Customizable:** Districts can delete any analytics sheet and recreate it later via the menu. Default sheets (marked with ★ in the menu) can also be recreated if accidentally deleted.
 
@@ -122,6 +122,24 @@ Use **iiQ Data > Add Analytics Sheet** to add any of these 23 optional sheets:
 | HTTP 429 / Rate limited | iiQ is throttling you — increase `THROTTLE_MS` in Config to 2000 or higher |
 | Script timeout | Normal for large districts — just run "Continue Loading" again |
 | Missing SLA data for some tickets | Expected — not all tickets have SLA policies assigned in iiQ |
+
+## Native Web-App Dashboard
+
+Ship a shareable URL to leadership instead of asking them to open the sheet. The project includes a deployable Apps Script Web App that renders a full-page, brand-styled dashboard with:
+
+- Fixed KPI row (Open, Closed, Avg Resolution, SLA Breach %)
+- Gold KPI badges for list-style sheets (At-Risk Response/Resolution, Stale Tickets, Frequent Flyers)
+- Tabbed category views (Volume, Backlog, SLA, Team, Location, Issue, Device) with Chart.js visualizations
+- Dynamic discovery — tabs/charts appear automatically based on which analytics sheets you've added
+
+**Deploy it:**
+
+1. In the sheet: **Extensions → Apps Script → Deploy → New deployment**. Type: **Web app**.
+2. **Execute as: Me**, **Who has access: Anyone within your domain**.
+3. Deploy, copy the `/exec` URL, and paste it into the **DASHBOARD_URL** row in your Config tab.
+4. Share the URL. Use **iiQ Data → Show Dashboard URL** at any time to copy the link.
+
+For updates, use **Manage deployments → Edit → New version** to keep the same URL. Full playbook in [CLAUDE.md](CLAUDE.md#deploying-the-dashboard-web-app).
 
 ## Documentation
 

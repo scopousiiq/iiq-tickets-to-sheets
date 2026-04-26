@@ -49,7 +49,10 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively). Skips if loading incomplete. |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
 | `Triggers.gs` | Time-driven trigger functions (no UI dialogs) |
-| `OptionalMetrics.gs` | Additional analytics sheets added via menu (23 optional + 8 default KPI sheets) |
+| `OptionalMetrics.gs` | Additional analytics sheets added via menu (25 optional + 8 default KPI sheets = 33 total) |
+| `Dashboard.gs` | Web-app entry point (`doGet`), registry-driven `getDashboardData()`, `showDashboardUrl` menu handler |
+| `Dashboard.html` | Full-page tabbed dashboard (KPIs, badges, category tabs, Chart.js cards) |
+| `ChartRegistry.gs` | Declarative sheet→chart(s) map — **register new analytics sheets here or the dashboard won't discover them** |
 
 **Key Dependencies:**
 - `ApiClient.gs` → `Config.gs`
@@ -232,6 +235,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | Sheet | Question Answered | Key Metrics |
 |-------|-------------------|-------------|
 | DeviceReliability | "Which device models generate the most tickets?" | Total/Open/Closed by model, avg resolution, breach rate |
+| DevicesByRole | "Which device models are used by which staff roles?" | Device counts by model filtered by RequesterRole |
 | FrequentFlyers | "Which users or devices have recurring issues?" | Users and devices exceeding ticket threshold, with date/category filters |
 
 ## TicketData Column Layout (46 columns)
@@ -386,6 +390,7 @@ Optional:
 - `CUSTOM_FIELD_1`: Custom field name for column AP (from iiQ custom field definitions)
 - `CUSTOM_FIELD_2`: Custom field name for column AQ
 - `CUSTOM_FIELD_3`: Custom field name for column AR
+- `DASHBOARD_URL`: Published web-app `/exec` URL. Paste this after deploying the dashboard (see "Deploying the Dashboard (Web App)" below). The `Show Dashboard URL` menu item reads this value.
 
 Progress Tracking (managed automatically):
 - `TICKET_LAST_PAGE`: Last completed page index (0-indexed, -1 = not started)
@@ -413,3 +418,31 @@ Version Information (managed automatically):
 - `VERSION_CHECK_DATE`: Date of last successful version check
 
 **Version Check:** Scripts check GitHub daily for newer versions (piggybacked on `triggerDataContinue`). The check fetches `version.json` from the repo's `main` branch via GitHub raw content. Results are displayed in the Config sheet with color coding — no pop-up dialogs. Manual check available via **iiQ Data > Setup > Check for Updates**.
+
+## Deploying the Dashboard (Web App)
+
+The dashboard is a native Apps Script Web App — a shareable URL that renders a full-page, tabbed, brand-styled view of your ticket analytics. Each district deploys their own instance bound to their sheet.
+
+**One-time deployment:**
+
+1. Open **Extensions → Apps Script** from the sheet.
+2. Click **Deploy → New deployment**. Select **Type: Web app**.
+3. **Description**: `iiQ Dashboard v1.5.0`.
+4. **Execute as**: **Me** (the deployer). *Critical — viewers won't need spreadsheet access this way.*
+5. **Who has access**: **Anyone within your domain** (recommended) or "Anyone with the link" for broader sharing.
+6. Click **Deploy**, authorize when prompted, and **copy the `/exec` URL**.
+7. In the sheet's **Config** tab, paste the URL into the `DASHBOARD_URL` row.
+8. Share the URL — viewers see the dashboard without needing sheet access.
+
+**Updating after code changes:**
+
+Use **Deploy → Manage deployments → Edit (pencil) → New version** — this publishes the new code at the **same URL**, so existing bookmarks keep working. Do **not** use "New deployment" for updates; it issues a new URL and invalidates everyone's links.
+
+**How the dashboard discovers charts:**
+
+- Fixed KPI row at the top is always computed from TicketData directly.
+- Below that, gold KPI badges show counts for list-style sheets (AtRiskResponse, AtRiskResolution, StaleTickets, FrequentFlyers, ReopenRate) — only the ones that actually exist.
+- Tabs (Volume, Backlog, SLA, Team, Location, Issue, Device) are built dynamically from `scripts/ChartRegistry.gs`. If you've added a registered sheet via **iiQ Data > Add Analytics Sheet**, its chart appears automatically; delete the sheet and the chart disappears on the next refresh.
+- Empty tabs (no registered sheets in that category) are omitted entirely.
+
+**When adding a new analytics sheet**, register it in `scripts/ChartRegistry.gs` — otherwise the dashboard won't know to read it.

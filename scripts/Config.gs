@@ -18,7 +18,7 @@
  */
 
 /** Current script version — update when releasing new versions */
-const SCRIPT_VERSION = '1.3.7';
+const SCRIPT_VERSION = '1.5.1';
 
 /** Number of columns in TicketData sheet (41 base + 2 asset ID + 3 custom field slots + 1 requester role) */
 const TICKET_COLUMN_COUNT = 47;

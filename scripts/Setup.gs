@@ -525,7 +525,10 @@ function setupConfigSheet(ss, schoolYear) {
     ['# Version Information', ''],                                             // 45
     ['SCRIPT_VERSION', SCRIPT_VERSION],                                        // 46
     ['LATEST_VERSION', ''],                                                    // 47
-    ['VERSION_CHECK_DATE', '']                                                 // 48
+    ['VERSION_CHECK_DATE', ''],                                                // 48
+    ['', ''],                                                                  // 49
+    ['# Dashboard Configuration', ''],                                         // 50
+    ['DASHBOARD_URL', '']                                                      // 51
   ];
 
   sheet.getRange(1, 1, configData.length, 2).setValues(configData);
@@ -534,7 +537,7 @@ function setupConfigSheet(ss, schoolYear) {
   sheet.getRange(1, 1, 1, 2).setFontWeight('bold').setBackground('#4285f4').setFontColor('white');
 
   // Format section headers (rows starting with #)
-  const sectionRows = [3, 9, 13, 20, 25, 34, 45];
+  const sectionRows = [3, 9, 13, 20, 25, 34, 45, 50];
   sectionRows.forEach(row => {
     sheet.getRange(row, 1, 1, 2).setFontWeight('bold').setBackground('#e8f0fe');
   });

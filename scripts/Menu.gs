@@ -42,6 +42,8 @@ function onOpen() {
       .addSeparator()
       .addItem('Check for Updates', 'menuCheckForUpdates'))
     .addSeparator()
+    .addItem('Show Dashboard URL', 'showDashboardUrl')
+    .addSeparator()
     .addItem('Refresh Teams', 'refreshTeams')
     .addSubMenu(ui.createMenu('Ticket Data')
       .addItem('Continue Loading (Initial)', 'refreshTicketDataContinue')
