@@ -421,6 +421,34 @@ function setupInstructionsSheet(ss) {
     [''],
     [''],
     ['═══════════════════════════════════════════════════════════════════════════════'],
+    ['iiQ TELEMETRY'],
+    ['═══════════════════════════════════════════════════════════════════════════════'],
+    [''],
+    ['Anonymous usage telemetry pings the iiQ team once per successful refresh, so'],
+    ['we can see which districts run which version, on which iiQ instance, with'],
+    ['how many tickets — to prioritize features and catch regressions early.'],
+    [''],
+    ['What is sent (per ping):'],
+    ['  • Stable install ID (UUID — generated locally, contains no PII)'],
+    ['  • Project name (iiq-tickets-to-sheets) and script version'],
+    ['  • iiQ instance hostname (e.g., demo.incidentiq.com)'],
+    ['  • TicketData row count'],
+    ['  • Names of analytics sheets present (only the canonical set this project ships)'],
+    ['  • Script time zone, install timestamp, send timestamp'],
+    [''],
+    ['What is NOT sent: ticket data, API tokens, custom field values or names,'],
+    ['custom sheet names you add yourself, user names or emails, anything from row contents.'],
+    [''],
+    ['POLICY: Automated polling requires telemetry opt-in.'],
+    ['  • To opt out, set TELEMETRY_ENABLED to FALSE in the Config sheet.'],
+    ['  • This DISABLES automated polling: time-based triggers uninstall on next fire.'],
+    ['  • Manual menu refreshes (iiQ Data > Ticket Data > ...) continue to work.'],
+    [''],
+    ['To re-enable: set TELEMETRY_ENABLED back to TRUE, then run'],
+    ['iiQ Data > Setup > Setup Automated Triggers to reinstall the triggers.'],
+    [''],
+    [''],
+    ['═══════════════════════════════════════════════════════════════════════════════'],
     ['SUPPORT'],
     ['═══════════════════════════════════════════════════════════════════════════════'],
     [''],
@@ -436,7 +464,7 @@ function setupInstructionsSheet(ss) {
   sheet.getRange(1, 1).setFontSize(16).setFontWeight('bold').setFontColor('#1a73e8');
 
   // Format section headers
-  const sectionRows = [4, 19, 49, 81, 157, 191, 231, 251];
+  const sectionRows = [4, 19, 49, 81, 157, 191, 231, 251, 279];
   sectionRows.forEach(row => {
     if (row <= content.length) {
       sheet.getRange(row, 1).setFontWeight('bold').setFontColor('#1a73e8');
@@ -444,7 +472,7 @@ function setupInstructionsSheet(ss) {
   });
 
   // Format divider lines
-  const dividerRows = [3, 18, 48, 80, 156, 190, 230, 250];
+  const dividerRows = [3, 18, 48, 80, 156, 190, 230, 250, 278];
   dividerRows.forEach(row => {
     if (row <= content.length) {
       sheet.getRange(row, 1).setFontColor('#dadce0');
@@ -528,7 +556,10 @@ function setupConfigSheet(ss, schoolYear) {
     ['VERSION_CHECK_DATE', ''],                                                // 48
     ['', ''],                                                                  // 49
     ['# Dashboard Configuration', ''],                                         // 50
-    ['DASHBOARD_URL', '']                                                      // 51
+    ['DASHBOARD_URL', ''],                                                     // 51
+    ['', ''],                                                                  // 52
+    ['# iiQ Telemetry (set FALSE to opt out — also disables automated polling)', ''], // 53
+    ['TELEMETRY_ENABLED', 'TRUE']                                              // 54
   ];
 
   sheet.getRange(1, 1, configData.length, 2).setValues(configData);
@@ -537,7 +568,7 @@ function setupConfigSheet(ss, schoolYear) {
   sheet.getRange(1, 1, 1, 2).setFontWeight('bold').setBackground('#4285f4').setFontColor('white');
 
   // Format section headers (rows starting with #)
-  const sectionRows = [3, 9, 13, 20, 25, 34, 45, 50];
+  const sectionRows = [3, 9, 13, 20, 25, 34, 45, 50, 53];
   sectionRows.forEach(row => {
     sheet.getRange(row, 1, 1, 2).setFontWeight('bold').setBackground('#e8f0fe');
   });

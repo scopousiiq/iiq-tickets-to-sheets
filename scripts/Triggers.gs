@@ -99,6 +99,9 @@
  * Use triggerDataContinue (every 10 min) to ensure completion.
  */
 function triggerOpenTicketRefresh() {
+  // POLICY: Automated polling requires telemetry opt-in
+  if (!enforceTelemetryGate()) return;
+
   // SAFETY: Try to acquire lock - skip if another operation is running
   const lock = tryAcquireScriptLock();
   if (!lock) {
@@ -165,6 +168,8 @@ function triggerOpenTicketRefresh() {
   } finally {
     releaseScriptLock(lock);
   }
+
+  reportTelemetry();
 }
 
 /**
@@ -184,6 +189,9 @@ function triggerOpenRefreshContinue() {
  * Only runs for current school year (historical school years don't need incremental updates).
  */
 function triggerNewTickets() {
+  // POLICY: Automated polling requires telemetry opt-in
+  if (!enforceTelemetryGate()) return;
+
   // SAFETY: Try to acquire lock - skip if another operation is running
   const lock = tryAcquireScriptLock();
   if (!lock) {
@@ -236,6 +244,8 @@ function triggerNewTickets() {
   } finally {
     releaseScriptLock(lock);
   }
+
+  reportTelemetry();
 }
 
 /**
@@ -251,6 +261,9 @@ function triggerNewTickets() {
  * - Any sync issues
  */
 function triggerWeeklyFullRefresh() {
+  // POLICY: Automated polling requires telemetry opt-in
+  if (!enforceTelemetryGate()) return;
+
   // SAFETY: Try to acquire lock - skip if another operation is running
   const lock = tryAcquireScriptLock();
   if (!lock) {
@@ -321,6 +334,8 @@ function triggerWeeklyFullRefresh() {
   } finally {
     releaseScriptLock(lock);
   }
+
+  reportTelemetry();
 }
 
 // =============================================================================
@@ -347,6 +362,14 @@ function triggerWeeklyFullRefresh() {
  * You can leave this trigger enabled permanently - it only runs when needed.
  */
 function triggerDataContinue() {
+  // POLICY: Automated polling requires telemetry opt-in
+  if (!enforceTelemetryGate()) return;
+
+  // Wrap entire body so reportTelemetry fires on every run, including the
+  // active-work paths that return early from the inner try block. The
+  // server's per-day dedupe collapses repeats to a single row.
+  try {
+
   // SAFETY: Try to acquire lock - skip if another operation is running
   const lock = tryAcquireScriptLock();
   if (!lock) {
@@ -444,6 +467,10 @@ function triggerDataContinue() {
 
   } finally {
     releaseScriptLock(lock);
+  }
+
+  } finally {
+    reportTelemetry();
   }
 }
 
@@ -733,6 +760,24 @@ function setupAutomatedTriggers() {
   );
 
   if (response !== ui.Button.YES) return;
+
+  // POLICY: Automated polling requires telemetry opt-in. Throws if
+  // TELEMETRY_ENABLED is not TRUE in the Config sheet.
+  try {
+    assertTelemetryEnabledForTriggers();
+  } catch (e) {
+    ui.alert(
+      'Telemetry Required',
+      e.message + '\n\n' +
+      'To enable automated triggers:\n' +
+      '1. Open the Config sheet\n' +
+      '2. Set TELEMETRY_ENABLED to TRUE\n' +
+      '3. Re-run Setup Automated Triggers',
+      ui.ButtonSet.OK
+    );
+    logOperation('Setup', 'TRIGGERS_BLOCKED', e.message);
+    return;
+  }
 
   try {
     const created = [];

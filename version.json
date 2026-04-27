@@ -1,6 +1,6 @@
 {
-  "version": "1.5.1",
-  "released": "2026-04-24",
+  "version": "1.6.0",
+  "released": "2026-04-25",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "Dashboard viz coverage fixes — register QueueTimeAnalysis in ChartRegistry so its distribution chart appears on the dashboard. Docs: correct sheet counts (25 optional + 8 default = 33) and add DevicesByRole to the Device category table."
+  "message": "Adds iiQ Sheets Telemetry. New installs ship with TELEMETRY_ENABLED=TRUE in the Config sheet and ping the iiQ team once per successful trigger refresh (anonymous install ID, instance hostname, version, ticket count, canonical analytics tabs present). Automated polling now requires telemetry opt-in: setting TELEMETRY_ENABLED=FALSE uninstalls time-based triggers on next fire. Existing v1.5.x installs upgrading need to add TELEMETRY_ENABLED=TRUE to the Config sheet manually, then re-run Setup Automated Triggers."
 }

@@ -18,10 +18,17 @@
  */
 
 /** Current script version — update when releasing new versions */
-const SCRIPT_VERSION = '1.5.1';
+const SCRIPT_VERSION = '1.6.0';
 
 /** Number of columns in TicketData sheet (41 base + 2 asset ID + 3 custom field slots + 1 requester role) */
 const TICKET_COLUMN_COUNT = 47;
+
+/**
+ * Telemetry Master /exec URL (iiQ-owned). Maintainer-managed — districts
+ * never see or edit it. Empty string disables telemetry entirely for this
+ * build. See iiq-sheets-telemetry/CLIENT_SETUP.md for rotation procedure.
+ */
+const TELEMETRY_URL = 'https://script.google.com/macros/s/AKfycbyaPAkUWjAqkYgX01WhJlNGNQuZACDtQ_6zNVUEbHD73RDaM5uWq7IwwqwD54mP9qXYZA/exec';
 
 function getConfig() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Config');

@@ -125,6 +125,9 @@ function appendDailySnapshot() {
  * meaningful backlog to snapshot (all tickets are closed).
  */
 function triggerDailySnapshot() {
+  // POLICY: Automated polling requires telemetry opt-in
+  if (!enforceTelemetryGate()) return;
+
   // SAFETY: Try to acquire lock - skip if another operation is running
   const lock = tryAcquireScriptLock();
   if (!lock) {
@@ -153,6 +156,8 @@ function triggerDailySnapshot() {
   } finally {
     releaseScriptLock(lock);
   }
+
+  reportTelemetry();
 }
 
 /**
