@@ -4,6 +4,67 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.6.1 — Documentation: changelog backfill + dashboard chart map (2026-04-29)
+
+### Added
+- **Backfilled changelog entries** for v1.3.7, v1.5.1, and v1.6.0.
+- **Dashboard chart-coverage tables** in `README.md` and `GUIDE.md` enumerating which analytics sheets render as Chart.js cards (28 sheets across 7 tabs) vs KPI badges (5 list-style sheets) vs the fixed KPI row computed directly from `TicketData`.
+
+No code or behavior changes — `SCRIPT_VERSION` bumped to 1.6.1 so districts pick up the docs in the next version-check cycle.
+
+---
+
+## v1.6.0 — iiQ Sheets Telemetry rollout (2026-04-27)
+
+### Added
+- **`Telemetry.gs`** — client module that pings the iiQ-owned Telemetry Master once per successful trigger refresh. The payload contains a stable anonymous install UUID, project name, script version, iiQ instance hostname (e.g. `demo.incidentiq.com`), TicketData row count, and the names of the canonical analytics sheets present in the spreadsheet. No ticket data, no API tokens, no custom field values, no user-added sheet names.
+- **`TELEMETRY_ENABLED` Config row** — stamped `TRUE` for new installs by `setupConfigSheet`. Districts can flip it to `FALSE` to opt out.
+- **`TELEMETRY_URL` constant in Config.gs** — maintainer-managed `/exec` URL for the Telemetry Master Web App. Districts never see or edit this.
+- **iiQ TELEMETRY section in the Instructions sheet** — documents what is sent, what is not sent, the opt-out flow, and how to re-enable.
+
+### Changed
+- **Automated polling now requires telemetry opt-in.** Every CLOCK trigger handler (`triggerOpenTicketRefresh`, `triggerNewTickets`, `triggerWeeklyFullRefresh`, `triggerDataContinue`, `triggerDailySnapshot`) now calls `enforceTelemetryGate()` as its first line. If `TELEMETRY_ENABLED` is not `TRUE`, the gate uninstalls every time-based trigger and the trigger returns without doing work. Manual menu items continue to work.
+- `setupAutomatedTriggers` now calls `assertTelemetryEnabledForTriggers()` before creating any triggers — installs with telemetry off see a clear "Telemetry Required" dialog instead of silently creating triggers that would self-uninstall on first fire.
+
+### Upgrade Notes
+1. Update all scripts to v1.6.0
+2. **Existing v1.5.x installs:** the `TELEMETRY_ENABLED` row does not appear in your Config sheet automatically. Add it manually with value `TRUE`, then re-run **iiQ Data > Setup > Setup Automated Triggers**. Without this step, your next trigger fire will uninstall all polling triggers.
+3. New installs (post-1.6.0 Setup Spreadsheet) ship with `TELEMETRY_ENABLED=TRUE` by default — no action needed.
+
+---
+
+## v1.5.1 — Native Web-App Dashboard + ChartRegistry (2026-04-25)
+
+### Added
+- **Native Apps Script Web App dashboard** — `doGet()` entry point in `Dashboard.gs` and a full-page, brand-styled `DashboardApp.html` render a tabbed analytics view at a shareable `/exec` URL. Districts deploy once, paste the URL into the new `DASHBOARD_URL` Config row, and share the link with leadership without granting spreadsheet access.
+- **`ChartRegistry.gs`** — declarative map of all 33 analytics sheets to chart specs (type, label/series columns, row mode). The dashboard iterates this registry, keeps entries whose sheet exists, reads the data, and ships a Chart.js-ready payload to the client. Adding a registered analytics sheet via the menu makes its chart appear automatically; deleting the sheet removes it on next refresh.
+- **Fixed KPI row** computed directly from TicketData (Open, Closed, Avg Resolution, SLA Breach %) — always present.
+- **Gold KPI badges** for list-style sheets (`AtRiskResponse`, `AtRiskResolution`, `StaleTickets`, `ReopenRate`, `FrequentFlyers`) — only the ones that exist are shown.
+- **"Show Dashboard URL" menu item** — reads `DASHBOARD_URL` from Config and copies the link to the user.
+
+### Fixed
+- **`QueueTimeAnalysis` chart coverage gap** — sheet existed but was not registered, so it never appeared on the dashboard. Now registered as a horizontal-bar distribution chart in the SLA category.
+
+### Changed
+- Documentation: corrected sheet counts in `CLAUDE.md` and `README.md` (25 optional + 8 default = 33 total) and added `DevicesByRole` to the Device category table.
+
+---
+
+## v1.3.7 — Resolve IiqLocation custom field UUIDs to campus names (2026-04-20)
+
+### Fixed
+- **Custom field values stored as raw UUIDs for `IiqLocation`-type fields (EditorType 22).** The iiQ API returns the `Value` for these fields as a JSON-encoded array of LocationIds with no display names attached. The previous JSON-parse path returned primitive UUIDs as-is, so cells showed strings like `b8a72c…-0010` instead of the campus name. `Select`/`MultiSelect` fields had the same shape problem.
+- New `getAllLocations()` helper in `ApiClient.gs` performs a site-scoped paginated fetch (`/v1.0/locations/all/{siteId}`) to bypass the user-scoped endpoint's permission cap.
+- `buildCustomFieldLookupMaps()` in `TicketData.gs` inspects each configured field's `EditorType` and builds a UUID → name lookup (locations API for type 22, `Options` JSON for types 9/10).
+- `enrichLocationMapsFromTickets()` fills any gaps from each batch's `ticket.Location` data as a fallback.
+- `extractCustomFieldValue` and `formatCustomFieldEntry` accept a `lookupMap` so primitive IDs inside parsed JSON arrays are resolved instead of returned raw.
+
+### Upgrade Notes
+1. Update all scripts to v1.3.7
+2. Run **iiQ Data > Ticket Data > Full Reload** to re-resolve custom field values on existing rows (requires removing triggers first)
+
+---
+
 ## v1.3.4 — RequesterRole column + Devices by Role analytics sheet (2026-04-17)
 
 ### Added

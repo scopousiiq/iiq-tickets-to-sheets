@@ -199,7 +199,7 @@ function setupInstructionsSheet(ss) {
     [''],
     ['2. CONFIGURE API CREDENTIALS (Config sheet)'],
     ['   • API_BASE_URL: Your iiQ instance (e.g., https://district.incidentiq.com)'],
-    ['   • BEARER_TOKEN: JWT token from iiQ (Admin > Integrations > API)'],
+    ['   • BEARER_TOKEN: JWT token from iiQ (Admin > Developer Tools)'],
     ['   • SITE_ID: Optional - only needed for multi-site instances'],
     ['   • MODULE: Select "Ticketing" (IT), "Facilities", or "HRSD" from the dropdown (default: Ticketing)'],
     [''],

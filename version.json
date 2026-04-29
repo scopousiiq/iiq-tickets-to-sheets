@@ -1,6 +1,6 @@
 {
-  "version": "1.6.0",
-  "released": "2026-04-25",
+  "version": "1.6.1",
+  "released": "2026-04-29",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "Adds iiQ Sheets Telemetry. New installs ship with TELEMETRY_ENABLED=TRUE in the Config sheet and ping the iiQ team once per successful trigger refresh (anonymous install ID, instance hostname, version, ticket count, canonical analytics tabs present). Automated polling now requires telemetry opt-in: setting TELEMETRY_ENABLED=FALSE uninstalls time-based triggers on next fire. Existing v1.5.x installs upgrading need to add TELEMETRY_ENABLED=TRUE to the Config sheet manually, then re-run Setup Automated Triggers."
+  "message": "Documentation cleanup: backfill CHANGELOG entries for v1.3.7 (IiqLocation custom field UUID resolution), v1.5.1 (web-app dashboard + ChartRegistry), and v1.6.0 (telemetry rollout). Add a dashboard chart-coverage map to README.md and GUIDE.md showing which analytics sheets render as Chart.js cards vs KPI badges, organized by tab. No code changes."
 }

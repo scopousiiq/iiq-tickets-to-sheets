@@ -30,7 +30,7 @@ In the `Config` sheet, enter your Incident IQ credentials:
 | Setting | Value | Where to Find It |
 |---------|-------|------------------|
 | `API_BASE_URL` | `https://yourdistrict.incidentiq.com` | Your iiQ URL (the `/api` is added automatically) |
-| `BEARER_TOKEN` | Your API token | iiQ Admin > Integrations > API |
+| `BEARER_TOKEN` | Your API token | iiQ Admin > Developer Tools |
 | `SITE_ID` | Your site UUID (optional) | Only needed for multi-site districts |
 | `MODULE` | `Ticketing`, `Facilities`, or `HRSD` (optional) | Dropdown in Config sheet — defaults to Ticketing |
 
@@ -127,10 +127,37 @@ Use **iiQ Data > Add Analytics Sheet** to add any of these 25 optional sheets:
 
 Ship a shareable URL to leadership instead of asking them to open the sheet. The project includes a deployable Apps Script Web App that renders a full-page, brand-styled dashboard with:
 
-- Fixed KPI row (Open, Closed, Avg Resolution, SLA Breach %)
-- Gold KPI badges for list-style sheets (At-Risk Response/Resolution, Stale Tickets, Frequent Flyers)
-- Tabbed category views (Volume, Backlog, SLA, Team, Location, Issue, Device) with Chart.js visualizations
-- Dynamic discovery — tabs/charts appear automatically based on which analytics sheets you've added
+- **Fixed KPI row** at the top (Open, Closed, Avg Resolution, SLA Breach %) — computed directly from `TicketData`, always present.
+- **Gold KPI badges** for list-style analytics sheets — counts only, no chart.
+- **Tabbed category views** with Chart.js visualizations — tabs and charts appear automatically based on which analytics sheets are present in your spreadsheet (registered in `scripts/ChartRegistry.gs`).
+
+### What renders where
+
+The dashboard discovers sheets via `ChartRegistry.gs`. Add a registered sheet via **iiQ Data > Add Analytics Sheet** and its chart appears on the next refresh; delete it and the chart disappears. Sheets not in the registry (custom sheets you add yourself) stay in the spreadsheet but are never rendered on the dashboard.
+
+**KPI badges (sheet exists → badge appears with the count):**
+
+| Sheet | Badge | Tab |
+|-------|-------|-----|
+| `AtRiskResponse` | At-Risk Response | SLA |
+| `AtRiskResolution` | At-Risk Resolution | SLA |
+| `StaleTickets` | Stale Tickets | Backlog |
+| `ReopenRate` | Reopened Tickets | Backlog |
+| `FrequentFlyers` | Frequent Flyers | Device |
+
+**Chart cards (sheet exists → Chart.js visualization on its category tab):**
+
+| Tab | Sheets with charts | Chart type |
+|-----|--------------------|------------|
+| Volume | `MonthlyVolume`, `PerformanceTrends`, `SeasonalComparison`, `TemporalPatterns`, `MonthlyVolumeByFA` | bar / line / stacked bar |
+| Backlog | `BacklogAging`, `ResolutionAging`, `BacklogAgingByFA`, `BacklogAgingByTeam`, `BacklogAgingByLocationType`, `BacklogAgingByPriority` | horizontal bar / stacked horizontal bar |
+| SLA | `SLACompliance`, `FirstContactResolution`, `ResponseDistribution`, `ResponseTrends`, `QueueTimeAnalysis`, `QueueTimeByTeam`, `QueueTimeTrend` | line / bar / horizontal bar |
+| Team | `TeamWorkload`, `TechnicianPerformance`, `FunctionalAreaSummary` | horizontal bar |
+| Location | `LocationBreakdown`, `LocationTypeComparison` | horizontal bar |
+| Issue | `IssueCategoryVolume`, `PriorityAnalysis`, `FrequentRequesters` | bar / horizontal bar |
+| Device | `DeviceReliability`, `DevicesByRole` | horizontal bar |
+
+Total: 28 chart sheets + 5 KPI badge sheets = 33 registered. Empty tabs (no registered sheets present in that category) are omitted entirely.
 
 **Deploy it:**
 

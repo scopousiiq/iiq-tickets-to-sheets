@@ -62,7 +62,7 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
 | Setting | Value | Description |
 |---------|-------|-------------|
 | `API_BASE_URL` | `https://your-district.incidentiq.com` | Your iiQ URL (the `/api` is added automatically) |
-| `BEARER_TOKEN` | (your JWT token) | Get this from iiQ Admin > Integrations > API |
+| `BEARER_TOKEN` | (your JWT token) | Get this from iiQ Admin > Developer Tools |
 | `SITE_ID` | (your site UUID) | Only needed for multi-site districts |
 
 **Optional Settings (defaults work for most districts):**
@@ -1265,7 +1265,7 @@ The TicketData sheet includes 46 columns (A-AT) with consolidated SLA metrics, d
 | What You See | What's Wrong | How to Fix It |
 |--------------|--------------|---------------|
 | "API configuration missing" | Config sheet isn't set up | Fill in `API_BASE_URL` and `BEARER_TOKEN` in the Config sheet |
-| "HTTP 401" error | Your API token expired | Get a new Bearer token from iiQ Admin > Integrations > API |
+| "HTTP 401" error | Your API token expired | Get a new Bearer token from iiQ Admin > Developer Tools |
 | "HTTP 403" error | API user doesn't have permission | Check that your API user has read access to tickets |
 | "HTTP 429" or "RATE_LIMITED" in Logs | iiQ is throttling your requests | Increase `THROTTLE_MS` in Config to 2000 or 3000 |
 | Script timeout after ~6 minutes | Normal — Google's limit | Just run "Continue Loading" again — progress is saved |
@@ -1281,6 +1281,86 @@ If you're getting rate limited by Incident IQ:
 2. **Check your Logs sheet**: Look for "RATE_LIMITED" or "RETRY" entries to see how often it's happening
 3. **Be patient during initial load**: Large districts may take several hours to fully load — that's normal
 4. **Reduce batch size if needed**: Lower `TICKET_BATCH_SIZE` from 2000 to 1000 if problems persist
+
+---
+
+## Native Web-App Dashboard
+
+The project ships an Apps Script Web App that renders a tabbed, brand-styled dashboard at a shareable `/exec` URL. Districts deploy once, paste the URL into the `DASHBOARD_URL` Config row, and share the link with leadership without granting spreadsheet access.
+
+### How the dashboard discovers content
+
+The dashboard reads `scripts/ChartRegistry.gs` — a declarative map of analytics sheet names to chart specifications — and on every refresh:
+
+1. Reads the fixed KPI row from `TicketData` directly (always present).
+2. Iterates the registry, keeps entries whose sheet exists in the workbook, and reads the data using each entry's spec.
+3. Ships a serializable payload to the client for Chart.js rendering.
+
+The result: charts/badges appear automatically when you add a registered analytics sheet via **iiQ Data > Add Analytics Sheet**, and disappear when you delete the sheet. Sheets you create yourself (custom columns, ad-hoc tabs) stay private — only sheets in the registry are read.
+
+### Dashboard content map
+
+**Fixed KPI row** (always present, computed from `TicketData`):
+- Open count
+- Closed count
+- Average resolution (days)
+- SLA breach rate (%)
+
+**KPI badges** — list-style sheets whose value is the row count. The badge appears only if the sheet exists.
+
+| Sheet | Badge label | Question answered |
+|-------|-------------|-------------------|
+| `AtRiskResponse` | At-Risk Response | How many open tickets are approaching Response SLA breach? |
+| `AtRiskResolution` | At-Risk Resolution | How many open tickets are approaching Resolution SLA breach? |
+| `StaleTickets` | Stale Tickets | How many open tickets have had no recent activity? |
+| `ReopenRate` | Reopened Tickets | How many tickets were closed-then-reopened? |
+| `FrequentFlyers` | Frequent Flyers | How many users / devices generate recurring tickets? |
+
+**Chart cards** — Chart.js visualizations grouped by tab. Each card maps 1-to-1 to a registered analytics sheet.
+
+| Tab | Sheet | Chart type | Question answered |
+|-----|-------|------------|-------------------|
+| Volume | `MonthlyVolume` | Bar + line | Created vs Closed by month, with closure rate trend |
+| Volume | `PerformanceTrends` | Line + bar | "Are we getting better?" — resolution time, breach rate, end-of-month backlog |
+| Volume | `SeasonalComparison` | Bar | Year-over-year tickets created by month |
+| Volume | `TemporalPatterns` | Bar (×2) | Tickets by day-of-week and hour-of-day |
+| Volume | `MonthlyVolumeByFA` | Stacked bar | Monthly Created cross-tabbed by Functional Area |
+| Backlog | `BacklogAging` | Horizontal bar | Open tickets by age bucket (0-7, 8-14, 15-30, 30+ days) |
+| Backlog | `ResolutionAging` | Horizontal bar | Closed tickets by days-to-resolve bucket |
+| Backlog | `BacklogAgingByFA` | Stacked horizontal bar | Aging buckets by Functional Area |
+| Backlog | `BacklogAgingByTeam` | Stacked horizontal bar | Aging buckets by Team |
+| Backlog | `BacklogAgingByLocationType` | Stacked horizontal bar | Aging buckets by Elementary/Middle/High |
+| Backlog | `BacklogAgingByPriority` | Stacked horizontal bar | Aging buckets by Priority |
+| SLA | `SLACompliance` | Line + bar | Breach rate by month + avg response/resolution hours |
+| SLA | `FirstContactResolution` | Line | Same-day % and 4-hour % monthly trend |
+| SLA | `ResponseDistribution` | Bar | Distribution of response/resolution times across buckets |
+| SLA | `ResponseTrends` | Line | Avg / median / 90th percentile response time by month |
+| SLA | `QueueTimeAnalysis` | Horizontal bar | Distribution of how long tickets wait before being picked up |
+| SLA | `QueueTimeByTeam` | Horizontal bar | Average queue time per team |
+| SLA | `QueueTimeTrend` | Line | Avg / median / 90th percentile queue time by month |
+| Team | `TeamWorkload` | Horizontal bar | Open and aged-30+ ticket counts per team |
+| Team | `TechnicianPerformance` | Horizontal bar | Open / aged tickets by assigned technician |
+| Team | `FunctionalAreaSummary` | Horizontal bar | Open / aged tickets by Functional Area |
+| Location | `LocationBreakdown` | Horizontal bar | Open ticket counts per location |
+| Location | `LocationTypeComparison` | Horizontal bar | Open / aged tickets by school type |
+| Issue | `IssueCategoryVolume` | Horizontal bar | Open ticket counts by issue category |
+| Issue | `PriorityAnalysis` | Bar | Open count and avg resolution time by priority |
+| Issue | `FrequentRequesters` | Horizontal bar | Top users by total ticket count |
+| Device | `DeviceReliability` | Horizontal bar | Tickets and avg resolution time by device model |
+| Device | `DevicesByRole` | Horizontal bar | Device-by-model counts filtered by RequesterRole |
+
+**Total dashboard coverage:** 33 registered analytics sheets — 28 chart cards + 5 KPI badges. Tabs with no registered sheets present are omitted entirely from the rendered page, so the layout stays clean for districts that haven't added the optional sheets yet.
+
+### Adding a new analytics sheet to the dashboard
+
+If you build a new analytics sheet via Apps Script, add an entry to `CHART_REGISTRY` in `scripts/ChartRegistry.gs` (sheet name, category, tab label, chart spec). Without that registration, the dashboard will not discover the sheet — it will exist in the spreadsheet but never render. See the comment block at the top of `ChartRegistry.gs` for the full entry shape.
+
+### Deploy, share, update
+
+1. **Extensions → Apps Script → Deploy → New deployment**, type **Web app**, **Execute as: Me**, **Who has access: Anyone within your domain** (or "Anyone with the link" for broader sharing).
+2. Copy the `/exec` URL and paste it into the `DASHBOARD_URL` row in the Config sheet.
+3. Share the URL — viewers see the dashboard without needing spreadsheet access.
+4. **Updates:** **Manage deployments → Edit (pencil) → New version** publishes the new code at the same URL, so existing bookmarks keep working.
 
 ---
 
