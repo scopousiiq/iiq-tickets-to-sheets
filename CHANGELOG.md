@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.6.2 — FrequentFlyers Role filter (2026-04-29)
+
+### Added
+- **Role dropdown (D2) on the FrequentFlyers sheet** — filters the user frequent-flyer list by requester role. Options: `All`, `Exclude Agent`, `Student`, `Staff`, `Agent`, `Guest`. Defaults to `Exclude Agent` so internal agent self-tickets don't inflate frequent-flyer results.
+  - The dropdown also narrows the `Selected Requester` picker (H2) to only show requesters who match the active role filter, so the drilldown stays coherent.
+  - All four ticket-count metrics (Total, Open, Closed, Avg Resolution) apply the role filter consistently using a `roleCriterion` LET variable. `Exclude Agent` maps to the COUNTIFS criterion `<>Agent`.
+
+### Upgrade Notes
+Recreate the FrequentFlyers sheet via **iiQ Data > Add Analytics Sheet > Issue & Requester > Frequent Flyers** to pick up the new Role control.
+
+---
+
 ## v1.6.1 — Documentation: changelog backfill + dashboard chart map (2026-04-29)
 
 ### Added

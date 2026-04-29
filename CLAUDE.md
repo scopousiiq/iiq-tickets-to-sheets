@@ -236,7 +236,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 |-------|-------------------|-------------|
 | DeviceReliability | "Which device models generate the most tickets?" | Total/Open/Closed by model, avg resolution, breach rate |
 | DevicesByRole | "Which device models are used by which staff roles?" | Device counts by model filtered by RequesterRole |
-| FrequentFlyers | "Which users or devices have recurring issues?" | Users and devices exceeding ticket threshold, with date/category filters |
+| FrequentFlyers | "Which users or devices have recurring issues?" | Users and devices exceeding ticket threshold, with date and role filters |
 
 ## TicketData Column Layout (46 columns)
 
