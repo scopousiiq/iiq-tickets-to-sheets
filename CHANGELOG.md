@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.6.3 — FrequentFlyers Location filter (2026-04-29)
+
+### Added
+- **Location dropdown (E2) on the FrequentFlyers sheet** — populated dynamically from your district's unique location names (column Q, hidden). Select a specific campus to see only its frequent flyers, or leave it at `All` to see everyone.
+  - The `Selected Requester` dropdown (H2) also respects the location filter — it only shows requesters who appear in the filtered result.
+  - Combines with the Role filter (D2) from v1.6.2: both criteria are always applied, using `"*"` as a COUNTIFS wildcard when set to "All" so the branch count stays at 2 regardless of filter state.
+  - The `allReqs` requester pool uses exact FILTER logic (4-branch: applyRole × applyLocation) for accuracy; all COUNTIFS carry both `roleCriterion` and `locationCriterion` at all times.
+
+### Upgrade Notes
+Recreate the FrequentFlyers sheet via **iiQ Data > Add Analytics Sheet > Issue & Requester > Frequent Flyers** to pick up the new Location control.
+
+---
+
 ## v1.6.2 — FrequentFlyers Role filter (2026-04-29)
 
 ### Added

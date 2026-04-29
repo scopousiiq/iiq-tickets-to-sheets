@@ -2786,7 +2786,7 @@ function setupFrequentFlyersSheet(ss) {
   const sheet = ss.insertSheet('FrequentFlyers');
 
   // === CONTROLS SECTION (Row 1-2) ===
-  const controlHeaders = ['Min Tickets', 'Date From', 'Date To', 'Role', '', '', '', 'Selected Requester'];
+  const controlHeaders = ['Min Tickets', 'Date From', 'Date To', 'Role', 'Location', '', '', 'Selected Requester'];
   sheet.getRange(1, 1, 1, 8).setValues([controlHeaders]);
 
   // Default control values
@@ -2794,6 +2794,7 @@ function setupFrequentFlyersSheet(ss) {
   sheet.getRange('B2').setValue('');             // Date from (blank = all time)
   sheet.getRange('C2').setValue('');             // Date to (blank = today)
   sheet.getRange('D2').setValue('Exclude Agent'); // Role filter (default: exclude agents)
+  sheet.getRange('E2').setValue('All');           // Location filter (default: all locations)
   sheet.getRange('H2').setValue('');             // Selected requester (blank = none)
 
   // Format controls header
@@ -2802,6 +2803,10 @@ function setupFrequentFlyersSheet(ss) {
     .setBackground('#ff9800')
     .setFontColor('white');
   sheet.getRange('D1')
+    .setFontWeight('bold')
+    .setBackground('#ff9800')
+    .setFontColor('white');
+  sheet.getRange('E1')
     .setFontWeight('bold')
     .setBackground('#ff9800')
     .setFontColor('white');
@@ -2815,6 +2820,7 @@ function setupFrequentFlyersSheet(ss) {
   sheet.getRange('B1').setNote('Start date (YYYY-MM-DD). Leave blank for all time.');
   sheet.getRange('C1').setNote('End date (YYYY-MM-DD). Leave blank for today.');
   sheet.getRange('D1').setNote('Role filter. "All" = all roles; "Exclude Agent" = hide internal staff; or pick a specific role.');
+  sheet.getRange('E1').setNote('Location filter. "All" = all locations; or pick a specific location name.');
   sheet.getRange('H1').setNote('Select a requester from the list to see their ticket details');
 
   // Role filter dropdown validation
@@ -2823,6 +2829,16 @@ function setupFrequentFlyersSheet(ss) {
     .setAllowInvalid(false)
     .build();
   sheet.getRange('D2').setDataValidation(roleRule);
+
+  // Location filter dropdown — populated dynamically from TicketData (hidden column Q)
+  sheet.getRange('Q1').setValue('LocationSource');
+  sheet.getRange('Q2').setValue('={"All"; SORT(UNIQUE(FILTER(TicketData!N2:N, TicketData!N2:N<>"")))}');
+  sheet.hideColumns(17); // Hide column Q
+  const locationRule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(sheet.getRange('Q2:Q2000'), true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange('E2').setDataValidation(locationRule);
 
   // === USER FREQUENT FLYERS SECTION (Row 4+, Columns A-G) ===
   const userHeaders = ['Requester Name', 'Location', 'Total Tickets', 'Open', 'Closed', 'Avg Resolution', 'Last Refreshed'];
@@ -2837,22 +2853,26 @@ function setupFrequentFlyersSheet(ss) {
     'dateTo, IF($C$2="", TEXT(TODAY(), "YYYY-MM-DD"), $C$2),' +
     'hasDateFilter, dateFrom<>"",' +
     'selectedRole, $D$2,' +
-    'roleCriterion, IF(selectedRole="Exclude Agent", "<>Agent", selectedRole),' +
+    // "*" matches any non-blank text — used when "All" so COUNTIFS always carries role/location criteria
+    'roleCriterion, IF(selectedRole="All", "*", IF(selectedRole="Exclude Agent", "<>Agent", selectedRole)),' +
     'applyRole, selectedRole<>"All",' +
-    // Get requesters matching role filter
+    'selectedLocation, $E$2,' +
+    'locationCriterion, IF(selectedLocation="All", "*", selectedLocation),' +
+    'applyLocation, selectedLocation<>"All",' +
+    // Build requester pool using exact FILTER logic (4-branch: applyRole × applyLocation)
     'allReqs, IF(applyRole,' +
-    '  IF(selectedRole="Exclude Agent",' +
-    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU<>"Agent")),' +
-    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU=selectedRole))),' +
-    '  UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>""))),' +
-    // Count tickets per requester (hasDateFilter × applyRole = 4 branches)
+    '  IF(applyLocation,' +
+    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", IF(selectedRole="Exclude Agent", TicketData!AU2:AU<>"Agent", TicketData!AU2:AU=selectedRole), TicketData!N2:N=selectedLocation)),' +
+    '    IF(selectedRole="Exclude Agent",' +
+    '      UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU<>"Agent")),' +
+    '      UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU=selectedRole)))),' +
+    '  IF(applyLocation,' +
+    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!N2:N=selectedLocation)),' +
+    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"")))),' +
+    // Role/location criteria always present in COUNTIFS via criterion strings (2-branch: date only)
     'counts, IF(hasDateFilter,' +
-    '  IF(applyRole,' +
-    '    BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo, TicketData!AU:AU, roleCriterion))),' +
-    '    BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo)))),' +
-    '  IF(applyRole,' +
-    '    BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!AU:AU, roleCriterion))),' +
-    '    BYROW(allReqs, LAMBDA(r, COUNTIF(TicketData!AC:AC, r))))),' +
+    '  BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo, TicketData!AU:AU, roleCriterion, TicketData!N:N, locationCriterion))),' +
+    '  BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!AU:AU, roleCriterion, TicketData!N:N, locationCriterion)))),' +
     // Filter to those meeting threshold
     'filtered, FILTER(allReqs, counts>=minTix),' +
     'filteredCounts, FILTER(counts, counts>=minTix),' +
@@ -2861,22 +2881,12 @@ function setupFrequentFlyersSheet(ss) {
     'col_b, BYROW(filtered, LAMBDA(r, IFERROR(INDEX(FILTER(TicketData!N:N, TicketData!AC:AC=r), 1), ""))),' +  // Location
     'col_c, filteredCounts,' +
     'col_d, IF(hasDateFilter,' +
-    '  IF(applyRole,' +
-    '    BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Open", TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo, TicketData!AU:AU, roleCriterion))),' +
-    '    BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Open", TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo)))),' +
-    '  IF(applyRole,' +
-    '    BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Open", TicketData!AU:AU, roleCriterion))),' +
-    '    BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Open"))))),' +
+    '  BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Open", TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo, TicketData!AU:AU, roleCriterion, TicketData!N:N, locationCriterion))),' +
+    '  BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Open", TicketData!AU:AU, roleCriterion, TicketData!N:N, locationCriterion)))),' +
     'col_e, IF(hasDateFilter,' +
-    '  IF(applyRole,' +
-    '    BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Closed", TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo, TicketData!AU:AU, roleCriterion))),' +
-    '    BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Closed", TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo)))),' +
-    '  IF(applyRole,' +
-    '    BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Closed", TicketData!AU:AU, roleCriterion))),' +
-    '    BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Closed"))))),' +
-    'col_f, IF(applyRole,' +
-    '  BYROW(filtered, LAMBDA(r, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AC:AC, r, TicketData!I:I, "Closed", TicketData!AU:AU, roleCriterion), "N/A"))),' +
-    '  BYROW(filtered, LAMBDA(r, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AC:AC, r, TicketData!I:I, "Closed"), "N/A")))),' +
+    '  BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Closed", TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo, TicketData!AU:AU, roleCriterion, TicketData!N:N, locationCriterion))),' +
+    '  BYROW(filtered, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Closed", TicketData!AU:AU, roleCriterion, TicketData!N:N, locationCriterion)))),' +
+    'col_f, BYROW(filtered, LAMBDA(r, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AC:AC, r, TicketData!I:I, "Closed", TicketData!AU:AU, roleCriterion, TicketData!N:N, locationCriterion), "N/A"))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f),' +
     'IF(ROWS(filtered)=0, {"No users meet threshold"}, SORT(data, 3, FALSE)))';
 
@@ -2928,20 +2938,23 @@ function setupFrequentFlyersSheet(ss) {
     'dateTo, IF($C$2="", TEXT(TODAY(), "YYYY-MM-DD"), $C$2),' +
     'hasDateFilter, dateFrom<>"",' +
     'selectedRole, $D$2,' +
-    'roleCriterion, IF(selectedRole="Exclude Agent", "<>Agent", selectedRole),' +
+    'roleCriterion, IF(selectedRole="All", "*", IF(selectedRole="Exclude Agent", "<>Agent", selectedRole)),' +
     'applyRole, selectedRole<>"All",' +
+    'selectedLocation, $E$2,' +
+    'locationCriterion, IF(selectedLocation="All", "*", selectedLocation),' +
+    'applyLocation, selectedLocation<>"All",' +
     'allReqs, IF(applyRole,' +
-    '  IF(selectedRole="Exclude Agent",' +
-    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU<>"Agent")),' +
-    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU=selectedRole))),' +
-    '  UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>""))),' +
+    '  IF(applyLocation,' +
+    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", IF(selectedRole="Exclude Agent", TicketData!AU2:AU<>"Agent", TicketData!AU2:AU=selectedRole), TicketData!N2:N=selectedLocation)),' +
+    '    IF(selectedRole="Exclude Agent",' +
+    '      UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU<>"Agent")),' +
+    '      UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU=selectedRole)))),' +
+    '  IF(applyLocation,' +
+    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!N2:N=selectedLocation)),' +
+    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"")))),' +
     'counts, IF(hasDateFilter,' +
-    '  IF(applyRole,' +
-    '    BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo, TicketData!AU:AU, roleCriterion))),' +
-    '    BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo)))),' +
-    '  IF(applyRole,' +
-    '    BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!AU:AU, roleCriterion))),' +
-    '    BYROW(allReqs, LAMBDA(r, COUNTIF(TicketData!AC:AC, r))))),' +
+    '  BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo, TicketData!AU:AU, roleCriterion, TicketData!N:N, locationCriterion))),' +
+    '  BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!AU:AU, roleCriterion, TicketData!N:N, locationCriterion)))),' +
     'filtered, FILTER(allReqs, counts>=minTix),' +
     'filteredCounts, FILTER(counts, counts>=minTix),' +
     'IF(ROWS(filtered)=0, "", SORT(filtered, filteredCounts, FALSE)))';
@@ -2974,6 +2987,7 @@ function setupFrequentFlyersSheet(ss) {
   sheet.setColumnWidth(1, 180);  // Requester Name
   sheet.setColumnWidth(2, 150);  // Location
   sheet.setColumnWidth(4, 130);  // Role
+  sheet.setColumnWidth(5, 150);  // Location filter
   sheet.setColumnWidth(7, 120);  // Last Refreshed
   sheet.setColumnWidth(8, 180);  // Selected Requester
   sheet.setColumnWidth(9, 100);  // Created Date
@@ -2999,6 +3013,7 @@ function setupFrequentFlyersSheet(ss) {
     '- Min Tickets: Only show users with this many+ tickets\n' +
     '- Date From/To: Filter to a specific date range\n' +
     '- Role: "All" shows everyone; "Exclude Agent" hides internal staff; pick a specific role to narrow further\n' +
+    '- Location: "All" shows all locations; pick a specific location to see only that campus\n' +
     '- Selected Requester: Pick from dropdown to see ticket details'
   );
 

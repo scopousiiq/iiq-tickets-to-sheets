@@ -1,6 +1,6 @@
 {
-  "version": "1.6.2",
+  "version": "1.6.3",
   "released": "2026-04-29",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "FrequentFlyers Role filter: new Role dropdown (D2) on the FrequentFlyers sheet lets you show all requesters, exclude internal agents, or narrow to a specific role (Student, Staff, Agent, Guest). Defaults to Exclude Agent so agent self-tickets don't inflate frequent-flyer lists."
+  "message": "FrequentFlyers Location filter: new Location dropdown (E2) populated from your district's locations lets you narrow the frequent-flyer list to a single campus. Combines with the Role filter (D2) added in v1.6.2."
 }
