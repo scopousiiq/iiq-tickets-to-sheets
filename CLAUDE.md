@@ -215,7 +215,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | Sheet | Question Answered | Key Metrics |
 |-------|-------------------|-------------|
 | TeamWorkload ★ | "How is work distributed across teams?" | Per-team: open, created, closed, aged 30+ |
-| TechnicianPerformance | "How is workload distributed among staff?" | Per-technician: open, closed, aged, breach rate; Window Start/End controls (M2/N2) scope all metrics to any period (Open/Aged reconstructed as-of window end) |
+| TechnicianPerformance | "How is workload distributed among staff?" | Per-technician: open, closed, aged, avg resolution (calendar days), avg SLA response/resolution (hrs), breach rate; Window Start/End controls (O2/P2) scope all metrics to any period (Open/Aged reconstructed as-of window end) |
 | FunctionalAreaSummary | "How are functional areas performing?" | Aggregated metrics by functional area |
 
 ### Location

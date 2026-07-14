@@ -4,17 +4,20 @@ All notable changes to this project are documented here.
 
 ---
 
-## v1.7.0 — TechnicianPerformance time window (2026-07-14)
+## v1.7.0 — TechnicianPerformance time window + SLA times (2026-07-14)
 
 ### Added
-- **Window Start (M2) and Window End (N2) controls on the TechnicianPerformance sheet** — slice technician metrics to any period (a single week, a sprint, a quarter) for week-by-week or period-over-period comparison. Defaults to school-year-start → today (blank End = today, blank Start = all time).
+- **Window Start (O2) and Window End (P2) controls on the TechnicianPerformance sheet** — slice technician metrics to any period (a single week, a sprint, a quarter) for week-by-week or period-over-period comparison. Defaults to school-year-start → today (blank End = today, blank Start = all time).
   - **Created / Closed** count tickets dated within the window (previously fixed to month-to-date).
-  - **Avg Resolution / Breach Rate** cover tickets *closed* within the window.
+  - **Avg Resolution / SLA times / Breach Rate** cover tickets *closed* within the window.
   - **Open / Aged 30+** are reconstructed *as of the window end* from CreatedDate (E) and ClosedDate (H) — a ticket is open as-of the window end if it was created on/before that date and either never closed or closed after it. Age is measured at the window end. These no longer read the live "as of now" AgeDays column, so past periods reflect the state at that time.
-  - The `Created`/`Closed` headers dropped their `(MTD)` suffix; the data table layout (columns A–H, spill at row 2) is unchanged, so the web-app dashboard chart continues to read Open/Aged 30+ without modification.
+- **Avg SLA Response (hrs) and Avg SLA Resolution (hrs) columns** on the TechnicianPerformance sheet — per-technician SLA-clock times from ResponseActual (AE) and ResolutionActual (AH), stored in minutes and shown in hours, averaged over tickets closed in the window and filtered to tickets that actually had an SLA clock (`>0`).
+  - Distinct from the existing **Avg Resolution (days)**, which is *calendar* time-to-close (from AgeDays). The new SLA columns are the SLA-policy clock (business hours, paused-time aware). Both are kept.
+  - The data table grew from 8 to 10 columns (A–J); sort controls moved to L/M and window controls to O/P. Open (col C) and Aged 30+ (col F) positions are unchanged, so the web-app dashboard chart reads them without modification.
+- The `Created`/`Closed` headers dropped their `(MTD)` suffix.
 
 ### Upgrade Notes
-Recreate the TechnicianPerformance sheet via **iiQ Data > Add Analytics Sheet > Team & Staff > Technician Performance** to pick up the Window controls.
+Recreate the TechnicianPerformance sheet via **iiQ Data > Add Analytics Sheet > Team & Staff > Technician Performance** to pick up the Window controls and SLA-time columns.
 
 ---
 
