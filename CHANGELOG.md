@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.7.1 — TechnicianPerformance: split breach into Response/Resolution (2026-07-14)
+
+### Changed
+- **The single `Breach Rate` column on the TechnicianPerformance sheet is now two columns: `Response Breach %` (col J, from ResponseBreach/AF) and `Resolution Breach %` (col K, from ResolutionBreach/AI).** Each is computed over the same denominator — tickets closed in the selected window — so a ticket that breaches both SLAs is no longer double-counted (the old combined rate could exceed 100%).
+  - The data table grew from 10 to 11 columns (A–K). Sort controls moved to M/N and window controls to P/Q. Open (col C) and Aged 30+ (col F) positions are unchanged, so the web-app dashboard chart is unaffected.
+  - Sort Col# now accepts 1–11 (10 = Response Breach, 11 = Resolution Breach).
+
+### Upgrade Notes
+Recreate the TechnicianPerformance sheet via **iiQ Data > Add Analytics Sheet > Team & Staff > Technician Performance** to pick up the split breach columns.
+
+---
+
 ## v1.7.0 — TechnicianPerformance time window + SLA times (2026-07-14)
 
 ### Added

@@ -1,6 +1,6 @@
 {
-  "version": "1.7.0",
+  "version": "1.7.1",
   "released": "2026-07-14",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "TechnicianPerformance time window + SLA times: new Window Start (O2) and Window End (P2) controls slice technician metrics to any period — a week, a sprint, a quarter — and two new columns show Avg SLA Response (hrs) and Avg SLA Resolution (hrs) per technician. All metrics scope to the window; Open and Aged 30+ are reconstructed as of the window end. Defaults to school-year-start through today."
+  "message": "TechnicianPerformance breach split: the single Breach Rate column is now two columns — Response Breach % and Resolution Breach % — each over tickets closed in the selected window, so a ticket that breaches both is no longer double-counted. Window and SLA-time controls shifted right (window now P2/Q2)."
 }
