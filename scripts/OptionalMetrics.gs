@@ -728,38 +728,71 @@ function setupTechnicianPerformanceSheet(ss) {
   deleteSheetIfExists(ss, 'TechnicianPerformance');
   const sheet = ss.insertSheet('TechnicianPerformance');
 
-  // Headers - includes sort controls
-  const headers = ['Technician', 'Team', 'Open', 'Created (MTD)', 'Closed (MTD)', 'Aged 30+', 'Avg Resolution (days)', 'Breach Rate', 'Last Refreshed', 'Sort Col#', 'Desc?'];
+  // Default time window: school year start -> today. Users can narrow this to any
+  // slice (a single week, a sprint, a quarter) via the Window Start/End controls.
+  const config = getConfig();
+  const dates = getSchoolYearDates(config);
+  const defaultStart = dates ? dates.startDate : new Date(new Date().getFullYear(), 0, 1);
+
+  // Headers - Created/Closed/AvgRes/Breach scope to the window; Open/Aged are
+  // reconstructed as-of the window end. Sort controls live in J/K, date window in M/N.
+  const headers = ['Technician', 'Team', 'Open', 'Created', 'Closed', 'Aged 30+', 'Avg Resolution (days)', 'Breach Rate', 'Last Refreshed', 'Sort Col#', 'Desc?'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  // Main formula - aggregates by AssignedToUserName (column AO = assigned technician), with dynamic sorting
+  // Main formula - aggregates by AssignedToUserName (column AO = assigned technician),
+  // scoped to the [winStart, winEnd] window, with dynamic sorting.
+  //
+  // Window semantics:
+  // - winEndExcl (winEnd + 1) makes the end day fully inclusive despite date-time stamps.
+  // - Created/Closed = events dated within the window.
+  // - Open / Aged 30+ = point-in-time reconstruction "as of window end": a ticket is open
+  //   as-of winEnd if it was created before winEndExcl AND is either still open (blank
+  //   ClosedDate) or was closed after the window (ClosedDate >= winEndExcl). Age is measured
+  //   at winEnd, so Aged 30+ means created on/before (winEnd - 30). This is derived from the
+  //   CreatedDate/ClosedDate columns, NOT the live AgeDays column (which is always "as of now").
+  // - Avg Resolution / Breach Rate = tickets CLOSED within the window.
   const mainFormula =
     '=LET(' +
     'techs, UNIQUE(FILTER(TicketData!AO2:AO, TicketData!AO2:AO<>"", TicketData!AO2:AO<>"AssignedToUserName")),' +
-    'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
-    'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
+    'winStart, IF($M$2="", DATE(1900,1,1), $M$2),' +
+    'winEnd, IF($N$2="", TODAY(), $N$2),' +
+    'winEndExcl, winEnd+1,' +
+    'ageThresh, winEndExcl-30,' +
     'col_a, techs,' +
     'col_b, BYROW(techs, LAMBDA(t, IFERROR(INDEX(TicketData!L:L, MATCH(t, TicketData!AO:AO, 0)), ""))),' +
-    'col_c, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Open"))),' +
-    'col_d, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
-    'col_e, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
-    'col_f, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Open", TicketData!R:R, ">=30"))),' +
-    'col_g, BYROW(techs, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AO:AO, t, TicketData!I:I, "Closed"), "N/A"))),' +
-    'col_h, BYROW(techs, LAMBDA(t, LET(total, COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Closed"), breached, COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Closed", TicketData!AF:AF, 1)+COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Closed", TicketData!AI:AI, 1), IF(total>0, breached/total, "N/A")))),' +
+    'col_c, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!E:E, "<"&winEndExcl, TicketData!H:H, "")+COUNTIFS(TicketData!AO:AO, t, TicketData!E:E, "<"&winEndExcl, TicketData!H:H, ">="&winEndExcl))),' +
+    'col_d, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!E:E, ">="&winStart, TicketData!E:E, "<"&winEndExcl))),' +
+    'col_e, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!H:H, ">="&winStart, TicketData!H:H, "<"&winEndExcl))),' +
+    'col_f, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!E:E, "<"&ageThresh, TicketData!H:H, "")+COUNTIFS(TicketData!AO:AO, t, TicketData!E:E, "<"&ageThresh, TicketData!H:H, ">="&winEndExcl))),' +
+    'col_g, BYROW(techs, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AO:AO, t, TicketData!H:H, ">="&winStart, TicketData!H:H, "<"&winEndExcl), "N/A"))),' +
+    'col_h, BYROW(techs, LAMBDA(t, LET(total, COUNTIFS(TicketData!AO:AO, t, TicketData!H:H, ">="&winStart, TicketData!H:H, "<"&winEndExcl), breached, COUNTIFS(TicketData!AO:AO, t, TicketData!H:H, ">="&winStart, TicketData!H:H, "<"&winEndExcl, TicketData!AF:AF, 1)+COUNTIFS(TicketData!AO:AO, t, TicketData!H:H, ">="&winStart, TicketData!H:H, "<"&winEndExcl, TicketData!AI:AI, 1), IF(total>0, breached/total, "N/A")))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h),' +
     'SORT(data, $J$2, $K$2))';
 
   sheet.getRange('A2').setValue(mainFormula);
   sheet.getRange('I2').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
 
-  // Default sort settings (column 5 = Closed MTD, descending)
+  // Default sort settings (column 5 = Closed, descending)
   sheet.getRange('J2').setValue(5);
   sheet.getRange('K2').setValue('FALSE');
 
-  // Format header
+  // === TIME WINDOW CONTROLS (M/N) ===
+  sheet.getRange('M1').setValue('Window Start');
+  sheet.getRange('N1').setValue('Window End');
+  sheet.getRange('M2').setValue(defaultStart);  // Default: school year start
+  sheet.getRange('N2').setValue('');            // Blank = today (see formula fallback)
+  sheet.getRange('M2:N2').setNumberFormat('yyyy-mm-dd');
+
+  // Format data header
   sheet.getRange(1, 1, 1, headers.length)
     .setFontWeight('bold')
     .setBackground('#7b1fa2')
+    .setFontColor('white');
+
+  // Format window control header (orange, matching the control styling used elsewhere)
+  sheet.getRange('M1:N1')
+    .setFontWeight('bold')
+    .setBackground('#ff9800')
     .setFontColor('white');
 
   // Format columns
@@ -772,6 +805,8 @@ function setupTechnicianPerformanceSheet(ss) {
   sheet.setColumnWidth(9, 180);  // Last Refreshed
   sheet.setColumnWidth(10, 80);  // Sort Col#
   sheet.setColumnWidth(11, 60);  // Desc?
+  sheet.setColumnWidth(13, 110); // Window Start
+  sheet.setColumnWidth(14, 110); // Window End
 
   sheet.setFrozenRows(1);
 
@@ -789,20 +824,35 @@ function setupTechnicianPerformanceSheet(ss) {
     .build();
   sheet.getRange('K2').setDataValidation(sortOrderRule);
 
+  // Date validation for the window controls (warn, don't hard-block)
+  const dateRule = SpreadsheetApp.newDataValidation()
+    .requireDate()
+    .setAllowInvalid(true)
+    .setHelpText('Enter a date (YYYY-MM-DD).')
+    .build();
+  sheet.getRange('M2:N2').setDataValidation(dateRule);
+
   // Add notes
   sheet.getRange('A1').setNote(
     'Technician Performance Dashboard\n\n' +
     'Question: "How is workload distributed among staff?"\n\n' +
+    'Time window (M2/N2) scopes every metric:\n' +
+    '- Created / Closed: tickets dated within the window\n' +
+    '- Avg Resolution / Breach Rate: tickets CLOSED within the window\n' +
+    '- Open / Aged 30+: reconstructed "as of" the window END\n\n' +
+    'Set Window Start/End to any slice (e.g. one week) to compare periods.\n\n' +
     'Use this to:\n' +
     '- Identify overloaded technicians\n' +
     '- Balance workload across team\n' +
+    '- Compare performance week-by-week or period-over-period\n' +
     '- Inform performance reviews\n' +
-    '- Plan training based on breach rates\n' +
-    '- Justify additional staffing\n\n' +
+    '- Plan training based on breach rates\n\n' +
     'Use Sort Col# and Desc? to change sorting.'
   );
   sheet.getRange('J2').setNote('Sort column: 1=Tech, 2=Team, 3=Open, 4=Created, 5=Closed, 6=Aged, 7=AvgRes, 8=Breach');
   sheet.getRange('K2').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
+  sheet.getRange('M1').setNote('Window Start date. Every metric is scoped to this window. Blank = all time.');
+  sheet.getRange('N1').setNote('Window End date. Open/Aged are reconstructed as of this date; Created/Closed count up to and including it. Blank = today.');
 
   return true;
 }

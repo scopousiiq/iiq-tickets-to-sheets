@@ -4,6 +4,20 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.7.0 — TechnicianPerformance time window (2026-07-14)
+
+### Added
+- **Window Start (M2) and Window End (N2) controls on the TechnicianPerformance sheet** — slice technician metrics to any period (a single week, a sprint, a quarter) for week-by-week or period-over-period comparison. Defaults to school-year-start → today (blank End = today, blank Start = all time).
+  - **Created / Closed** count tickets dated within the window (previously fixed to month-to-date).
+  - **Avg Resolution / Breach Rate** cover tickets *closed* within the window.
+  - **Open / Aged 30+** are reconstructed *as of the window end* from CreatedDate (E) and ClosedDate (H) — a ticket is open as-of the window end if it was created on/before that date and either never closed or closed after it. Age is measured at the window end. These no longer read the live "as of now" AgeDays column, so past periods reflect the state at that time.
+  - The `Created`/`Closed` headers dropped their `(MTD)` suffix; the data table layout (columns A–H, spill at row 2) is unchanged, so the web-app dashboard chart continues to read Open/Aged 30+ without modification.
+
+### Upgrade Notes
+Recreate the TechnicianPerformance sheet via **iiQ Data > Add Analytics Sheet > Team & Staff > Technician Performance** to pick up the Window controls.
+
+---
+
 ## v1.6.3 — FrequentFlyers Location filter (2026-04-29)
 
 ### Added

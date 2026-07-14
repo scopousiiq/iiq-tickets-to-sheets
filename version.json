@@ -1,6 +1,6 @@
 {
-  "version": "1.6.3",
-  "released": "2026-04-29",
+  "version": "1.7.0",
+  "released": "2026-07-14",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "FrequentFlyers Location filter: new Location dropdown (E2) populated from your district's locations lets you narrow the frequent-flyer list to a single campus. Combines with the Role filter (D2) added in v1.6.2."
+  "message": "TechnicianPerformance time window: new Window Start (M2) and Window End (N2) controls let you slice technician metrics to any period — a single week, a sprint, a quarter. Created/Closed/Avg Resolution/Breach Rate scope to the window; Open and Aged 30+ are reconstructed as of the window end. Defaults to school-year-start through today."
 }
