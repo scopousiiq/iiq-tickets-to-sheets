@@ -728,81 +728,148 @@ function setupTechnicianPerformanceSheet(ss) {
   deleteSheetIfExists(ss, 'TechnicianPerformance');
   const sheet = ss.insertSheet('TechnicianPerformance');
 
-  // Headers - includes sort controls
-  const headers = ['Technician', 'Team', 'Open', 'Created (MTD)', 'Closed (MTD)', 'Aged 30+', 'Avg Resolution (days)', 'Breach Rate', 'Last Refreshed', 'Sort Col#', 'Desc?'];
+  // Default time window: school year start -> today. Users can narrow this to any
+  // slice (a single week, a sprint, a quarter) via the Window Start/End controls.
+  const config = getConfig();
+  const dates = getSchoolYearDates(config);
+  const defaultStart = dates ? dates.startDate : new Date(new Date().getFullYear(), 0, 1);
+
+  // Data table: 10 columns (A-J). Created/Closed/AvgRes/SLA times/Breach scope to the
+  // window; Open/Aged are reconstructed as-of the window end. Sort controls live in L/M,
+  // date window in O/P (all outside the A-J spill).
+  //
+  // Two resolution metrics, intentionally distinct:
+  // - Avg Resolution (days, col G): CALENDAR time-to-close, from the AgeDays column (R).
+  // - Avg SLA Resolution (hrs, col I): SLA-CLOCK actual (col AH), respects business hours
+  //   and paused time per the SLA policy. Avg SLA Response (hrs, col H) is the response
+  //   clock (col AE). Both SLA columns are stored in minutes, divided by 60 for hours.
+  const headers = ['Technician', 'Team', 'Open', 'Created', 'Closed', 'Aged 30+', 'Avg Resolution (days)', 'Avg SLA Response (hrs)', 'Avg SLA Resolution (hrs)', 'Breach Rate', 'Last Refreshed', 'Sort Col#', 'Desc?'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-  // Main formula - aggregates by AssignedToUserName (column AO = assigned technician), with dynamic sorting
+  // Main formula - aggregates by AssignedToUserName (column AO = assigned technician),
+  // scoped to the [winStart, winEnd] window, with dynamic sorting.
+  //
+  // Window semantics:
+  // - winEndExcl (winEnd + 1) makes the end day fully inclusive despite date-time stamps.
+  // - Created/Closed = events dated within the window.
+  // - Open / Aged 30+ = point-in-time reconstruction "as of window end": a ticket is open
+  //   as-of winEnd if it was created before winEndExcl AND is either still open (blank
+  //   ClosedDate) or was closed after the window (ClosedDate >= winEndExcl). Age is measured
+  //   at winEnd, so Aged 30+ means created on/before (winEnd - 30). This is derived from the
+  //   CreatedDate/ClosedDate columns, NOT the live AgeDays column (which is always "as of now").
+  // - Avg Resolution / Avg SLA Response / Avg SLA Resolution / Breach Rate = tickets CLOSED
+  //   within the window. SLA-time averages filter to >0 to skip tickets with no SLA clock.
   const mainFormula =
     '=LET(' +
     'techs, UNIQUE(FILTER(TicketData!AO2:AO, TicketData!AO2:AO<>"", TicketData!AO2:AO<>"AssignedToUserName")),' +
-    'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
-    'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
+    'winStart, IF($O$2="", DATE(1900,1,1), $O$2),' +
+    'winEnd, IF($P$2="", TODAY(), $P$2),' +
+    'winEndExcl, winEnd+1,' +
+    'ageThresh, winEndExcl-30,' +
     'col_a, techs,' +
     'col_b, BYROW(techs, LAMBDA(t, IFERROR(INDEX(TicketData!L:L, MATCH(t, TicketData!AO:AO, 0)), ""))),' +
-    'col_c, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Open"))),' +
-    'col_d, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
-    'col_e, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
-    'col_f, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Open", TicketData!R:R, ">=30"))),' +
-    'col_g, BYROW(techs, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AO:AO, t, TicketData!I:I, "Closed"), "N/A"))),' +
-    'col_h, BYROW(techs, LAMBDA(t, LET(total, COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Closed"), breached, COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Closed", TicketData!AF:AF, 1)+COUNTIFS(TicketData!AO:AO, t, TicketData!I:I, "Closed", TicketData!AI:AI, 1), IF(total>0, breached/total, "N/A")))),' +
-    'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h),' +
-    'SORT(data, $J$2, $K$2))';
+    'col_c, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!E:E, "<"&winEndExcl, TicketData!H:H, "")+COUNTIFS(TicketData!AO:AO, t, TicketData!E:E, "<"&winEndExcl, TicketData!H:H, ">="&winEndExcl))),' +
+    'col_d, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!E:E, ">="&winStart, TicketData!E:E, "<"&winEndExcl))),' +
+    'col_e, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!H:H, ">="&winStart, TicketData!H:H, "<"&winEndExcl))),' +
+    'col_f, BYROW(techs, LAMBDA(t, COUNTIFS(TicketData!AO:AO, t, TicketData!E:E, "<"&ageThresh, TicketData!H:H, "")+COUNTIFS(TicketData!AO:AO, t, TicketData!E:E, "<"&ageThresh, TicketData!H:H, ">="&winEndExcl))),' +
+    'col_g, BYROW(techs, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AO:AO, t, TicketData!H:H, ">="&winStart, TicketData!H:H, "<"&winEndExcl), "N/A"))),' +
+    'col_h, BYROW(techs, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!AE:AE, TicketData!AO:AO, t, TicketData!H:H, ">="&winStart, TicketData!H:H, "<"&winEndExcl, TicketData!AE:AE, ">0")/60, "N/A"))),' +
+    'col_i, BYROW(techs, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!AH:AH, TicketData!AO:AO, t, TicketData!H:H, ">="&winStart, TicketData!H:H, "<"&winEndExcl, TicketData!AH:AH, ">0")/60, "N/A"))),' +
+    'col_j, BYROW(techs, LAMBDA(t, LET(total, COUNTIFS(TicketData!AO:AO, t, TicketData!H:H, ">="&winStart, TicketData!H:H, "<"&winEndExcl), breached, COUNTIFS(TicketData!AO:AO, t, TicketData!H:H, ">="&winStart, TicketData!H:H, "<"&winEndExcl, TicketData!AF:AF, 1)+COUNTIFS(TicketData!AO:AO, t, TicketData!H:H, ">="&winStart, TicketData!H:H, "<"&winEndExcl, TicketData!AI:AI, 1), IF(total>0, breached/total, "N/A")))),' +
+    'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h, col_i, col_j),' +
+    'SORT(data, $L$2, $M$2))';
 
   sheet.getRange('A2').setValue(mainFormula);
-  sheet.getRange('I2').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
+  sheet.getRange('K2').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
 
-  // Default sort settings (column 5 = Closed MTD, descending)
-  sheet.getRange('J2').setValue(5);
-  sheet.getRange('K2').setValue('FALSE');
+  // Default sort settings (column 5 = Closed, descending)
+  sheet.getRange('L2').setValue(5);
+  sheet.getRange('M2').setValue('FALSE');
 
-  // Format header
+  // === TIME WINDOW CONTROLS (O/P) ===
+  sheet.getRange('O1').setValue('Window Start');
+  sheet.getRange('P1').setValue('Window End');
+  sheet.getRange('O2').setValue(defaultStart);  // Default: school year start
+  sheet.getRange('P2').setValue('');            // Blank = today (see formula fallback)
+  sheet.getRange('O2:P2').setNumberFormat('yyyy-mm-dd');
+
+  // Format data header
   sheet.getRange(1, 1, 1, headers.length)
     .setFontWeight('bold')
     .setBackground('#7b1fa2')
     .setFontColor('white');
 
+  // Format window control header (orange, matching the control styling used elsewhere)
+  sheet.getRange('O1:P1')
+    .setFontWeight('bold')
+    .setBackground('#ff9800')
+    .setFontColor('white');
+
   // Format columns
-  sheet.getRange('G:G').setNumberFormat('0.0');   // Avg Resolution
-  sheet.getRange('H:H').setNumberFormat('0.0%');  // Breach Rate
+  sheet.getRange('G:G').setNumberFormat('0.0');   // Avg Resolution (days)
+  sheet.getRange('H:H').setNumberFormat('0.0');   // Avg SLA Response (hrs)
+  sheet.getRange('I:I').setNumberFormat('0.0');   // Avg SLA Resolution (hrs)
+  sheet.getRange('J:J').setNumberFormat('0.0%');  // Breach Rate
 
   // Column widths
   sheet.setColumnWidth(1, 180);  // Technician
   sheet.setColumnWidth(2, 150);  // Team
-  sheet.setColumnWidth(9, 180);  // Last Refreshed
-  sheet.setColumnWidth(10, 80);  // Sort Col#
-  sheet.setColumnWidth(11, 60);  // Desc?
+  sheet.setColumnWidth(8, 160);  // Avg SLA Response (hrs)
+  sheet.setColumnWidth(9, 170);  // Avg SLA Resolution (hrs)
+  sheet.setColumnWidth(11, 180); // Last Refreshed
+  sheet.setColumnWidth(12, 80);  // Sort Col#
+  sheet.setColumnWidth(13, 60);  // Desc?
+  sheet.setColumnWidth(15, 110); // Window Start
+  sheet.setColumnWidth(16, 110); // Window End
 
   sheet.setFrozenRows(1);
 
   // Add data validation for sort column
   const sortColRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(['1', '2', '3', '4', '5', '6', '7', '8'], true)
-    .setHelpText('1=Tech, 2=Team, 3=Open, 4=Created, 5=Closed, 6=Aged, 7=AvgRes, 8=Breach')
+    .requireValueInList(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], true)
+    .setHelpText('1=Tech, 2=Team, 3=Open, 4=Created, 5=Closed, 6=Aged, 7=AvgRes(d), 8=SLAResp(h), 9=SLARes(h), 10=Breach')
     .build();
-  sheet.getRange('J2').setDataValidation(sortColRule);
+  sheet.getRange('L2').setDataValidation(sortColRule);
 
   // Add data validation for sort order
   const sortOrderRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(['FALSE', 'TRUE'], true)
     .setHelpText('FALSE=Descending, TRUE=Ascending')
     .build();
-  sheet.getRange('K2').setDataValidation(sortOrderRule);
+  sheet.getRange('M2').setDataValidation(sortOrderRule);
+
+  // Date validation for the window controls (warn, don't hard-block)
+  const dateRule = SpreadsheetApp.newDataValidation()
+    .requireDate()
+    .setAllowInvalid(true)
+    .setHelpText('Enter a date (YYYY-MM-DD).')
+    .build();
+  sheet.getRange('O2:P2').setDataValidation(dateRule);
 
   // Add notes
   sheet.getRange('A1').setNote(
     'Technician Performance Dashboard\n\n' +
     'Question: "How is workload distributed among staff?"\n\n' +
+    'Time window (O2/P2) scopes every metric:\n' +
+    '- Created / Closed: tickets dated within the window\n' +
+    '- Avg Resolution / Avg SLA Response / Avg SLA Resolution / Breach Rate: tickets CLOSED within the window\n' +
+    '- Open / Aged 30+: reconstructed "as of" the window END\n\n' +
+    'Two resolution metrics:\n' +
+    '- Avg Resolution (days) = calendar time-to-close\n' +
+    '- Avg SLA Resolution (hrs) = SLA-clock actual (business hours, paused-time aware)\n' +
+    'Avg SLA Response (hrs) is the SLA response clock. SLA averages skip tickets with no SLA.\n\n' +
+    'Set Window Start/End to any slice (e.g. one week) to compare periods.\n\n' +
     'Use this to:\n' +
     '- Identify overloaded technicians\n' +
-    '- Balance workload across team\n' +
+    '- Compare response/resolution speed across staff and over time\n' +
     '- Inform performance reviews\n' +
-    '- Plan training based on breach rates\n' +
-    '- Justify additional staffing\n\n' +
+    '- Plan training based on breach rates\n\n' +
     'Use Sort Col# and Desc? to change sorting.'
   );
-  sheet.getRange('J2').setNote('Sort column: 1=Tech, 2=Team, 3=Open, 4=Created, 5=Closed, 6=Aged, 7=AvgRes, 8=Breach');
-  sheet.getRange('K2').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
+  sheet.getRange('L2').setNote('Sort column: 1=Tech, 2=Team, 3=Open, 4=Created, 5=Closed, 6=Aged, 7=AvgRes(d), 8=SLAResp(h), 9=SLARes(h), 10=Breach');
+  sheet.getRange('M2').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
+  sheet.getRange('O1').setNote('Window Start date. Every metric is scoped to this window. Blank = all time.');
+  sheet.getRange('P1').setNote('Window End date. Open/Aged are reconstructed as of this date; Created/Closed count up to and including it. Blank = today.');
 
   return true;
 }
