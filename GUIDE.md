@@ -672,7 +672,7 @@ iiQ Data > Add Analytics Sheet >
 | **Reopen Rate** | "Are we truly resolving issues?" | Reopened ticket detection and quality metrics |
 | **First Contact Resolution** | "How many tickets resolved same-day?" | Same-day %, 4-hour resolution %, monthly trend |
 | **Response Distribution** | "How consistent is our response time?" | Percentiles, distribution buckets, consistency |
-| **Technician Performance** | "How is workload distributed among staff?" | Per-technician: open, closed, aged, avg resolution (days), avg SLA response/resolution (hrs), breach rate — with a Window Start/End control (O2/P2) to slice any period (week, sprint, quarter) |
+| **Technician Performance** | "How is workload distributed among staff?" | Per-technician: open, closed, aged, avg resolution (days), avg SLA response/resolution (hrs), response breach % + resolution breach % (separate) — with a Window Start/End control (P2/Q2) to slice any period (week, sprint, quarter) |
 | **Functional Area Summary** | "How are functional areas performing?" | Aggregated metrics by functional area |
 | **Location Breakdown** | "Which locations generate the most tickets?" | Per-location: open, created, closed |
 | **Location Type Comparison** | "Which school types generate most tickets?" | Metrics by Elementary/Middle/High/Admin |
