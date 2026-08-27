@@ -1,6 +1,6 @@
 {
-  "version": "1.8.0",
+  "version": "1.8.1",
   "released": "2026-08-27",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "Location custom fields: TicketData can now pull in custom fields that live on your locations, such as site codes, regions, and building numbers, not just the ones set on tickets. Paste up to five CustomFieldTypeIds into LOCATION_CUSTOM_FIELD_1-5 in Config and their values land in new columns AV-AZ, matched to each ticket by its location. Run \"Refresh Custom Fields\" to list your fields and see which are Ticket vs Location. Also fixes Refresh Custom Fields failing on large field catalogs, duplicate rows on the CustomFields sheet, and a Clear Data + Reset error after a full load."
+  "message": "Instructions sheet formatting: tables on the Instructions tab now render in Roboto Mono so their columns line up, matching the other iiQ sheet projects. The custom field setup step is now a table too. Re-run Setup Spreadsheet (or just recreate the Instructions tab) to pick it up."
 }

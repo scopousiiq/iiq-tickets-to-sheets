@@ -212,14 +212,15 @@ function setupInstructionsSheet(ss) {
     ['   • Populates the CustomFields sheet with every custom field your district'],
     ['     defines, labeled by Entity: "Ticket" or "Location"'],
     ['   • Copy the CustomFieldTypeId (column C) of a field and paste it into Config:'],
-    ['       CUSTOM_FIELD_1/2/3            — up to 3 Ticket fields. These read'],
-    ['                                       values set on the ticket itself.'],
-    ['       LOCATION_CUSTOM_FIELD_1-5     — up to 5 Location fields. These read'],
-    ['                                       values set on a school/building (site'],
-    ['                                       code, region, building number) and are'],
-    ['                                       joined onto every ticket at that'],
-    ['                                       location. Useful for pivoting a'],
-    ['                                       dashboard by your own site identifier.'],
+    [''],
+    ['     | Config key                | Slots | Values are read from          |'],
+    ['     |---------------------------|-------|-------------------------------|'],
+    ['     | CUSTOM_FIELD_1/2/3        |   3   | the ticket itself             |'],
+    ['     | LOCATION_CUSTOM_FIELD_1-5 |   5   | the ticket\'s location        |'],
+    [''],
+    ['     Location fields hold values set on a school or building — site code,'],
+    ['     region, building number — and are joined onto every ticket at that'],
+    ['     location. Useful for pivoting a dashboard by your own site identifier.'],
     ['   • Check the Entity column: a Location field pasted into a Ticket slot will'],
     ['     never resolve, and vice versa.'],
     ['   • A field name also works, but ids are unambiguous — two different fields'],
@@ -514,44 +515,47 @@ function setupInstructionsSheet(ss) {
   // Format title
   sheet.getRange(1, 1).setFontSize(16).setFontWeight('bold').setFontColor('#1a73e8');
 
-  // Section headers, dividers and tables are located by scanning the content
-  // rather than by hardcoded row numbers — any edit to the text above used to
-  // silently shift the formatting onto the wrong rows.
-  const DIVIDER = '═';
-  for (let i = 0; i < content.length; i++) {
-    const line = String(content[i][0] || '');
-    const row = i + 1;
-
-    if (line.indexOf(DIVIDER) === 0) {
-      // Divider rule
-      sheet.getRange(row, 1).setFontColor('#dadce0');
-    } else if (line.trim() !== '' && i > 0 && String(content[i - 1][0] || '').indexOf(DIVIDER) === 0) {
-      // A heading is the non-blank line immediately following a divider. Each
-      // heading sits between two dividers, so the blank line after the closing
-      // one must not be picked up.
-      sheet.getRange(row, 1).setFontWeight('bold').setFontColor('#1a73e8');
-    }
-  }
-
   // Set text wrapping for long content
   sheet.getRange(1, 1, content.length, 1).setWrap(true);
 
-  // Tables are drawn with pipe characters, so they only line up in a monospaced
-  // face — and must not wrap, or the columns break apart. Applied as contiguous
-  // blocks so a multi-row table is one formatting call.
-  const isTableRow = (line) => (String(line || '').match(/\|/g) || []).length >= 2;
-  let blockStart = -1;
-  for (let i = 0; i <= content.length; i++) {
-    const inTable = i < content.length && isTableRow(content[i][0]);
-    if (inTable && blockStart === -1) {
-      blockStart = i;
-    } else if (!inTable && blockStart !== -1) {
-      sheet.getRange(blockStart + 1, 1, i - blockStart, 1)
-        .setFontFamily('Roboto Mono')
-        .setFontSize(9)
-        .setWrap(false);
-      blockStart = -1;
+  // Locate section headers, dividers and tabular rows in a single pass, then
+  // apply each style class as one batched getRangeList call. Matches the
+  // Instructions formatting used across the sibling iiq-*-to-sheets projects.
+  // Titles are matched explicitly rather than by position, so editing the text
+  // above cannot shift the styling onto unrelated rows.
+  const sectionTitles = new Set([
+    'OVERVIEW',
+    'INITIAL SETUP',
+    'AUTOMATED TRIGGERS (Recommended)',
+    'SHEETS REFERENCE',
+    'MENU REFERENCE',
+    'TROUBLESHOOTING',
+    'DASHBOARD INTEGRATION',
+    'iiQ TELEMETRY',
+    'SUPPORT'
+  ]);
+  const sectionRanges = [];
+  const dividerRanges = [];
+  const monoRanges = [];
+
+  content.forEach(function(row, index) {
+    const value = row[0];
+    if (sectionTitles.has(value)) sectionRanges.push('A' + (index + 1));
+    if (typeof value === 'string' && /^═+$/.test(value)) dividerRanges.push('A' + (index + 1));
+    // Tabular rows (any line with 2+ pipes) only line up in a monospace font
+    if (typeof value === 'string' && (value.match(/\|/g) || []).length >= 2) {
+      monoRanges.push('A' + (index + 1));
     }
+  });
+
+  if (sectionRanges.length) {
+    sheet.getRangeList(sectionRanges).setFontWeight('bold').setFontColor('#1a73e8');
+  }
+  if (dividerRanges.length) {
+    sheet.getRangeList(dividerRanges).setFontColor('#dadce0');
+  }
+  if (monoRanges.length) {
+    sheet.getRangeList(monoRanges).setFontFamily('Roboto Mono');
   }
 
   // Freeze title row

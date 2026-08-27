@@ -4,6 +4,20 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.8.1 — Instructions sheet table formatting (2026-08-27)
+
+### Changed
+- **Tabular rows on the Instructions sheet now render in Roboto Mono**, so their column separators actually line up instead of drifting under a proportional font. Applied to any line containing two or more pipe characters, which covers the automated-triggers table and the custom field config table.
+- The custom field setup step is now a table rather than space-aligned text, so it benefits from the same treatment.
+- Section headers and dividers are matched by content rather than by hardcoded row numbers, and all three style classes apply as batched `getRangeList` calls (four formatting calls instead of one per row).
+
+This matches the Instructions formatting already used across the sibling `iiq-*-to-sheets` projects.
+
+### Upgrade Notes
+Re-run **iiQ Data > Setup > Setup Spreadsheet** to regenerate the Instructions tab with the new formatting. No data is affected — the Instructions sheet is documentation only.
+
+---
+
 ## v1.8.0 — Location custom fields in TicketData (2026-08-27)
 
 ### Added
