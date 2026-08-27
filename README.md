@@ -154,7 +154,7 @@ The dashboard discovers sheets via `ChartRegistry.gs`. Add a registered sheet vi
 | SLA | `SLACompliance`, `FirstContactResolution`, `ResponseDistribution`, `ResponseTrends`, `QueueTimeAnalysis`, `QueueTimeByTeam`, `QueueTimeTrend` | line / bar / horizontal bar |
 | Team | `TeamWorkload`, `TechnicianPerformance`, `FunctionalAreaSummary` | horizontal bar |
 | Location | `LocationBreakdown`, `LocationTypeComparison` | horizontal bar |
-| Issue | `IssueCategoryVolume`, `PriorityAnalysis`, `FrequentRequesters` | bar / horizontal bar |
+| Issue | `IssueCategoryVolume`, `IssueTypeVolume`, `PriorityAnalysis`, `FrequentRequesters` | bar / horizontal bar |
 | Device | `DeviceReliability`, `DevicesByRole` | horizontal bar |
 
 Total: 28 chart sheets + 5 KPI badge sheets = 33 registered. Empty tabs (no registered sheets present in that category) are omitted entirely.

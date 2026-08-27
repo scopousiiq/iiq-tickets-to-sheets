@@ -92,6 +92,7 @@ function onOpen() {
         .addItem('Location Type Comparison', 'addLocationTypeComparisonSheet'))
       .addSubMenu(ui.createMenu('Issue & Requester')
         .addItem('Issue Category Volume', 'addIssueCategoryVolumeSheet')
+        .addItem('Issue Type Volume', 'addIssueTypeVolumeSheet')
         .addItem('Priority Analysis', 'addPriorityAnalysisSheet')
         .addItem('Frequent Requesters', 'addFrequentRequestersSheet'))
       .addSubMenu(ui.createMenu('Device')

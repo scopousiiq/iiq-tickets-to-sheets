@@ -871,6 +871,7 @@ Formula-based analytics sheets (31 total, no scripts needed):
     ├── TechnicianPerformance   → reads from TicketData (per-owner)
     ├── LocationTypeComparison  → reads from TicketData (by school type)
     ├── IssueCategoryVolume     → reads from TicketData (by category)
+    ├── IssueTypeVolume         → reads from TicketData (by issue type)
     ├── PriorityAnalysis        → reads from TicketData (by priority)
     ├── FrequentRequesters      → reads from TicketData (top requesters)
     ├── QueueTimeAnalysis       → reads from TicketData (queue time stats)
@@ -1350,6 +1351,7 @@ The result: charts/badges appear automatically when you add a registered analyti
 | Location | `LocationBreakdown` | Horizontal bar | Open ticket counts per location |
 | Location | `LocationTypeComparison` | Horizontal bar | Open / aged tickets by school type |
 | Issue | `IssueCategoryVolume` | Horizontal bar | Open ticket counts by issue category |
+| Issue | `IssueTypeVolume` | Horizontal bar | Open ticket counts by issue type (top 50) |
 | Issue | `PriorityAnalysis` | Bar | Open count and avg resolution time by priority |
 | Issue | `FrequentRequesters` | Horizontal bar | Top users by total ticket count |
 | Device | `DeviceReliability` | Horizontal bar | Tickets and avg resolution time by device model |
@@ -1427,6 +1429,7 @@ Once your data is flowing, here are some ideas for getting more value:
 | Queue Time by Team | QueueTimeByTeam | SLA & Response |
 | Queue Time Trend | QueueTimeTrend | SLA & Response |
 | Issue Category Volume | IssueCategoryVolume | Issue & Requester |
+| Issue Type Volume | IssueTypeVolume | Issue & Requester |
 | Priority Analysis | PriorityAnalysis | Issue & Requester |
 | Frequent Requesters | FrequentRequesters | Issue & Requester |
 | Device Reliability | DeviceReliability | Device |

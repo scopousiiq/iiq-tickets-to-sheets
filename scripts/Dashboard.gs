@@ -288,9 +288,13 @@ function buildChartPayload_(values, spec) {
     const row = window[i];
     const label = row[spec.labelCol];
     const values_ = series.map(s => Number(row[s.col]));
-    if (values_.some(v => !isFinite(v))) continue;
+    // Drop only fully unusable rows. A single "N/A" cell (e.g. Avg Resolution
+    // for a category with no closed tickets) used to discard the whole row,
+    // hiding that category's Open count too; that value is now charted as a
+    // gap while its siblings still render.
+    if (!values_.some(v => isFinite(v))) continue;
     labels.push(label instanceof Date ? label.toISOString().slice(0, 10) : String(label));
-    values_.forEach((v, idx) => dataCols[idx].push(v));
+    values_.forEach((v, idx) => dataCols[idx].push(isFinite(v) ? v : null));
   }
 
   if (labels.length === 0) return null;
@@ -299,7 +303,8 @@ function buildChartPayload_(values, spec) {
     label: s.header,
     color: s.color,
     data: dataCols[idx],
-    percent: !!s.percent
+    percent: !!s.percent,
+    axis: s.axis === 'right' ? 'right' : 'left'
   }));
 
   return { labels: labels, datasets: datasets };
@@ -313,7 +318,10 @@ function buildChartPayload_(values, spec) {
 function resolveDynamicSeries_(values, cfg) {
   if (!values[0]) return [];
   const headerRow = values[0];
-  const palette = ['darkBlue', 'teal', 'gold', 'orange', 'purple', 'slate'];
+  // Full set of distinct chart tokens. A district with more functional areas
+  // than colors still wraps, but stacked segments carry a separator border
+  // (see datasetForType) so repeats stay distinguishable.
+  const palette = ['darkBlue', 'teal', 'gold', 'orange', 'purple', 'slate', 'lightBlue', 'red'];
   const series = [];
   const startCol = cfg.startCol || 1;
 

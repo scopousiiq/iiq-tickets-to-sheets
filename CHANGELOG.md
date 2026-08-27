@@ -4,6 +4,35 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.8.2 — Issue Type Volume sheet + dashboard chart legibility (2026-08-27)
+
+### Added
+- **`IssueTypeVolume` analytics sheet** — a drill-down partner to `IssueCategoryVolume`, grouping by issue type rather than category. Same metrics (Open, Created/Closed MTD, Avg Resolution, Breach Rate), plus a **Category** column showing which category each type rolls up to, so a row is readable without cross-referencing the category sheet.
+  - Add it via **iiQ Data > Add Analytics Sheet > Issue & Requester > Issue Type Volume**.
+  - Capped at the top 50 rows with a **Category Filter** control. Districts commonly define hundreds of issue types against a couple dozen categories; without a cap and a filter, a full-catalog sweep would run thousands of full-column `COUNTIFS` on every recalculation. Narrowing to one category is both the natural drill-down and the fast path.
+  - No API change — `IssueTypeName` was already extracted into `TicketData` column AA. This is a formula-only sheet.
+
+### Changed
+- **Dashboard chart cards are now sized from their data instead of a fixed 280px.** Horizontal bar charts grow with their category count (300–1600px) and claim the full grid row once they exceed eight bars; vertical charts get a modest height increase and go full width past fourteen categories. The dashboard content area widened from 1400px to 1600px.
+- **Each bar now carries its value**, drawn beside the bar so the number is readable without hovering. Implemented as a small inline Chart.js plugin rather than adding a third-party datalabels package. Suppressed on stacked charts, where the labels would overlap.
+- Long category labels are truncated on the axis with the full text still shown in the tooltip.
+- Tooltips format per series rather than per chart, so a chart holding both a rate and a count no longer renders the count as a percentage.
+- Stacked bar segments carry a hairline separator, and the dynamic-series palette expanded from six colors to eight.
+
+### Fixed
+- **Dense charts were silently dropping category labels.** Cards were a fixed height in a fixed two-column grid, so Chart.js quietly skipped axis labels to make them fit — the chart looked complete while showing only a fraction of its labels. Horizontal charts are now sized to fit every label and no longer skip any.
+- **Four charts flattened one of their series into an unreadable line.** `PerformanceTrends` (both charts), `PriorityAnalysis`, and `DeviceReliability` each plotted a 0–1 rate or a single-digit day average on the *same* axis as raw ticket counts, so the smaller series collapsed onto the baseline. On `PerformanceTrends` the shared percent formatter also labeled a days axis in percent, reading up to "650%". These series now get their own axis via a new `axis: 'right'` field in `ChartRegistry`.
+- **Percentage axes were collapsed to just 0% and 100%.** Integer-precision ticks were applied to every value axis, including rate axes spanning 0–1, leaving two gridlines. Percent axes no longer force integer ticks.
+- **A single "N/A" cell discarded its entire chart row.** Any non-numeric value in one series dropped the whole row, so an issue category with no closed tickets (and therefore no average resolution) also lost its Open count. Rows now survive as long as one series has a real number, with the missing value charted as a gap.
+- Stacked charts with more than six series repeated colors within a single bar, making adjacent segments indistinguishable.
+
+### Upgrade Notes
+- Existing dashboards pick up the chart changes on reload — no action needed, no data affected.
+- `IssueTypeVolume` is added from the menu; it is not created automatically by `Setup Spreadsheet`.
+- On a large `TicketData`, the unfiltered `All` view takes noticeably longer to settle on first calculation than a single-category view. Selecting a category is the fast path.
+
+---
+
 ## v1.8.1 — Instructions sheet table formatting (2026-08-27)
 
 ### Changed

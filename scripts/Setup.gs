@@ -348,6 +348,7 @@ function setupInstructionsSheet(ss) {
     [''],
     ['Issue & Requester:'],
     ['  • Issue Category Volume — Open/Closed by category, breach rate'],
+    ['  • Issue Type Volume — Top 50 issue types, filterable by category'],
     ['  • Priority Analysis — Metrics by priority level'],
     ['  • Frequent Requesters — Top 50 requesters with category data'],
     [''],

@@ -19,7 +19,14 @@
  *     title:    string — card header
  *     type:     'bar' | 'line' | 'stackedBar' | 'horizontalBar' | 'stackedHorizontalBar'
  *     labelCol: number — 0-indexed column for category/axis labels
- *     series:   [ { header: string, col: number, color: string } ]
+ *     series:   [ { header: string, col: number, color: string,
+ *                   percent?: bool — value is a 0-1 rate, rendered as %
+ *                   axis?: 'right' — put this series on its own measure axis.
+ *                          Use whenever a series shares a chart with values of
+ *                          a different unit or magnitude (a rate next to a
+ *                          count, a day-average next to a ticket total);
+ *                          otherwise the smaller series flattens onto the
+ *                          baseline and cannot be read. } ]
  *     rowStart: number — 1-indexed first data row (row 1 is normally headers)
  *     rowMode:  'contiguous' — read until labelCol goes blank
  *               | 'fixed'    — take exactly rowCount rows from rowStart
@@ -74,7 +81,7 @@ const CHART_REGISTRY = [
       labelCol: 0,
       series: [
         { header: 'Avg Resolution (days)', col: 3, color: 'darkBlue' },
-        { header: 'Breach Rate',           col: 5, color: 'orange', percent: true }
+        { header: 'Breach Rate',           col: 5, color: 'orange', percent: true, axis: 'right' }
       ],
       rowStart: 2,
       rowMode: 'contiguous'
@@ -84,7 +91,7 @@ const CHART_REGISTRY = [
       labelCol: 0,
       series: [
         { header: 'Backlog EOM',   col: 6, color: 'purple' },
-        { header: '% Aged 30+ EOM', col: 7, color: 'gold', percent: true }
+        { header: '% Aged 30+ EOM', col: 7, color: 'gold', percent: true, axis: 'right' }
       ],
       rowStart: 2,
       rowMode: 'contiguous'
@@ -502,6 +509,21 @@ const CHART_REGISTRY = [
     }]
   },
   {
+    sheetName: 'IssueTypeVolume',
+    category: 'Issue & Requester',
+    tabLabel: 'Issue',
+    charts: [{
+      title: 'Issue Type — Open Tickets (Top 50)',
+      type: 'horizontalBar',
+      labelCol: 0,
+      series: [
+        { header: 'Open', col: 2, color: 'teal' }
+      ],
+      rowStart: 2,
+      rowMode: 'contiguous'
+    }]
+  },
+  {
     sheetName: 'PriorityAnalysis',
     category: 'Issue & Requester',
     tabLabel: 'Issue',
@@ -511,7 +533,7 @@ const CHART_REGISTRY = [
       labelCol: 0,
       series: [
         { header: 'Open',               col: 1, color: 'darkBlue' },
-        { header: 'Avg Resolution (d)', col: 4, color: 'orange' }
+        { header: 'Avg Resolution (d)', col: 4, color: 'orange', axis: 'right' }
       ],
       rowStart: 2,
       rowMode: 'contiguous'
@@ -544,7 +566,7 @@ const CHART_REGISTRY = [
       labelCol: 0,
       series: [
         { header: 'Total',            col: 1, color: 'darkBlue' },
-        { header: 'Avg Resolution (d)', col: 4, color: 'orange' }
+        { header: 'Avg Resolution (d)', col: 4, color: 'orange', axis: 'right' }
       ],
       rowStart: 2,
       rowMode: 'contiguous'

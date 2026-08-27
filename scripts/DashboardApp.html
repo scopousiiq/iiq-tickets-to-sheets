@@ -97,7 +97,7 @@
     .refresh-btn.spinning .icon { animation: spin 0.8s linear infinite; display: inline-block; }
 
     main {
-      max-width: 1400px;
+      max-width: 1600px;
       margin: 0 auto;
       padding: 22px 28px 40px 28px;
     }
@@ -230,6 +230,9 @@
       height: 280px;
       position: relative;
     }
+    /* Charts with many categories claim the whole grid row — a 50-bar chart
+       squeezed into half the width has no room for its category labels. */
+    .card-wide { grid-column: 1 / -1; }
 
     .footer {
       margin-top: 30px;
@@ -357,12 +360,83 @@
 
     const activeCharts = [];
 
+    /**
+     * Draws each bar's value next to the bar so the number is readable without
+     * hovering. Written inline rather than pulling in chartjs-plugin-datalabels
+     * for one small feature. Skips bars too thin to label without collision,
+     * so it degrades quietly on dense charts instead of turning into mush.
+     */
+    const barValueLabels = {
+      id: 'barValueLabels',
+      afterDatasetsDraw: function(c, args, opts) {
+        if (!opts || !opts.enabled) return;
+        const ctx = c.ctx;
+        const horizontal = c.options.indexAxis === 'y';
+        const percentByDataset = opts.percent || [];
+        ctx.save();
+        ctx.font = '600 10px ' + Chart.defaults.font.family;
+        ctx.fillStyle = IIQ.slate;
+        ctx.textBaseline = 'middle';
+        c.data.datasets.forEach(function(ds, di) {
+          const meta = c.getDatasetMeta(di);
+          if (meta.hidden || meta.type !== 'bar') return;
+          meta.data.forEach(function(el, i) {
+            const v = ds.data[i];
+            if (v === null || v === undefined || !isFinite(v)) return;
+            const text = formatBarValue(v, percentByDataset[di]);
+            if (horizontal) {
+              if (el.height < 11) return;
+              ctx.textAlign = 'left';
+              ctx.fillText(text, el.x + 5, el.y);
+            } else {
+              if (el.width < 16) return;
+              ctx.textAlign = 'center';
+              ctx.fillText(text, el.x, el.y - 7);
+            }
+          });
+        });
+        ctx.restore();
+      }
+    };
+
+    function formatBarValue(v, percent) {
+      if (percent) return (v * 100).toFixed(0) + '%';
+      return Number.isInteger(v) ? String(v) : v.toFixed(1);
+    }
+
+    /**
+     * Sizes a chart card from its own data instead of a fixed 280px box.
+     * Horizontal bars grow with the category count; vertical charts get a
+     * modest height bump and go full width once x-axis labels start crowding.
+     */
+    function chartLayout(chart) {
+      const n = (chart.labels || []).length;
+      const horizontal = chart.type === 'horizontalBar' || chart.type === 'stackedHorizontalBar';
+      const seriesCount = Math.max(1, (chart.datasets || []).length);
+
+      if (horizontal) {
+        const perRow = 16 + (seriesCount * 18);
+        return { height: clamp(n * perRow + 60, 300, 1600), wide: n > 8 };
+      }
+      return {
+        height: n > 24 ? 420 : (n > 12 ? 360 : 300),
+        wide: n > 14
+      };
+    }
+
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    function truncateLabel(s, max) {
+      return s.length > max ? s.slice(0, max - 1) + '\u2026' : s;
+    }
+
     if (typeof Chart !== 'undefined') {
       Chart.defaults.font.family = "'Proxima Nova','Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
       Chart.defaults.font.size = 11;
       Chart.defaults.color = IIQ.textMuted;
       Chart.defaults.plugins.legend.labels.boxWidth = 12;
       Chart.defaults.plugins.legend.labels.usePointStyle = true;
+      Chart.register(barValueLabels);
     }
 
     function loadData() {
@@ -461,13 +535,15 @@
         const grid = document.createElement('div');
         grid.className = 'charts-grid';
         group.charts.forEach(chart => {
+          const layout = chartLayout(chart);
           const card = document.createElement('div');
-          card.className = 'card';
+          card.className = 'card' + (layout.wide ? ' card-wide' : '');
           const header = document.createElement('div');
           header.className = 'card-header';
           header.textContent = chart.title;
           const body = document.createElement('div');
           body.className = 'card-body';
+          body.style.height = layout.height + 'px';
           const canvas = document.createElement('canvas');
           body.appendChild(canvas);
           card.appendChild(header);
@@ -523,49 +599,130 @@
     }
 
     function datasetForType(type, d, color) {
-      if (type === 'line') {
-        return {
-          label: d.label,
-          data: d.data,
-          borderColor: color,
-          backgroundColor: hexToRgba(color, 0.15),
-          tension: 0.35,
-          fill: false,
-          pointRadius: 3,
-          pointBackgroundColor: color
-        };
+      const horizontal = type === 'horizontalBar' || type === 'stackedHorizontalBar';
+      const valueAxisId = horizontal ? 'x' : 'y';
+      const axisId = d.axis === 'right' ? valueAxisId + '1' : valueAxisId;
+
+      const base = (type === 'line')
+        ? {
+            label: d.label,
+            data: d.data,
+            borderColor: color,
+            backgroundColor: hexToRgba(color, 0.15),
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            pointBackgroundColor: color,
+            spanGaps: true
+          }
+        : {
+            label: d.label,
+            data: d.data,
+            backgroundColor: color,
+            borderRadius: 3
+          };
+
+      // Stacked segments sit flush against each other; a hairline separator
+      // keeps them readable when the palette wraps and two segments in one bar
+      // land on the same color.
+      if (type === 'stackedBar' || type === 'stackedHorizontalBar') {
+        base.borderColor = '#fff';
+        base.borderWidth = 1;
+        base.borderRadius = 0;
       }
-      return {
-        label: d.label,
-        data: d.data,
-        backgroundColor: color,
-        borderRadius: 3
+
+      if (horizontal) base.xAxisID = axisId; else base.yAxisID = axisId;
+      return base;
+    }
+
+    /** Builds a value (measure) axis. Percent axes skip integer-precision
+     *  ticks — forcing whole numbers on a 0-1 range collapsed the scale to
+     *  just 0% and 100%. */
+    function valueAxisFor(sets, opts) {
+      const percent = sets.length > 0 && sets.every(function(d) { return d.percent; });
+      const axis = {
+        beginAtZero: true,
+        stacked: !!opts.stacked,
+        ticks: {}
       };
+      if (percent) {
+        axis.suggestedMax = 1;
+        axis.ticks.callback = function(v) { return (v * 100).toFixed(0) + '%'; };
+      } else {
+        axis.ticks.precision = 0;
+      }
+      if (opts.secondary) {
+        axis.position = opts.horizontal ? 'top' : 'right';
+        // Secondary gridlines would double up on the primary set.
+        axis.grid = { drawOnChartArea: false };
+      } else {
+        axis.grid = { color: IIQ.border };
+      }
+      return axis;
     }
 
     function chartOptions(chart) {
       const horizontal = chart.type === 'horizontalBar' || chart.type === 'stackedHorizontalBar';
       const stacked = chart.type === 'stackedBar' || chart.type === 'stackedHorizontalBar';
-      const percent = chart.datasets.some(d => d.percent);
 
-      const valueAxis = {
-        beginAtZero: true,
+      // Series marked axis:'right' in ChartRegistry get their own measure axis.
+      // Sharing one axis between, say, open-ticket counts and a 0-1 breach rate
+      // flattened the smaller series into an unreadable line along the baseline.
+      const leftSets  = chart.datasets.filter(function(d) { return d.axis !== 'right'; });
+      const rightSets = chart.datasets.filter(function(d) { return d.axis === 'right'; });
+
+      const valueAxis = valueAxisFor(leftSets, { stacked: stacked, horizontal: horizontal });
+      const secondaryAxis = rightSets.length
+        ? valueAxisFor(rightSets, { stacked: stacked, horizontal: horizontal, secondary: true })
+        : null;
+
+      // Horizontal cards are sized to fit every category, so disable autoSkip —
+      // Chart.js would otherwise silently drop labels to make them fit, which is
+      // what made dense charts unreadable. Vertical charts keep autoSkip because
+      // their x-axis room is fixed by the page width.
+      const categoryAxis = {
         stacked: stacked,
-        grid: { color: IIQ.border },
+        grid: { display: false },
         ticks: {
-          precision: 0,
-          callback: percent ? function(v) { return (v * 100).toFixed(0) + '%'; } : undefined
+          autoSkip: !horizontal,
+          maxRotation: horizontal ? 0 : 60,
+          font: { size: 11 },
+          callback: function(value, index) {
+            const raw = (chart.labels || [])[index];
+            const label = (raw === undefined || raw === null) ? value : raw;
+            // Truncated on the axis only; the tooltip still shows the full name.
+            return truncateLabel(String(label), horizontal ? 44 : 22);
+          }
         }
       };
-      if (percent) valueAxis.suggestedMax = 1;
 
-      const categoryAxis = { stacked: stacked, grid: { display: false } };
+      // Leave room for the value drawn past the end of each bar.
+      const showBarValues = !stacked && chart.type !== 'line';
+      const padding = showBarValues
+        ? (horizontal ? { right: 34 } : { top: 16 })
+        : {};
+
+      const scales = {};
+      if (horizontal) {
+        scales.x = valueAxis;
+        scales.y = categoryAxis;
+        if (secondaryAxis) scales.x1 = secondaryAxis;
+      } else {
+        scales.x = categoryAxis;
+        scales.y = valueAxis;
+        if (secondaryAxis) scales.y1 = secondaryAxis;
+      }
 
       return {
         responsive: true,
         maintainAspectRatio: false,
         indexAxis: horizontal ? 'y' : 'x',
+        layout: { padding: padding },
         plugins: {
+          barValueLabels: {
+            enabled: showBarValues,
+            percent: chart.datasets.map(function(d) { return !!d.percent; })
+          },
           legend: chart.datasets.length > 1
             ? { position: 'top', align: 'end' }
             : { display: false },
@@ -575,16 +732,22 @@
             bodyColor: '#fff',
             padding: 10,
             cornerRadius: 6,
-            callbacks: percent ? {
+            callbacks: {
+              // Formatted per dataset, not per chart: a mixed chart would
+              // otherwise render its day-average series as a percentage.
               label: function(ctx) {
-                return ctx.dataset.label + ': ' + (ctx.parsed[horizontal?'x':'y'] * 100).toFixed(1) + '%';
+                const v = ctx.parsed[horizontal ? 'x' : 'y'];
+                const name = ctx.dataset.label;
+                if (v === null || v === undefined) return name + ': n/a';
+                const set = chart.datasets[ctx.datasetIndex] || {};
+                return name + ': ' + (set.percent
+                  ? (v * 100).toFixed(1) + '%'
+                  : formatBarValue(v, false));
               }
-            } : undefined
+            }
           }
         },
-        scales: horizontal
-          ? { x: valueAxis, y: categoryAxis }
-          : { x: categoryAxis, y: valueAxis }
+        scales: scales
       };
     }
 

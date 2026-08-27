@@ -18,6 +18,7 @@
  * - LocationBreakdown: Metrics by location
  * - FunctionalAreaSummary: Aggregated by functional area
  * - IssueCategoryVolume: What types of problems are we handling?
+ * - IssueTypeVolume: Which specific issues inside a category drive volume?
  * - PriorityAnalysis: Are high-priority tickets handled faster?
  * - FirstContactResolution: How many tickets resolved same-day?
  * - TechnicianPerformance: Individual technician workload and metrics
@@ -207,6 +208,15 @@ function addIssueCategoryVolumeSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   setupIssueCategoryVolumeSheet(ss);
   SpreadsheetApp.getUi().alert('Created', 'IssueCategoryVolume sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Add Issue Type Volume sheet (deletes and recreates if exists)
+ */
+function addIssueTypeVolumeSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  setupIssueTypeVolumeSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'IssueTypeVolume sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
@@ -535,6 +545,134 @@ function setupIssueCategoryVolumeSheet(ss) {
   );
   sheet.getRange('H2').setNote('Sort column: 1=Category, 2=Open, 3=Created, 4=Closed, 5=AvgRes, 6=Breach');
   sheet.getRange('I2').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
+
+  return true;
+}
+
+/**
+ * Setup IssueTypeVolume sheet
+ * Question: "Which specific issues inside a category are driving volume?"
+ *
+ * The drill-down partner to IssueCategoryVolume. Districts routinely define
+ * hundreds of issue types against a couple dozen categories, so this sheet
+ * caps output at the top 50 rows and offers a category filter to narrow the
+ * pool before aggregating — without it, a full-catalog sweep would run
+ * thousands of full-column COUNTIFS on every recalculation.
+ *
+ * Deletes existing sheet if present for clean slate
+ */
+function setupIssueTypeVolumeSheet(ss) {
+  deleteSheetIfExists(ss, 'IssueTypeVolume');
+  const sheet = ss.insertSheet('IssueTypeVolume');
+
+  // Headers - A-H are data/info, I-K are controls
+  const headers = ['Issue Type', 'Category', 'Open', 'Created (MTD)', 'Closed (MTD)',
+                   'Avg Resolution (days)', 'Breach Rate', 'Last Refreshed',
+                   'Sort Col#', 'Desc?', 'Category Filter'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // Aggregates by IssueTypeName (column AA), carrying the parent
+  // IssueCategoryName (column Y) so a row is readable without cross-referencing
+  // the category sheet. Category filter narrows the type pool before the
+  // per-type aggregations run.
+  const stack = 'HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g)';
+  const mainFormula =
+    '=LET(' +
+    'catFilter, $K$2,' +
+    'useAll, OR(catFilter="", catFilter="All"),' +
+    'types, IF(useAll,' +
+    '  UNIQUE(FILTER(TicketData!AA2:AA, TicketData!AA2:AA<>"", TicketData!AA2:AA<>"IssueTypeName")),' +
+    '  UNIQUE(FILTER(TicketData!AA2:AA, TicketData!AA2:AA<>"", TicketData!AA2:AA<>"IssueTypeName", TicketData!Y2:Y=catFilter))),' +
+    'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
+    'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
+    'col_a, types,' +
+    'col_b, BYROW(types, LAMBDA(t, IFERROR(INDEX(FILTER(TicketData!Y:Y, TicketData!AA:AA=t, TicketData!Y:Y<>""), 1), ""))),' +
+    'col_c, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!AA:AA, t, TicketData!I:I, "Open"))),' +
+    'col_d, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!AA:AA, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
+    'col_e, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!AA:AA, t, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
+    'col_f, BYROW(types, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AA:AA, t, TicketData!I:I, "Closed"), "N/A"))),' +
+    'col_g, BYROW(types, LAMBDA(t, LET(total, COUNTIFS(TicketData!AA:AA, t, TicketData!I:I, "Closed"), breached, COUNTIFS(TicketData!AA:AA, t, TicketData!I:I, "Closed", TicketData!AF:AF, 1)+COUNTIFS(TicketData!AA:AA, t, TicketData!I:I, "Closed", TicketData!AI:AI, 1), IF(total>0, breached/total, "N/A")))),' +
+    'sorted, IFERROR(SORT(' + stack + ', $I$2, $J$2), ' + stack + '),' +
+    'IFERROR(ARRAY_CONSTRAIN(sorted, 50, 7), sorted))';
+
+  sheet.getRange('A2').setValue(mainFormula);
+  sheet.getRange('H2').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
+
+  // Default controls: sort by Open (column 3) descending, all categories
+  sheet.getRange('I2').setValue(3);
+  sheet.getRange('J2').setValue('FALSE');
+  sheet.getRange('K2').setValue('All');
+
+  // Format header - data columns teal, controls orange so they read as inputs
+  sheet.getRange(1, 1, 1, 8)
+    .setFontWeight('bold')
+    .setBackground('#00695c')
+    .setFontColor('white');
+  sheet.getRange(1, 9, 1, 3)
+    .setFontWeight('bold')
+    .setBackground('#ff9800')
+    .setFontColor('white');
+
+  // Format columns
+  sheet.getRange('F:F').setNumberFormat('0.0');   // Avg Resolution
+  sheet.getRange('G:G').setNumberFormat('0.0%');  // Breach Rate
+
+  // Column widths
+  sheet.setColumnWidth(1, 260);  // Issue Type - names run long
+  sheet.setColumnWidth(2, 200);  // Category
+  sheet.setColumnWidth(8, 180);  // Last Refreshed
+  sheet.setColumnWidth(9, 80);   // Sort Col#
+  sheet.setColumnWidth(10, 60);  // Desc?
+  sheet.setColumnWidth(11, 200); // Category Filter
+
+  sheet.setFrozenRows(1);
+
+  // Category filter dropdown - populated dynamically from TicketData (hidden column M).
+  // requireValueInRange rather than requireValueInList: list validation caps at
+  // 500 items and category catalogs can exceed that in large districts.
+  sheet.getRange('M1').setValue('CategorySource');
+  sheet.getRange('M2').setValue('={"All"; SORT(UNIQUE(FILTER(TicketData!Y2:Y, TicketData!Y2:Y<>"")))}');
+  sheet.hideColumns(13);
+  const catRule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(sheet.getRange('M2:M2000'), true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange('K2').setDataValidation(catRule);
+
+  // Add data validation for sort column
+  const sortColRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['1', '2', '3', '4', '5', '6', '7'], true)
+    .setHelpText('1=Type, 2=Category, 3=Open, 4=Created, 5=Closed, 6=AvgRes, 7=Breach')
+    .build();
+  sheet.getRange('I2').setDataValidation(sortColRule);
+
+  // Add data validation for sort order
+  const sortOrderRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['FALSE', 'TRUE'], true)
+    .setHelpText('FALSE=Descending, TRUE=Ascending')
+    .build();
+  sheet.getRange('J2').setDataValidation(sortOrderRule);
+
+  // Add notes
+  sheet.getRange('A1').setNote(
+    'Issue Type Volume Analysis (Top 50)\n\n' +
+    'Question: "Which specific issues are driving volume?"\n\n' +
+    'This is the drill-down partner to IssueCategoryVolume: categories tell you\n' +
+    'which area is busy, types tell you what is actually breaking.\n\n' +
+    'Use this to:\n' +
+    '- Separate a real hardware fault from a category-wide catch-all\n' +
+    '- Target training at the single most common user error\n' +
+    '- Justify a specific part or accessory purchase\n' +
+    '- Spot issue types that are chronically breaching SLA\n\n' +
+    'Set Category Filter to narrow to one category, then sort by Open.'
+  );
+  sheet.getRange('I1').setNote('Sort column: 1=Type, 2=Category, 3=Open, 4=Created, 5=Closed, 6=AvgRes, 7=Breach');
+  sheet.getRange('J1').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
+  sheet.getRange('K1').setNote(
+    'Category filter. "All" = every issue type across all categories;\n' +
+    'or pick one category to see only its types.\n\n' +
+    'Narrowing to a single category also makes the sheet recalculate faster.'
+  );
 
   return true;
 }
