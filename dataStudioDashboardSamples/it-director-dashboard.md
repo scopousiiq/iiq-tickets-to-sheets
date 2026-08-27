@@ -1,4 +1,4 @@
-# IT Director Operations Dashboard — Looker Studio Build Guide
+# IT Director Operations Dashboard — Google Data Studio Build Guide
 
 Single-page operations dashboard for a K-12 district IT Director focused on daily execution, backlog control, and measurable performance improvement.
 
@@ -16,7 +16,7 @@ This dashboard should answer:
 
 ### Connect Three Sheets
 
-1. Go to [lookerstudio.google.com](https://lookerstudio.google.com)
+1. Go to [datastudio.google.com](https://datastudio.google.com)
 2. Create > Report > Google Sheets connector
 3. Select your spreadsheet, choose the **TicketData** sheet, check "Use first row as headers"
 4. Add a second data source: Add Data > Google Sheets > same spreadsheet > **DailySnapshot** sheet
@@ -45,7 +45,7 @@ This dashboard should answer:
 | `ModelName` | Text | |
 | `SerialNumber` | Text | |
 
-> **Date handling:** The date fields arrive as ISO 8601 strings from the iiQ API (e.g., `2025-02-05T14:30:00Z`). When you set these to **Date & Time** in Looker Studio, the Google Sheets connector should parse them automatically. If a date field isn't recognized after changing the type, create a calculated field using:
+> **Date handling:** The date fields arrive as ISO 8601 strings from the iiQ API (e.g., `2025-02-05T14:30:00Z`). When you set these to **Date & Time** in Google Data Studio, the Google Sheets connector should parse them automatically. If a date field isn't recognized after changing the type, create a calculated field using:
 > ```
 > PARSE_DATETIME("%Y-%m-%dT%H:%M:%S", REGEXP_REPLACE(CreatedDate, "Z$", ""))
 > ```
@@ -102,7 +102,7 @@ END
 
 - Type: Number
 - Usage: `AVG`, format as Percent
-- **Important:** Add a "Has SLA" filter (see below) to any chart using this field. Looker Studio does not reliably exclude NULLs from AVG calculations, which will dilute the result to near 0%.
+- **Important:** Add a "Has SLA" filter (see below) to any chart using this field. Google Data Studio does not reliably exclude NULLs from AVG calculations, which will dilute the result to near 0%.
 
 **"Has SLA" filter** — Create this as a reusable filter and apply it to any chart that uses `SLA Breached`:
 - Name: `Has SLA`
@@ -110,7 +110,7 @@ END
 - **OR**
 - Clause 2: **Include** `ResponseBreach` **Equal to (=)** `0`
 
-Looker Studio only allows one value per filter condition, so the OR with two clauses is required.
+Google Data Studio only allows one value per filter condition, so the OR with two clauses is required.
 
 ### ClosedMonth
 
@@ -398,7 +398,7 @@ END
 
 **Alternative — Blend approach (weekly granularity):**
 
-If you need weekly granularity instead of monthly, use blended data. Be aware that blends are fragile in Looker Studio — date granularity dropdowns don't work, and join alignment issues can silently drop data.
+If you need weekly granularity instead of monthly, use blended data. Be aware that blends are fragile in Google Data Studio — date granularity dropdowns don't work, and join alignment issues can silently drop data.
 
 - Chart type: Time series or grouped bar using blended data
 - **Important:** You must use the `CreatedWeek` and `ClosedWeek` calculated fields (see Calculated Fields section). Changing date granularity via the dropdown does not work in blends.
@@ -498,7 +498,7 @@ IsPastDue = "Overdue"
 
 ### Intake vs Throughput chart looks misaligned or shows "too many rows"
 
-Changing date granularity via the dropdown does **not** work in blended data sources — this is a known Looker Studio bug. Use the `CreatedWeek` and `ClosedWeek` calculated fields (which use `DATETIME_TRUNC`) instead of raw date fields. Both sides of the blend must use the same truncation (ISOWEEK or MONTH) for the join to align. If blends continue to cause issues, use the MonthlyVolume sheet as a standalone data source instead.
+Changing date granularity via the dropdown does **not** work in blended data sources — this is a known Google Data Studio bug. Use the `CreatedWeek` and `ClosedWeek` calculated fields (which use `DATETIME_TRUNC`) instead of raw date fields. Both sides of the blend must use the same truncation (ISOWEEK or MONTH) for the join to align. If blends continue to cause issues, use the MonthlyVolume sheet as a standalone data source instead.
 
 ### Too many blank teams or owners
 
@@ -508,11 +508,11 @@ Add chart filters:
 
 ### Date range silently filtering data
 
-When you connect a Google Sheets data source, Looker Studio assigns a **default date dimension** (likely `CreatedDate`). Every component is automatically filtered by the report's date range — even without a date range control. If unfiltered record counts are lower than expected, set the default date range to cover your full school year in File > Report settings.
+When you connect a Google Sheets data source, Google Data Studio assigns a **default date dimension** (likely `CreatedDate`). Every component is automatically filtered by the report's date range — even without a date range control. If unfiltered record counts are lower than expected, set the default date range to cover your full school year in File > Report settings.
 
 ### Date fields not recognized
 
-If Looker Studio doesn't auto-detect date columns, manually set the type to **Date & Time** in the data source config (Resource > Manage added data sources > Edit). The TicketData dates are ISO format (`2025-02-05T14:30:00Z`). If setting the type alone doesn't work, create a calculated field using:
+If Google Data Studio doesn't auto-detect date columns, manually set the type to **Date & Time** in the data source config (Resource > Manage added data sources > Edit). The TicketData dates are ISO format (`2025-02-05T14:30:00Z`). If setting the type alone doesn't work, create a calculated field using:
 
 ```text
 PARSE_DATETIME("%Y-%m-%dT%H:%M:%S", REGEXP_REPLACE(CreatedDate, "Z$", ""))

@@ -132,6 +132,7 @@ function refreshTicketDataFull() {
     if (response !== ui.Button.YES) return;
 
     // Clear all data (keep header row)
+    ensureTicketGridWidth(sheet);
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
       sheet.getRange(2, 1, lastRow - 1, TICKET_COLUMN_COUNT).clear();
@@ -313,6 +314,13 @@ function runTicketDataLoader(sheet) {
   // Build lookup maps for resolving UUID values to display names (IiqLocation, Select, etc.)
   const customFieldLookupMaps = buildCustomFieldLookupMaps(config);
 
+  // Resolve location custom field names, then index their values by LocationId
+  // once for the whole run (fixed cost — see buildLocationCustomFieldIndex)
+  resolveLocationCustomFieldIds(config);
+  config = getConfig();
+  cacheConfigRowPositions();
+  const locationCfIndex = buildLocationCustomFieldIndex(config);
+
   // Extend TicketData headers if upgrading from older column count
   updateCustomFieldHeaders(sheet, config);
 
@@ -336,7 +344,7 @@ function runTicketDataLoader(sheet) {
     if (!ticketComplete) {
       // Still doing initial pagination-based load
       // Pass in-memory progress to avoid re-reading config
-      const result = processSchoolYearBatchOptimized(sheet, config, ticketLastPage, ticketTotalPages, customFieldIds, customFieldLookupMaps);
+      const result = processSchoolYearBatchOptimized(sheet, config, ticketLastPage, ticketTotalPages, customFieldIds, customFieldLookupMaps, locationCfIndex);
       batchCount++;
       ticketCount += result.count;
 
@@ -379,7 +387,7 @@ function runTicketDataLoader(sheet) {
 
     } else if (isCurrent) {
       // Pagination complete, do incremental updates for current school year
-      const result = processCurrentSchoolYearBatchOptimized(sheet, config, ticketLastFetch, customFieldIds, customFieldLookupMaps);
+      const result = processCurrentSchoolYearBatchOptimized(sheet, config, ticketLastFetch, customFieldIds, customFieldLookupMaps, locationCfIndex);
       batchCount++;
       ticketCount += result.count;
 
@@ -426,6 +434,8 @@ function runTicketDataLoader(sheet) {
  * Process one batch for the school year using pagination
  */
 function processSchoolYearBatch(sheet, config) {
+  ensureTicketGridWidth(sheet);
+  const locationCfIndex = buildLocationCustomFieldIndex(config);
   const batchSize = config.ticketBatchSize;
   const lastPage = config.ticketLastPage;
   const nextPage = lastPage + 1;
@@ -475,7 +485,7 @@ function processSchoolYearBatch(sheet, config) {
 
   // Write tickets to sheet (with merged SLA data) - use school year string for Year column
   const now = new Date();
-  const rows = response.Items.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds));
+  const rows = response.Items.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds, null, locationCfIndex));
   const lastRow = sheet.getLastRow();
   sheet.getRange(lastRow + 1, 1, rows.length, TICKET_COLUMN_COUNT).setValues(rows);
 
@@ -499,6 +509,8 @@ function processSchoolYearBatch(sheet, config) {
  * Process one batch for current school year using date windowing (incremental)
  */
 function processCurrentSchoolYearBatch(sheet, config) {
+  ensureTicketGridWidth(sheet);
+  const locationCfIndex = buildLocationCustomFieldIndex(config);
   const batchSize = config.ticketBatchSize;
   const lastFetch = config.ticketLastFetch;
 
@@ -563,7 +575,7 @@ function processCurrentSchoolYearBatch(sheet, config) {
 
   // Write to sheet (with merged SLA data) - use school year string
   const now = new Date();
-  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds));
+  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds, null, locationCfIndex));
   const lastRow = sheet.getLastRow();
   sheet.getRange(lastRow + 1, 1, rows.length, TICKET_COLUMN_COUNT).setValues(rows);
 
@@ -589,7 +601,7 @@ function processCurrentSchoolYearBatch(sheet, config) {
  * @param {number} totalPages - Total pages (in-memory, -1 if unknown)
  * @returns {Object} - { count, complete, lastPage, totalPages }
  */
-function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages, customFieldIds, customFieldLookupMaps) {
+function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages, customFieldIds, customFieldLookupMaps, locationCfIndex) {
   const batchSize = config.ticketBatchSize;
   const nextPage = lastPage + 1;
 
@@ -636,7 +648,7 @@ function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages, cu
 
   // Write tickets to sheet (with merged SLA data)
   const now = new Date();
-  const rows = response.Items.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds, customFieldLookupMaps));
+  const rows = response.Items.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds, customFieldLookupMaps, locationCfIndex));
   const lastRow = sheet.getLastRow();
   sheet.getRange(lastRow + 1, 1, rows.length, TICKET_COLUMN_COUNT).setValues(rows);
 
@@ -670,7 +682,7 @@ function processSchoolYearBatchOptimized(sheet, config, lastPage, totalPages, cu
  * @param {string} lastFetch - Last fetch timestamp (in-memory)
  * @returns {Object} - { count, hasMore, lastFetch }
  */
-function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch, customFieldIds, customFieldLookupMaps) {
+function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch, customFieldIds, customFieldLookupMaps, locationCfIndex) {
   const batchSize = config.ticketBatchSize;
 
   // Get school year date range
@@ -736,7 +748,7 @@ function processCurrentSchoolYearBatchOptimized(sheet, config, lastFetch, custom
 
   // Write to sheet (with merged SLA data)
   const now = new Date();
-  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds, customFieldLookupMaps));
+  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds, customFieldLookupMaps, locationCfIndex));
   const lastRow = sheet.getLastRow();
   sheet.getRange(lastRow + 1, 1, rows.length, TICKET_COLUMN_COUNT).setValues(rows);
 
@@ -862,6 +874,18 @@ function buildCustomFieldLookupMaps(config) {
     return [{}, {}, {}];
   }
 
+  return buildLookupMapsForFieldIds(definitions, cfIds);
+}
+
+/**
+ * Build one lookup map per requested CustomFieldTypeId from a set of custom
+ * field definitions. Shared by the ticket and location custom field paths.
+ *
+ * @param {Array} definitions - CustomFieldDetail objects from a /custom-fields/for/* call
+ * @param {Array} fieldIds - CustomFieldTypeId UUIDs (blank/NOT_FOUND entries yield {})
+ * @returns {Array} - Array of lookup objects, parallel to fieldIds
+ */
+function buildLookupMapsForFieldIds(definitions, fieldIds) {
   const defById = {};
   for (const def of definitions) {
     if (def.CustomFieldTypeId) defById[def.CustomFieldTypeId] = def;
@@ -869,7 +893,7 @@ function buildCustomFieldLookupMaps(config) {
 
   let locationMap = null; // lazy — fetched at most once
 
-  return cfIds.map(function(id) {
+  return fieldIds.map(function(id) {
     if (!id || id === 'NOT_FOUND') return {};
     const def = defById[id];
     if (!def) return {};
@@ -916,6 +940,131 @@ function buildCustomFieldLookupMaps(config) {
 }
 
 /**
+ * Build the LocationId -> location custom field values index for a run.
+ *
+ * Resolved once per run, not per ticket: at most one paginated locations sweep
+ * regardless of how many tickets are processed. Locations number in the
+ * hundreds while tickets number in the tens of thousands, so joining on
+ * LocationId keeps this a fixed cost per run.
+ *
+ * Editor types come from the Config cache when fresh, so a steady-state run
+ * makes NO /custom-fields/for/location call — see the editor type cache section
+ * in Config.gs. The location name map for IiqLocation-typed fields is built
+ * from the locations payload already fetched here, not a second locations call.
+ *
+ * Each map entry is an array of LOCATION_CUSTOM_FIELD_COUNT display strings,
+ * positionally matching LOCATION_CUSTOM_FIELD_1..N.
+ *
+ * @param {Object} config - Config object from getConfig()
+ * @returns {Object|null} - { valuesByLocationId: Object, blank: Array } or null if none configured
+ */
+function buildLocationCustomFieldIndex(config) {
+  const ids = (config.locationCustomFieldIds || []).slice(0, LOCATION_CUSTOM_FIELD_COUNT);
+  const blank = new Array(LOCATION_CUSTOM_FIELD_COUNT).fill('');
+
+  // Nothing configured — existing sheets that never set a location field pay nothing.
+  if (!ids.some(id => id && id !== 'NOT_FOUND')) return null;
+
+  // Editor types: cached cell first, definitions call only on miss or expiry
+  let editorTypes;
+  if (isLocationCfTypeCacheFresh(config)) {
+    editorTypes = config.locationCfTypeCache.types;
+  } else {
+    editorTypes = {};
+    try {
+      const definitions = getLocationCustomFieldDefinitions();
+      for (const def of definitions) {
+        if (!def.CustomFieldTypeId) continue;
+        const ct = def.CustomFieldType || {};
+        editorTypes[def.CustomFieldTypeId] = def.EditorTypeId || ct.EditorType || 0;
+      }
+      writeLocationCfTypeCache(definitions);
+    } catch (e) {
+      // Values still extract correctly; only display-name resolution degrades.
+      logOperation('LocationCustomFields', 'WARNING', 'Could not fetch location definitions: ' + e.message);
+    }
+  }
+
+  let locations;
+  try {
+    locations = getAllLocationsWithCustomFields();
+  } catch (e) {
+    logOperation('LocationCustomFields', 'ERROR', 'Could not fetch locations with custom fields: ' + e.message);
+    return null;
+  }
+
+  const lookupMaps = buildLocationLookupMaps_(ids, editorTypes, locations);
+
+  const valuesByLocationId = {};
+  let withValues = 0;
+  for (const loc of locations) {
+    if (!loc || !loc.LocationId) continue;
+    const row = [];
+    let any = false;
+    for (let i = 0; i < LOCATION_CUSTOM_FIELD_COUNT; i++) {
+      // extractCustomFieldValue reads .CustomFieldValues, which locations carry
+      // in the same shape as tickets — reused rather than duplicated.
+      const val = extractCustomFieldValue(loc, ids[i] || '', lookupMaps[i] || {});
+      if (val !== '') any = true;
+      row.push(val);
+    }
+    valuesByLocationId[loc.LocationId] = row;
+    if (any) withValues++;
+  }
+
+  logOperation('LocationCustomFields', 'INDEXED',
+    `Indexed ${Object.keys(valuesByLocationId).length} locations, ${withValues} with values, for ${ids.filter(id => id && id !== 'NOT_FOUND').length} configured field(s)`);
+
+  return { valuesByLocationId: valuesByLocationId, blank: blank };
+}
+
+/**
+ * Build per-field lookup maps for location custom fields from editor types
+ * alone, without needing the full field definitions.
+ *
+ * Only IiqLocation-typed fields need a map, and it is built from the locations
+ * array already in hand. Location Select/MultiSelect fields need none: their
+ * CustomFieldType.Options is a plain array of strings and the stored Value is
+ * the literal string, not an option id (verified live — this differs from the
+ * ticket side, whose option objects carry Id/Name pairs).
+ *
+ * @param {Array} ids - Configured CustomFieldTypeId UUIDs
+ * @param {Object} editorTypes - CustomFieldTypeId -> EditorType
+ * @param {Array} locations - Location objects from getAllLocationsWithCustomFields()
+ * @returns {Array} - Lookup objects parallel to ids
+ */
+function buildLocationLookupMaps_(ids, editorTypes, locations) {
+  let locationNameMap = null; // built at most once, only if some field needs it
+
+  return ids.map(function(id) {
+    if (!id || id === 'NOT_FOUND') return {};
+    if (editorTypes[id] !== 22) return {}; // 22 = IiqLocation
+
+    if (!locationNameMap) {
+      locationNameMap = {};
+      for (const loc of locations) {
+        if (loc && loc.LocationId && loc.Name) locationNameMap[loc.LocationId] = loc.Name;
+      }
+    }
+    return locationNameMap;
+  });
+}
+
+/**
+ * Look up a ticket's location custom field values.
+ * Returns a blank row when the index is absent (no fields configured) or the
+ * ticket's location isn't in the index — one row per ticket either way, so the
+ * one-to-many location/ticket relationship can never fan out.
+ */
+function locationCustomFieldValuesFor(ticket, locationCfIndex) {
+  const blank = locationCfIndex ? locationCfIndex.blank : LOCATION_CUSTOM_FIELD_BLANK_ROW;
+  if (!locationCfIndex) return blank;
+  const locId = ticket.Location ? ticket.Location.LocationId : (ticket.LocationId || '');
+  if (!locId) return blank;
+  return locationCfIndex.valuesByLocationId[locId] || blank;
+}
+
+/**
  * Enrich custom field lookup maps with LocationId -> LocationName pairs pulled
  * directly from the tickets being processed. This fills in any locations the
  * /locations/all API didn't return (common when the bearer token is user-scoped
@@ -958,10 +1107,12 @@ function enrichLocationMapsFromTickets(tickets, customFieldLookupMaps) {
  * @param {Map} slaMap - Optional map of TicketId -> SLA metrics
  * @param {Array} customFieldIds - Array of 3 CustomFieldTypeId UUIDs (default: ['','',''])
  * @param {Array} customFieldLookupMaps - Array of 3 lookup objects {uuid: displayName} (default: [{},{},{}])
+ * @param {Object} locationCfIndex - Location custom field index from buildLocationCustomFieldIndex (default: null)
  */
-function extractTicketRow(ticket, now, year, slaMap, customFieldIds, customFieldLookupMaps) {
+function extractTicketRow(ticket, now, year, slaMap, customFieldIds, customFieldLookupMaps, locationCfIndex) {
   const cfIds = customFieldIds || ['', '', ''];
   const cfMaps = customFieldLookupMaps || [{}, {}, {}];
+  const locCfValues = locationCustomFieldValuesFor(ticket, locationCfIndex || null);
   const createdDate = ticket.CreatedDate ? new Date(ticket.CreatedDate) : null;
   const closedDate = ticket.ClosedDate ? new Date(ticket.ClosedDate) : null;
 
@@ -1057,7 +1208,10 @@ function extractTicketRow(ticket, now, year, slaMap, customFieldIds, customField
     extractCustomFieldValue(ticket, cfIds[1], cfMaps[1]),
     extractCustomFieldValue(ticket, cfIds[2], cfMaps[2]),
     // AU: Requester Role (role of the "for" user — Student, Staff, Agent, Guest, etc.)
-    ticket.For ? (ticket.For.Role ? (ticket.For.Role.Name || '') : '') : ''
+    ticket.For ? (ticket.For.Role ? (ticket.For.Role.Name || '') : '') : '',
+    // AV-AZ: Location Custom Fields — joined from the ticket's location, not the
+    // ticket itself (configurable via LOCATION_CUSTOM_FIELD_1..5 in Config)
+    locCfValues[0], locCfValues[1], locCfValues[2], locCfValues[3], locCfValues[4]
   ];
 }
 
@@ -1401,6 +1555,15 @@ function deleteRowsBySchoolYear(sheet, schoolYear) {
 
   // Delete in batches (more efficient)
   if (rowsToDelete.length > 0) {
+    // Sheets refuses to delete every non-frozen row. Because the intended layout
+    // is one school year per spreadsheet, every data row matches the year being
+    // cleared — and a completed load leaves the grid sized exactly to the data,
+    // so the deletion covers all of them. Add a spare row first so one survives.
+    const frozenRows = sheet.getFrozenRows();
+    if (sheet.getMaxRows() - frozenRows <= rowsToDelete.length) {
+      sheet.insertRowsAfter(sheet.getMaxRows(), 1);
+    }
+
     // Group consecutive rows for batch deletion
     let start = rowsToDelete[0];
     let count = 1;
@@ -1733,6 +1896,10 @@ function runOpenTicketRefresh(sheet) {
   // Build custom field IDs and lookup maps for extractTicketRow threading
   const customFieldIds = [config.customField1Id, config.customField2Id, config.customField3Id];
   const customFieldLookupMaps = buildCustomFieldLookupMaps(config);
+  const locationCfIndex = buildLocationCustomFieldIndex(config);
+
+  // Widen/extend the sheet before any full-width row write (upgrade path)
+  updateCustomFieldHeaders(sheet, config);
 
   // Get last refresh timestamp - if none, use STALE_DAYS as fallback window
   let lastRefreshTime = config.openRefreshLastRun;
@@ -1774,8 +1941,8 @@ function runOpenTicketRefresh(sheet) {
   // For historical school years, only update existing tickets (don't append tickets from other school years)
   const isHistorical = !isSchoolYearCurrent(config);
   const batchOptions = isHistorical
-    ? { updateOnly: true, customFieldIds: customFieldIds, customFieldLookupMaps: customFieldLookupMaps }
-    : { customFieldIds: customFieldIds, customFieldLookupMaps: customFieldLookupMaps };
+    ? { updateOnly: true, customFieldIds: customFieldIds, customFieldLookupMaps: customFieldLookupMaps, locationCfIndex: locationCfIndex }
+    : { customFieldIds: customFieldIds, customFieldLookupMaps: customFieldLookupMaps, locationCfIndex: locationCfIndex };
 
   if (isHistorical) {
     logOperation('Ticket Data', 'REFRESH_MODE', 'Historical school year - update only, no appends');
@@ -1910,6 +2077,7 @@ function processTicketBatch(sheet, tickets, ticketIdToRow, now, options) {
   const updateOnly = options && options.updateOnly;
   const customFieldIds = (options && options.customFieldIds) || ['', '', ''];
   const customFieldLookupMaps = (options && options.customFieldLookupMaps) || [{}, {}, {}];
+  const locationCfIndex = (options && options.locationCfIndex) || null;
   let updated = 0;
   let appended = 0;
   let skipped = 0;
@@ -1928,7 +2096,7 @@ function processTicketBatch(sheet, tickets, ticketIdToRow, now, options) {
 
   for (const ticket of tickets) {
     const ticketId = ticket.TicketId;
-    const rowData = extractTicketRow(ticket, now, schoolYear, slaMap, customFieldIds, customFieldLookupMaps);
+    const rowData = extractTicketRow(ticket, now, schoolYear, slaMap, customFieldIds, customFieldLookupMaps, locationCfIndex);
 
     const existingRow = ticketIdToRow.get(ticketId);
 

@@ -1,6 +1,6 @@
 {
-  "version": "1.7.1",
-  "released": "2026-07-14",
+  "version": "1.8.0",
+  "released": "2026-08-27",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "TechnicianPerformance breach split: the single Breach Rate column is now two columns — Response Breach % and Resolution Breach % — each over tickets closed in the selected window, so a ticket that breaches both is no longer double-counted. Window and SLA-time controls shifted right (window now P2/Q2)."
+  "message": "Location custom fields: TicketData can now pull in custom fields that live on your locations, such as site codes, regions, and building numbers, not just the ones set on tickets. Paste up to five CustomFieldTypeIds into LOCATION_CUSTOM_FIELD_1-5 in Config and their values land in new columns AV-AZ, matched to each ticket by its location. Run \"Refresh Custom Fields\" to list your fields and see which are Ticket vs Location. Also fixes Refresh Custom Fields failing on large field catalogs, duplicate rows on the CustomFields sheet, and a Clear Data + Reset error after a full load."
 }

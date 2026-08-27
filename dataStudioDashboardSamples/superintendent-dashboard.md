@@ -1,4 +1,4 @@
-# Superintendent IT Dashboard — Looker Studio Build Guide
+# Superintendent IT Dashboard — Google Data Studio Build Guide
 
 Single A4 page, at-a-glance dashboard for a school district superintendent to understand IT service desk health.
 
@@ -10,7 +10,7 @@ Complete all data source configuration before building dashboard components. Thi
 
 ### Connect Three Sheets
 
-1. Go to [lookerstudio.google.com](https://lookerstudio.google.com)
+1. Go to [datastudio.google.com](https://datastudio.google.com)
 2. Create > Report > Google Sheets connector
 3. Select your spreadsheet, choose the **TicketData** sheet, check "Use first row as headers"
 4. Add a second data source: Add Data > Google Sheets > same spreadsheet > **DailySnapshot** sheet
@@ -42,7 +42,7 @@ Apply these in the data source config (Resource > Manage added data sources > Ed
 | `ModelName` | Text | |
 | `SerialNumber` | Text | |
 
-> **Date handling:** The date fields arrive as ISO 8601 strings from the iiQ API (e.g., `2025-02-05T14:30:00Z`). When you set these to **Date & Time** in Looker Studio, the Google Sheets connector should parse them automatically. If a date field isn't recognized after changing the type, create a calculated field using:
+> **Date handling:** The date fields arrive as ISO 8601 strings from the iiQ API (e.g., `2025-02-05T14:30:00Z`). When you set these to **Date & Time** in Google Data Studio, the Google Sheets connector should parse them automatically. If a date field isn't recognized after changing the type, create a calculated field using:
 > ```
 > PARSE_DATETIME("%Y-%m-%dT%H:%M:%S", REGEXP_REPLACE(CreatedDate, "Z$", ""))
 > ```
@@ -70,7 +70,7 @@ END
 
 - Type: Number
 - Usage: AVG aggregation, formatted as Percent
-- **Important:** Apply the `Has SLA` filter (see Reusable Filters below) to any chart using this field. The `ELSE NULL` is intended to exclude tickets without SLA data, but Looker Studio does not reliably exclude NULLs from AVG calculations, which will dilute the result to near 0%.
+- **Important:** Apply the `Has SLA` filter (see Reusable Filters below) to any chart using this field. The `ELSE NULL` is intended to exclude tickets without SLA data, but Google Data Studio does not reliably exclude NULLs from AVG calculations, which will dilute the result to near 0%.
 
 **SLA Breached** — Used for the breach rate trend line chart.
 
@@ -167,7 +167,7 @@ END
 - **OR**
 - Clause 2: **Include** `ResponseBreach` **Equal to (=)** `0`
 
-Looker Studio only allows one value per filter condition, so the OR with two clauses is required.
+Google Data Studio only allows one value per filter condition, so the OR with two clauses is required.
 
 ---
 
@@ -215,7 +215,7 @@ Colors sourced from the Incident IQ brand style guide.
 | Card backgrounds | Light Gray | `#F9FAFB` |
 | Page background | White | `#FFFFFF` |
 
-### Applying Colors in Looker Studio
+### Applying Colors in Google Data Studio
 
 1. **Report-level theme:** Go to **Theme and Layout > Theme > Customize** to set the default chart color sequence to: `#365c96`, `#22b2a3`, `#febb12`, `#f1663c`, `#715091`
 2. **Per-chart overrides:** In each chart's **STYLE** tab, override individual series colors as needed per the table above
@@ -451,7 +451,7 @@ Colors sourced from the Incident IQ brand style guide.
 - Grid lines: `#F3F4F6`, axis labels: `#6B7280`, 10-11px
 - Chart title: left-aligned, bold, `#1F2937`, 14px
 
-> **Data quality note:** Issue categories with inconsistent capitalization in iiQ (e.g., "Issue not listed" vs "Issue Not Listed") will appear as separate bars. This is a source data issue, not a Looker Studio issue.
+> **Data quality note:** Issue categories with inconsistent capitalization in iiQ (e.g., "Issue not listed" vs "Issue Not Listed") will appear as separate bars. This is a source data issue, not a Google Data Studio issue.
 
 ---
 
@@ -475,11 +475,11 @@ Colors sourced from the Incident IQ brand style guide.
 
 ### Date range silently filtering data
 
-When you connect a Google Sheets data source, Looker Studio assigns a **default date dimension** (likely `CreatedDate`). Every component is automatically filtered by the report's date range — even without a date range control. If unfiltered record counts are lower than expected, set the default date range to cover your full school year in File > Report settings.
+When you connect a Google Sheets data source, Google Data Studio assigns a **default date dimension** (likely `CreatedDate`). Every component is automatically filtered by the report's date range — even without a date range control. If unfiltered record counts are lower than expected, set the default date range to cover your full school year in File > Report settings.
 
 ### Date fields not recognized
 
-If Looker Studio doesn't auto-detect date columns, manually set the type to **Date & Time** in the data source config. The TicketData dates are ISO format (`2025-02-05T14:30:00Z`). If setting the type alone doesn't work, create a calculated field using `PARSE_DATETIME` (see the TicketData Field Types section above for the formula).
+If Google Data Studio doesn't auto-detect date columns, manually set the type to **Date & Time** in the data source config. The TicketData dates are ISO format (`2025-02-05T14:30:00Z`). If setting the type alone doesn't work, create a calculated field using `PARSE_DATETIME` (see the TicketData Field Types section above for the formula).
 
 ### Blank/null values in charts
 
@@ -488,4 +488,4 @@ Many fields can be empty (no SLA, no team assigned, no location). Add a filter t
 
 ### Monthly Volume uses a separate data source
 
-The Monthly Volume chart uses the **MonthlyVolume** sheet (not TicketData) because charting Created and Closed in one bar chart requires two different date columns (`CreatedDate` and `ClosedDate`), which Looker Studio blends handle poorly. The MonthlyVolume sheet pre-calculates both counts per month, avoiding blend issues entirely.
+The Monthly Volume chart uses the **MonthlyVolume** sheet (not TicketData) because charting Created and Closed in one bar chart requires two different date columns (`CreatedDate` and `ClosedDate`), which Google Data Studio blends handle poorly. The MonthlyVolume sheet pre-calculates both counts per month, avoiding blend issues entirely.

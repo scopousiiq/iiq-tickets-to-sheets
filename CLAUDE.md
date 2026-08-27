@@ -16,7 +16,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 
 **Data Flow:**
 1. Scripts fetch data from iiQ API using Bearer token authentication
-2. Raw data lands in `TicketData` sheet (46 columns including consolidated SLA metrics, device/asset, assigned technician, and custom fields)
+2. Raw data lands in `TicketData` sheet (52 columns including consolidated SLA metrics, device/asset, assigned technician, ticket custom fields, and location custom fields)
 3. Analytics sheets (`MonthlyVolume`, `BacklogAging`, `TeamWorkload`, etc.) calculate via Google Sheets formulas - no scripts needed
 4. Power BI connects to Google Sheets for dashboards
 
@@ -32,7 +32,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 - SLA metrics are fetched per-batch during ticket loading (single API call per batch)
 - No separate SLA loading phase - SLA is always in sync with ticket data
 - Columns 29-35: ResponseThreshold, ResponseActual, ResponseBreach, ResolutionThreshold, ResolutionActual, ResolutionBreach, IsRunning
-- Boolean-like fields use Looker Studio-safe values (not "Yes"/"No" or JS booleans):
+- Boolean-like fields use Google Data Studio-safe values (not "Yes"/"No" or JS booleans):
   - IsClosed: "Closed" / "Open"
   - IsPastDue: "Overdue" / "On Track"
   - ResponseBreach, ResolutionBreach, IsRunning: 1 / 0 (numeric)
@@ -44,7 +44,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `Setup.gs` | Initial spreadsheet setup - creates all sheets, headers, and formulas |
 | `Config.gs` | Reads settings from Config sheet, school year date calculation, logging utilities, concurrency control (LockService helpers) |
 | `ApiClient.gs` | HTTP client with retry/exponential backoff (429, 503, network errors) |
-| `TicketData.gs` | Bulk ticket loader - 46 columns (28 ticket + 7 SLA + 3 device/asset + 2 assigned technician + 2 asset ID + 3 custom fields), fetches SLA per-batch, school year pagination, 5.5min timeout with resume |
+| `TicketData.gs` | Bulk ticket loader - 52 columns (28 ticket + 7 SLA + 3 device/asset + 2 assigned technician + 2 asset ID + 3 ticket custom fields + 1 requester role + 5 location custom fields), fetches SLA per-batch, school year pagination, 5.5min timeout with resume |
 | `Teams.gs` | Team directory loader, preserves Functional Area mappings |
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively). Skips if loading incomplete. |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
@@ -154,7 +154,7 @@ Workflow for destructive operations:
 |-------|------|---------|
 | Instructions | Static | Setup and usage guide |
 | Config | Manual | API settings, progress tracking |
-| TicketData | Data | Main ticket data (46 columns with SLA + device + assigned technician + custom fields) |
+| TicketData | Data | Main ticket data (52 columns with SLA + device + assigned technician + ticket custom fields + location custom fields) |
 | Teams | Data | Team directory with Functional Area mapping |
 | DailySnapshot | Data | Daily backlog metrics for trending |
 | Logs | Data | Operation logs |
@@ -238,7 +238,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | DevicesByRole | "Which device models are used by which staff roles?" | Device counts by model filtered by RequesterRole |
 | FrequentFlyers | "Which users or devices have recurring issues?" | Users and devices exceeding ticket threshold, with date, role, and location filters |
 
-## TicketData Column Layout (46 columns)
+## TicketData Column Layout (52 columns)
 
 | Columns | Description |
 |---------|-------------|
@@ -258,6 +258,8 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 | AN-AO | Assigned Technician: AssignedToUserId, AssignedToUserName (agent assigned to work the ticket, nullable) |
 | AP-AQ | Asset Identifiers: AssetId, AssetCategory (for device aggregation and filtering, e.g., "Chromebooks") |
 | AR-AT | Custom Fields: CustomField1, CustomField2, CustomField3 (configurable via CUSTOM_FIELD_1/2/3 in Config) |
+| AU | RequesterRole: role of the "for" user (Student, Staff, Agent, Guest) |
+| AV-AZ | Location Custom Fields: LocationCustomField1-5 (configurable via LOCATION_CUSTOM_FIELD_1-5 in Config). Values come from custom fields defined on the **location**, joined onto each ticket by `LocationId` — not read from the ticket itself. |
 
 ### Analytics Formula Column Reference
 
@@ -387,9 +389,10 @@ Optional:
 - `TICKET_BATCH_SIZE`: Tickets per page for bulk load (default 2000)
 - `STALE_DAYS`: Days to look back for recently closed tickets (default 7)
 - `SLA_RISK_PERCENT`: Percentage threshold for SLA risk warnings (default 75)
-- `CUSTOM_FIELD_1`: Custom field name for column AP (from iiQ custom field definitions)
-- `CUSTOM_FIELD_2`: Custom field name for column AQ
-- `CUSTOM_FIELD_3`: Custom field name for column AR
+- `CUSTOM_FIELD_1`: Ticket custom field name for column AR (from iiQ ticket custom field definitions)
+- `CUSTOM_FIELD_2`: Ticket custom field name for column AS
+- `CUSTOM_FIELD_3`: Ticket custom field name for column AT
+- `LOCATION_CUSTOM_FIELD_1` … `LOCATION_CUSTOM_FIELD_5`: Location custom field names for columns AV-AZ (from iiQ **location** custom field definitions — a separate namespace from the ticket ones)
 - `DASHBOARD_URL`: Published web-app `/exec` URL. Paste this after deploying the dashboard (see "Deploying the Dashboard (Web App)" below). The `Show Dashboard URL` menu item reads this value.
 
 Progress Tracking (managed automatically):
@@ -400,15 +403,18 @@ Progress Tracking (managed automatically):
 - `OPEN_REFRESH_LAST_RUN`: Timestamp of last successful refresh (used for ModifiedDate filter)
 - `OPEN_REFRESH_PAGE`, `OPEN_REFRESH_COMPLETE`: Current refresh cycle progress
 - `CUSTOM_FIELD_1_ID`, `CUSTOM_FIELD_2_ID`, `CUSTOM_FIELD_3_ID`: Resolved CustomFieldTypeId UUIDs (auto-managed)
+- `LOCATION_CUSTOM_FIELD_1_ID` … `_5_ID`: Resolved location CustomFieldTypeId UUIDs (auto-managed)
+- `LOCATION_CF_TYPE_CACHE`: Cached location custom field editor types as JSON, `{"cached":"<ISO>","types":{"<uuid>":<editorType>}}` (auto-managed). Lets a steady-state load skip the `/custom-fields/for/location` call entirely. Refreshed when older than `LOCATION_CF_TYPE_CACHE_DAYS` (30), when a configured field's UUID isn't in it, or on `Refresh Custom Fields`. Cleared by "Clear Data + Reset Progress". A malformed value is treated as a cache miss, never an error.
 
 Config Lock (set when loading starts, cleared by "Clear Data + Reset"):
 - `SCHOOL_YEAR_LOADED`: Locks the school year value
 - `PAGE_SIZE_LOADED`: Locks the page size value
 - `BATCH_SIZE_LOADED`: Locks the batch size value
 - `MODULE_LOADED`: Locks the module value
-- `CUSTOM_FIELD_1_LOADED`, `CUSTOM_FIELD_2_LOADED`, `CUSTOM_FIELD_3_LOADED`: Locks the custom field names
+- `CUSTOM_FIELD_1_LOADED`, `CUSTOM_FIELD_2_LOADED`, `CUSTOM_FIELD_3_LOADED`: Locks the ticket custom field names
+- `LOCATION_CUSTOM_FIELD_1_LOADED` … `_5_LOADED`: Locks the location custom field names
 
-**Configuration Lock:** Once data loading starts, critical configuration values are locked to prevent accidental changes that would cause data inconsistency. Locked values include `SCHOOL_YEAR`, `PAGE_SIZE`, `TICKET_BATCH_SIZE`, `MODULE`, and `CUSTOM_FIELD_1/2/3`. To change these values, use "Clear Data + Reset Progress" which unlocks the configuration.
+**Configuration Lock:** Once data loading starts, critical configuration values are locked to prevent accidental changes that would cause data inconsistency. Locked values include `SCHOOL_YEAR`, `PAGE_SIZE`, `TICKET_BATCH_SIZE`, `MODULE`, `CUSTOM_FIELD_1/2/3`, and `LOCATION_CUSTOM_FIELD_1-5`. To change these values, use "Clear Data + Reset Progress" which unlocks the configuration.
 
 **Pagination Note:** All page tracking uses 0-indexed values. For a school year with 6 pages of data, after completion both `LAST_PAGE` and `TOTAL_PAGES` will be `5`. The UI displays 1-indexed values ("Page 6 of 6").
 

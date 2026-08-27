@@ -205,6 +205,56 @@ function getTicketCustomFieldDefinitions() {
 }
 
 /**
+ * Get all custom field definitions for locations.
+ * POST /v1.0/custom-fields/for/location with empty body returns all location
+ * custom fields. Same envelope as the ticket variant: Items[] with
+ * CustomFieldTypeId (UUID) and CustomFieldType.Name (display name).
+ *
+ * @returns {Array} - Array of CustomFieldDetail objects
+ */
+function getLocationCustomFieldDefinitions() {
+  const endpoint = '/v1.0/custom-fields/for/location';
+  const response = makeApiRequest(endpoint, 'POST', {});
+  return response.Items || [];
+}
+
+/**
+ * Get all locations for the district including their custom field values.
+ *
+ * Deliberately separate from getAllLocations(): the v1.0 locations endpoint
+ * does NOT hydrate CustomFieldValues (verified against live districts), while
+ * v2.0 does. getAllLocations() is left on v1.0 so existing callers (the
+ * IiqLocation lookup map, the FrequentFlyers location dropdown) keep their
+ * current behavior untouched.
+ *
+ * Cost is one paginated sweep per run regardless of ticket volume — locations
+ * number in the hundreds, so this is a fixed cost, not a per-ticket call.
+ * Locations with no values set omit CustomFieldValues entirely.
+ *
+ * @returns {Array} - Array of Location objects (each may have CustomFieldValues)
+ */
+function getAllLocationsWithCustomFields() {
+  const config = getApiConfig_();
+  const base = config.siteId
+    ? `/v2.0/locations/all/${config.siteId}`
+    : '/v2.0/locations/all';
+  const all = [];
+  const pageSize = 500;
+  let page = 0;
+  while (true) {
+    const endpoint = `${base}?$p=${page}&$s=${pageSize}`;
+    const response = makeApiRequest(endpoint, 'GET', null);
+    const items = response.Items || [];
+    all.push.apply(all, items);
+    const totalRows = response.Paging ? (response.Paging.TotalRows || response.Paging.Total || 0) : 0;
+    if (items.length === 0 || all.length >= totalRows || items.length < pageSize) break;
+    page++;
+    if (page > 100) break; // safety
+  }
+  return all;
+}
+
+/**
  * Get all locations for the district.
  * Paginates through locations endpoint. Prefers site-scoped endpoint (returns
  * all district locations) over user-scoped endpoint (returns only locations

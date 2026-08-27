@@ -131,8 +131,11 @@ function getDashboardData() {
   }
 
   const lastRow = ticketSheet.getLastRow();
+  // Clamp to the grid: a sheet upgraded from an earlier column count may still
+  // be narrower than TICKET_COLUMN_COUNT until the next data load widens it.
+  const numCols = Math.min(TICKET_COLUMN_COUNT, ticketSheet.getMaxColumns());
   const rows = lastRow >= 2
-    ? ticketSheet.getRange(2, 1, lastRow - 1, TICKET_COLUMN_COUNT).getValues()
+    ? ticketSheet.getRange(2, 1, lastRow - 1, numCols).getValues()
     : [];
 
   const kpis = computeKpis_(rows);

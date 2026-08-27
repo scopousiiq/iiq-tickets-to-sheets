@@ -14,14 +14,38 @@
  * - Assigned technician in columns 40-41 (AN-AO)
  * - Asset identifiers in columns 42-43 (AP-AQ)
  * - Custom field values in columns 44-46 (AR-AT)
+ * - Location custom field values in columns 48-52 (AV-AZ)
  * - SLA is fetched per-batch during ticket loading, no separate SLA loading phase
  */
 
 /** Current script version — update when releasing new versions */
-const SCRIPT_VERSION = '1.7.1';
+const SCRIPT_VERSION = '1.8.0';
 
-/** Number of columns in TicketData sheet (41 base + 2 asset ID + 3 custom field slots + 1 requester role) */
-const TICKET_COLUMN_COUNT = 47;
+/**
+ * How many Location custom field slots the sheet exposes.
+ * Higher than the 3 ticket slots because location values are resolved once per
+ * run from a single paginated call — extra slots cost columns, not API calls.
+ * Districts observed in the wild define up to 8 location fields (region, site
+ * group, org unit, hardware area), so 3 would be limiting.
+ */
+const LOCATION_CUSTOM_FIELD_COUNT = 5;
+
+/** Reusable empty value row, so tickets with no location match allocate nothing. */
+const LOCATION_CUSTOM_FIELD_BLANK_ROW = new Array(LOCATION_CUSTOM_FIELD_COUNT).fill('');
+
+/**
+ * How long a cached location custom field editor type stays trusted, in days.
+ *
+ * Editor types change only when an admin edits the field definition in iiQ,
+ * which is rare, so this is deliberately long — it exists to bound staleness,
+ * not to poll. "Refresh Custom Fields" rewrites the cache immediately, and
+ * "Clear Data + Reset Progress" drops it, so a district never has to wait out
+ * the window to correct a wrong type.
+ */
+const LOCATION_CF_TYPE_CACHE_DAYS = 30;
+
+/** Number of columns in TicketData sheet (41 base + 2 asset ID + 3 custom field slots + 1 requester role + 5 location custom field slots) */
+const TICKET_COLUMN_COUNT = 52;
 
 /**
  * Telemetry Master /exec URL (iiQ-owned). Maintainer-managed — districts
@@ -170,6 +194,24 @@ function getConfig() {
     customField2Loaded: getStringValue(rawConfig['CUSTOM_FIELD_2_LOADED']) || '',
     customField3Loaded: getStringValue(rawConfig['CUSTOM_FIELD_3_LOADED']) || ''
   };
+
+  // Location custom fields (optional). Kept in parallel arrays rather than
+  // numbered properties — there are 5 slots x 3 keys, and every consumer
+  // iterates them. Indexes are 0-based; Config keys are 1-based.
+  config.locationCustomFields = [];
+  config.locationCustomFieldIds = [];
+  config.locationCustomFieldsLoaded = [];
+  for (let n = 1; n <= LOCATION_CUSTOM_FIELD_COUNT; n++) {
+    config.locationCustomFields.push(getStringValue(rawConfig['LOCATION_CUSTOM_FIELD_' + n]) || '');
+    config.locationCustomFieldIds.push(getStringValue(rawConfig['LOCATION_CUSTOM_FIELD_' + n + '_ID']) || '');
+    config.locationCustomFieldsLoaded.push(getStringValue(rawConfig['LOCATION_CUSTOM_FIELD_' + n + '_LOADED']) || '');
+  }
+
+  // Editor type cache — one JSON cell keyed by CustomFieldTypeId, so swapping a
+  // configured field invalidates its own entry without touching the others.
+  config.locationCfTypeCache = parseLocationCfTypeCache(
+    getStringValue(rawConfig['LOCATION_CF_TYPE_CACHE']) || ''
+  );
 
   // Simplified progress tracking (no year suffix)
   config.ticketTotalPages = getIntValue(rawConfig['TICKET_TOTAL_PAGES'], -1);
@@ -325,6 +367,19 @@ function checkConfigLock(config) {
     });
   }
 
+  // Location custom fields — same blank-sensitive comparison as the ticket ones
+  const locNames = config.locationCustomFields || [];
+  const locLocked = config.locationCustomFieldsLoaded || [];
+  for (let i = 0; i < LOCATION_CUSTOM_FIELD_COUNT; i++) {
+    if ((locNames[i] || '') !== (locLocked[i] || '')) {
+      mismatches.push({
+        key: 'LOCATION_CUSTOM_FIELD_' + (i + 1),
+        current: locNames[i] || '(blank)',
+        locked: locLocked[i] || '(blank)'
+      });
+    }
+  }
+
   return {
     locked: true,
     matches: mismatches.length === 0,
@@ -381,6 +436,9 @@ function lockConfig() {
   setConfigValue('CUSTOM_FIELD_1_LOADED', config.customField1);
   setConfigValue('CUSTOM_FIELD_2_LOADED', config.customField2);
   setConfigValue('CUSTOM_FIELD_3_LOADED', config.customField3);
+  for (let i = 0; i < LOCATION_CUSTOM_FIELD_COUNT; i++) {
+    setConfigValue('LOCATION_CUSTOM_FIELD_' + (i + 1) + '_LOADED', config.locationCustomFields[i] || '');
+  }
   logOperation('Config', 'LOCKED',
     `Configuration locked: SCHOOL_YEAR=${config.schoolYear}, PAGE_SIZE=${config.pageSize}, BATCH_SIZE=${config.ticketBatchSize}, MODULE=${config.module}`);
 }
@@ -408,7 +466,12 @@ function unlockConfig() {
   setConfigValue('CUSTOM_FIELD_1_ID', '');
   setConfigValue('CUSTOM_FIELD_2_ID', '');
   setConfigValue('CUSTOM_FIELD_3_ID', '');
-  logOperation('Config', 'UNLOCKED', 'Configuration unlocked (SCHOOL_YEAR, PAGE_SIZE, BATCH_SIZE, MODULE, CUSTOM_FIELDS)');
+  for (let i = 0; i < LOCATION_CUSTOM_FIELD_COUNT; i++) {
+    setConfigValue('LOCATION_CUSTOM_FIELD_' + (i + 1) + '_LOADED', '');
+    setConfigValue('LOCATION_CUSTOM_FIELD_' + (i + 1) + '_ID', '');
+  }
+  setConfigValue('LOCATION_CF_TYPE_CACHE', '');
+  logOperation('Config', 'UNLOCKED', 'Configuration unlocked (SCHOOL_YEAR, PAGE_SIZE, BATCH_SIZE, MODULE, CUSTOM_FIELDS, LOCATION_CUSTOM_FIELDS)');
 }
 
 /**
@@ -438,19 +501,36 @@ function resolveCustomFieldIds(config) {
   ];
 
   // Check which fields need resolution
-  const needsResolution = fields.filter(f => f.name && (!f.id || f.id === 'NOT_FOUND'));
-  if (needsResolution.length === 0) {
+  const pending = fields.filter(f => f.name && (!f.id || f.id === 'NOT_FOUND'));
+  if (pending.length === 0) {
     return { resolved: 0, notFound: [] };
   }
 
-  // Call discovery endpoint once
+  // A pasted CustomFieldTypeId is used as-is — no lookup, no API call
+  let resolvedFromGuid = 0;
+  const needsResolution = [];
+  for (const field of pending) {
+    if (looksLikeCustomFieldGuid_(field.name)) {
+      const guid = String(field.name).trim();
+      setConfigValue(field.key, guid);
+      logOperation('CustomFields', 'RESOLVED', `Custom Field ${field.label} set directly from CustomFieldTypeId ${guid}`);
+      resolvedFromGuid++;
+    } else {
+      needsResolution.push(field);
+    }
+  }
+  if (needsResolution.length === 0) {
+    return { resolved: resolvedFromGuid, notFound: [] };
+  }
+
+  // Call discovery endpoint once, only for entries given as names
   logOperation('CustomFields', 'RESOLVING', `Resolving ${needsResolution.length} custom field name(s)`);
   let definitions;
   try {
     definitions = getTicketCustomFieldDefinitions();
   } catch (e) {
     logOperation('CustomFields', 'ERROR', 'Failed to fetch custom field definitions: ' + e.message);
-    return { resolved: 0, notFound: needsResolution.map(f => f.name) };
+    return { resolved: resolvedFromGuid, notFound: needsResolution.map(f => f.name) };
   }
 
   // Build lowercase name → CustomFieldTypeId map
@@ -462,7 +542,7 @@ function resolveCustomFieldIds(config) {
     }
   }
 
-  let resolved = 0;
+  let resolved = resolvedFromGuid;
   const notFound = [];
 
   for (const field of needsResolution) {
@@ -475,6 +555,190 @@ function resolveCustomFieldIds(config) {
     } else {
       setConfigValue(field.key, 'NOT_FOUND');
       logOperation('CustomFields', 'WARNING', `Custom Field ${field.label} "${field.name}" not found in district`);
+      notFound.push(field.name);
+    }
+  }
+
+  return { resolved, notFound };
+}
+
+/**
+ * Does this config value look like a CustomFieldTypeId rather than a field name?
+ *
+ * Custom field slots accept either. A pasted GUID is used directly, which is the
+ * unambiguous option: field names are not unique (a district can have two
+ * different field types sharing a display name), and the discovery endpoints
+ * return one row per field/filter-set mapping, so name lookup is both ambiguous
+ * and unnecessary when the district already has the id in front of them.
+ *
+ * @param {string} value - Config cell value
+ * @returns {boolean}
+ */
+function looksLikeCustomFieldGuid_(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || '').trim());
+}
+
+// =============================================================================
+// LOCATION CUSTOM FIELD EDITOR TYPE CACHE
+// =============================================================================
+//
+// Building the location value index needs each field's EditorType, to know
+// whether its raw value needs resolving to a display name. That type used to
+// cost a /custom-fields/for/location call on every script execution, purely to
+// re-learn something that almost never changes. It is cached in one Config cell
+// instead, so a steady-state run makes no definitions call at all.
+
+/**
+ * Parse the LOCATION_CF_TYPE_CACHE cell.
+ * Shape: {"cached":"<ISO date>","types":{"<CustomFieldTypeId>":<editorType>}}
+ * Any malformed or empty value is treated as "no cache" rather than an error —
+ * a bad cell should cost one API call, never a failed load.
+ *
+ * @param {string} raw - Cell contents
+ * @returns {Object|null} - { cached: string, types: Object } or null
+ */
+function parseLocationCfTypeCache(raw) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !parsed.types) return null;
+    return { cached: parsed.cached || '', types: parsed.types };
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Is the cached editor type usable for every configured location field?
+ *
+ * Requires an entry for each configured, resolved field AND a cache timestamp
+ * inside the TTL. Keying on CustomFieldTypeId means pointing a slot at a
+ * different field misses the cache on its own, without invalidating the rest.
+ *
+ * @param {Object} config - Config object from getConfig()
+ * @returns {boolean}
+ */
+function isLocationCfTypeCacheFresh(config) {
+  const cache = config.locationCfTypeCache;
+  if (!cache || !cache.cached) return false;
+
+  const cachedAt = new Date(cache.cached);
+  if (isNaN(cachedAt.getTime())) return false;
+  const ageDays = (Date.now() - cachedAt.getTime()) / (1000 * 60 * 60 * 24);
+  if (ageDays > LOCATION_CF_TYPE_CACHE_DAYS || ageDays < 0) return false;
+
+  const ids = config.locationCustomFieldIds || [];
+  for (let i = 0; i < LOCATION_CUSTOM_FIELD_COUNT; i++) {
+    const id = ids[i];
+    if (!id || id === 'NOT_FOUND') continue;
+    if (cache.types[id] === undefined || cache.types[id] === null) return false;
+  }
+  return true;
+}
+
+/**
+ * Write the editor type cache from a set of location custom field definitions.
+ * Called wherever definitions were already fetched for another reason, so the
+ * cache refresh itself never costs an extra API call.
+ *
+ * Caches every definition the district has, not just the configured ones, so
+ * selecting a different field later is already a cache hit.
+ *
+ * @param {Array} definitions - CustomFieldDetail objects from getLocationCustomFieldDefinitions()
+ */
+function writeLocationCfTypeCache(definitions) {
+  if (!definitions || !definitions.length) return;
+
+  const types = {};
+  for (const def of definitions) {
+    const id = def.CustomFieldTypeId;
+    if (!id) continue;
+    const ct = def.CustomFieldType || {};
+    const editorType = def.EditorTypeId || ct.EditorType || 0;
+    types[id] = editorType;
+  }
+  if (!Object.keys(types).length) return;
+
+  const payload = JSON.stringify({ cached: new Date().toISOString(), types: types });
+  setConfigValue('LOCATION_CF_TYPE_CACHE', payload);
+  logOperation('LocationCustomFields', 'CACHED',
+    `Cached editor types for ${Object.keys(types).length} location custom field(s), valid ${LOCATION_CF_TYPE_CACHE_DAYS} days`);
+}
+
+/**
+ * Resolve LOCATION_CUSTOM_FIELD_* names to CustomFieldTypeId UUIDs.
+ * Mirrors resolveCustomFieldIds but queries the location custom field
+ * definitions endpoint, so the two namespaces resolve independently and a
+ * name present on both entities can never cross over.
+ *
+ * @param {Object} config - Config object from getConfig()
+ * @returns {Object} - { resolved: number, notFound: string[] }
+ */
+function resolveLocationCustomFieldIds(config) {
+  const names = config.locationCustomFields || [];
+  const ids = config.locationCustomFieldIds || [];
+
+  const pending = [];
+  for (let i = 0; i < LOCATION_CUSTOM_FIELD_COUNT; i++) {
+    const name = names[i] || '';
+    const id = ids[i] || '';
+    if (name && (!id || id === 'NOT_FOUND')) {
+      pending.push({ name: name, key: 'LOCATION_CUSTOM_FIELD_' + (i + 1) + '_ID', label: String(i + 1) });
+    }
+  }
+  if (pending.length === 0) {
+    return { resolved: 0, notFound: [] };
+  }
+
+  // A pasted CustomFieldTypeId is used as-is — no lookup, no API call
+  let resolvedFromGuid = 0;
+  const needsResolution = [];
+  for (const field of pending) {
+    if (looksLikeCustomFieldGuid_(field.name)) {
+      const guid = String(field.name).trim();
+      setConfigValue(field.key, guid);
+      logOperation('LocationCustomFields', 'RESOLVED', `Location Custom Field ${field.label} set directly from CustomFieldTypeId ${guid}`);
+      resolvedFromGuid++;
+    } else {
+      needsResolution.push(field);
+    }
+  }
+  if (needsResolution.length === 0) {
+    return { resolved: resolvedFromGuid, notFound: [] };
+  }
+
+  logOperation('LocationCustomFields', 'RESOLVING', `Resolving ${needsResolution.length} location custom field name(s)`);
+  let definitions;
+  try {
+    definitions = getLocationCustomFieldDefinitions();
+  } catch (e) {
+    logOperation('LocationCustomFields', 'ERROR', 'Failed to fetch location custom field definitions: ' + e.message);
+    return { resolved: resolvedFromGuid, notFound: needsResolution.map(f => f.name) };
+  }
+
+  const nameToId = new Map();
+  for (const def of definitions) {
+    const typeName = def.CustomFieldType && def.CustomFieldType.Name;
+    if (typeName && def.CustomFieldTypeId) {
+      nameToId.set(typeName.trim().toLowerCase(), def.CustomFieldTypeId);
+    }
+  }
+
+  // Free cache fill: definitions are already in hand
+  writeLocationCfTypeCache(definitions);
+
+  let resolved = resolvedFromGuid;
+  const notFound = [];
+
+  for (const field of needsResolution) {
+    const uuid = nameToId.get(field.name.trim().toLowerCase());
+    if (uuid) {
+      setConfigValue(field.key, uuid);
+      logOperation('LocationCustomFields', 'RESOLVED', `Location Custom Field ${field.label} "${field.name}" → ${uuid}`);
+      resolved++;
+    } else {
+      setConfigValue(field.key, 'NOT_FOUND');
+      logOperation('LocationCustomFields', 'WARNING', `Location Custom Field ${field.label} "${field.name}" not found in district`);
       notFound.push(field.name);
     }
   }

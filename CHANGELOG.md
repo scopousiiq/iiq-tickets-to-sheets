@@ -4,6 +4,48 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.8.0 — Location custom fields in TicketData (2026-08-27)
+
+### Added
+- **Location custom fields as TicketData columns (AV-AZ)** — up to five custom fields defined on your district's *locations* can now be pulled into TicketData, alongside the three ticket custom fields already supported. Set them via the new `LOCATION_CUSTOM_FIELD_1`–`LOCATION_CUSTOM_FIELD_5` keys in Config.
+  - This covers fields that live on the school/building rather than the ticket: district site codes, regions, building numbers, hardware support areas. Previously these were unreachable — the ticket custom field extraction only ever looked at values set on the ticket itself.
+  - Values are joined onto each ticket by its `LocationId`. The grain is unchanged: still exactly one row per ticket.
+  - New columns are appended at the end of the header row, so existing column references, analytics formulas, and Google Data Studio / Domo / Power BI field mappings do not shift.
+- **`Refresh Custom Fields` now lists both entities** — the CustomFields sheet has a new leading `Entity` column marking each field as `Ticket` or `Location`. The Config dropdowns are scoped per entity, so a location field can't be selected into a ticket slot (where it would never resolve) or vice versa.
+- **Five location slots rather than three** — location values are resolved once per run from a single paginated call, so extra slots cost columns rather than API calls. Districts commonly define more location fields than ticket fields.
+
+### Changed
+- `TicketData` is now 52 columns (was 47).
+- **Custom field slots now take a `CustomFieldTypeId`, pasted from the `CustomFields` sheet, instead of a name picked from a dropdown.** The id is what the loader actually stores and uses, and it is unambiguous — a district can define two different fields sharing the same display name, which a name-based selection cannot distinguish. Field names are still accepted, so existing configurations keep working. Applies to both `CUSTOM_FIELD_1/2/3` and `LOCATION_CUSTOM_FIELD_1-5`.
+- A pasted id needs no lookup, so configuring fields by id makes **no** `/custom-fields/for/*` call during resolution.
+- `Verify Configuration` reports location custom field resolution status, and warns specifically that Ticket and Location fields are separate namespaces when a name doesn't resolve.
+
+### Fixed
+- **`Refresh Custom Fields` failed outright on districts with many custom fields**, reporting `The data validation rule has more items than the limit of 500`. Config cells no longer carry list validation at all, so the cap does not apply.
+- **The `CustomFields` sheet listed the same field many times over.** The `/custom-fields/for/*` endpoints return one row per field-to-filter-set mapping rather than one per field, so a single field could appear dozens of times with an identical name and `CustomFieldTypeId`. Rows are now deduplicated per field type, which in testing more than halved the row count on districts with large custom field catalogs.
+- **`Clear Data + Reset Progress` failed with `Sorry, it is not possible to delete all non-frozen rows`.** Because each spreadsheet holds a single school year, clearing that year matches every data row, and a completed load leaves the grid sized exactly to the data — so the delete covered every non-frozen row, which Sheets rejects. A spare row is now added before the delete.
+- **A pasted `CustomFieldTypeId` was silently rejected**, resolving to `NOT_FOUND` because the value was only ever looked up as a field name. Ids are now recognized and used directly.
+- **Custom field errors blamed API credentials regardless of cause.** A failure while writing the sheet reported "Make sure API_BASE_URL and BEARER_TOKEN are configured" even though the API call had already succeeded. Fetch failures and sheet failures now report separately.
+- The `EditorType` labels on the `CustomFields` sheet were misaligned from type 4 onward against iiQ's actual editor type values (type 4 showed as "Dropdown" when it is "Number"; Select and MultiSelect were also wrong).
+
+### Performance
+- Cost per run is **one paginated locations sweep** (one API call for any district under 500 locations), and only when at least one location field is configured. Nothing scales with ticket volume — a district with hundreds of thousands of tickets pays exactly the same as one with a few thousand.
+- Editor types are cached in Config (`LOCATION_CF_TYPE_CACHE`) for 30 days, so a steady-state load makes **no** `/custom-fields/for/location` call. The cache is filled for free whenever definitions are already being fetched (field name resolution, `Refresh Custom Fields`), keyed by field UUID so pointing a slot at a different field invalidates only that entry.
+- `IiqLocation`-typed location fields build their name map from the locations payload already in hand rather than issuing a second locations call.
+- Measured overhead on a 5.5-minute execution budget: well under a second for a few hundred locations, and around a second for districts approaching a thousand — under 0.5% of the run, and less than a third of a single ticket batch.
+
+### Upgrade Notes
+- Existing sheets keep working untouched. With no location fields configured, the five new columns stay blank and no extra API calls are made.
+- Config rows are added automatically on next load or on `Verify Configuration`. Sheets upgraded from an earlier version pick up the new rows even though they already have the ticket custom field rows.
+- The `CustomFields` sheet is rebuilt on the next `Refresh Custom Fields` run to add the `Entity` column. That run also strips the old list validation from the Config custom field cells and adds a note explaining the id paste.
+- If an admin changes a location field's *type* in iiQ (rare), run `Refresh Custom Fields` to correct the cached editor type immediately rather than waiting out the 30-day window. `Verify Configuration` shows the cache age.
+- To start using location fields on a sheet that already has data loaded: run `Refresh Custom Fields`, pick your fields in Config, then `Clear Data + Reset Progress` and reload. The fields are part of the config lock, so they can't be changed mid-load.
+
+### Known Limitations
+- Location custom fields of type `IiqUser` (e.g. a "Principal" field) emit the raw user UUID rather than a name. Resolving them would require a bulk user fetch; the ticket custom fields have the same limitation.
+
+---
+
 ## v1.7.1 — TechnicianPerformance: split breach into Response/Resolution (2026-07-14)
 
 ### Changed
@@ -242,13 +284,13 @@ After updating scripts:
 
 ---
 
-## v1.0.0 — Device tracking, Looker Studio guides, concurrency
+## v1.0.0 — Device tracking, Google Data Studio guides, concurrency
 
 - **Device/Asset columns (AssetTag, ModelName, SerialNumber)** added to TicketData — 39 columns total.
 - **New DeviceReliability analytics sheet** — which device models generate the most tickets?
-- **Looker Studio dashboard guides** — step-by-step build guides for Superintendent and IT Director dashboards.
+- **Google Data Studio dashboard guides** — step-by-step build guides for Superintendent and IT Director dashboards.
 - **Concurrency control** — LockService prevents overlapping operations from corrupting data.
-- **Looker Studio-safe values** — IsClosed uses "Open"/"Closed", breaches use 1/0 (no booleans).
+- **Google Data Studio-safe values** — IsClosed uses "Open"/"Closed", breaches use 1/0 (no booleans).
 
 ---
 

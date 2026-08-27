@@ -294,6 +294,7 @@ function triggerWeeklyFullRefresh() {
     try {
       // Step 1: Clear all ticket data for this school year
       if (ticketSheet) {
+        ensureTicketGridWidth(ticketSheet);
         const lastRow = ticketSheet.getLastRow();
         if (lastRow > 1) {
           ticketSheet.getRange(2, 1, lastRow - 1, TICKET_COLUMN_COUNT).clear();
@@ -631,7 +632,9 @@ function runNewTicketsCheck(sheet, config) {
   const now = new Date();
   tickets.sort((a, b) => new Date(a.CreatedDate) - new Date(b.CreatedDate));
   const customFieldIds = [config.customField1Id, config.customField2Id, config.customField3Id];
-  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds));
+  const locationCfIndex = buildLocationCustomFieldIndex(config);
+  const rows = tickets.map(ticket => extractTicketRow(ticket, now, config.schoolYear, slaMap, customFieldIds, null, locationCfIndex));
+  updateCustomFieldHeaders(sheet, config); // widens the grid if upgrading from fewer columns
   const lastRow = sheet.getLastRow();
   sheet.getRange(lastRow + 1, 1, rows.length, TICKET_COLUMN_COUNT).setValues(rows);
 
@@ -672,7 +675,9 @@ function createTicketSheet(ss) {
     'AssignedToUserId', 'AssignedToUserName',
     'AssetId', 'AssetCategory',
     'CustomField1', 'CustomField2', 'CustomField3',
-    'RequesterRole'
+    'RequesterRole',
+    'LocationCustomField1', 'LocationCustomField2', 'LocationCustomField3',
+    'LocationCustomField4', 'LocationCustomField5'
   ];
   sheet.getRange(1, 1, 1, TICKET_COLUMN_COUNT).setValues([headers]);
   sheet.setFrozenRows(1);

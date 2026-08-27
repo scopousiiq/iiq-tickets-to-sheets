@@ -10,7 +10,7 @@ This guide explains how the iiQ Tickets to Sheets system works — the sheet str
 ┌─────────────┐     ┌──────────────────┐     ┌──────────────────┐
 │  iiQ API    │────▶│  Google Sheets   │────▶│  Dashboards      │
 │             │     │  + Apps Script   │     │                  │
-│ /tickets    │     │                  │     │ • Looker Studio  │
+│ /tickets    │     │                  │     │ • Google Data Studio  │
 │ /teams      │     │ • Config sheet   │     │ • Power BI       │
 └─────────────┘     │ • Ticket data    │     │ • Google Sheets  │
                     │ • Analytics      │     │   (built-in)     │
@@ -31,7 +31,7 @@ Create a new Google Sheet. The **Setup Spreadsheet** function will create all re
 | Sheet Name | Purpose |
 |------------|---------|
 | `Config` | API credentials and settings |
-| `TicketData` | Raw ticket dump with SLA metrics, device info, assigned technician, and custom fields (46 columns) |
+| `TicketData` | Raw ticket dump with SLA metrics, device info, assigned technician, ticket custom fields, and location custom fields (52 columns) |
 | `Teams` | Team directory with FA mapping |
 | `DailySnapshot` | Daily backlog metrics for trending |
 | `Logs` | API call logs and errors |
@@ -748,8 +748,14 @@ iiQ Data > Add Analytics Sheet >
 | AR | **CustomField1** | Configurable custom field value (set CUSTOM_FIELD_1 in Config) |
 | AS | **CustomField2** | Configurable custom field value (set CUSTOM_FIELD_2 in Config) |
 | AT | **CustomField3** | Configurable custom field value (set CUSTOM_FIELD_3 in Config) |
+| AU | **RequesterRole** | Role of the "for" user (Student, Staff, Agent, Guest) |
+| AV | **LocationCustomField1** | Value of a custom field on the ticket's **location** (set LOCATION_CUSTOM_FIELD_1 in Config) |
+| AW | **LocationCustomField2** | Value of a custom field on the ticket's location (set LOCATION_CUSTOM_FIELD_2 in Config) |
+| AX | **LocationCustomField3** | Value of a custom field on the ticket's location (set LOCATION_CUSTOM_FIELD_3 in Config) |
+| AY | **LocationCustomField4** | Value of a custom field on the ticket's location (set LOCATION_CUSTOM_FIELD_4 in Config) |
+| AZ | **LocationCustomField5** | Value of a custom field on the ticket's location (set LOCATION_CUSTOM_FIELD_5 in Config) |
 
-> **Note:** Raw ticket data dump with consolidated SLA metrics, device info, assigned technician, and custom fields for Power BI analysis. Data is loaded by year with automatic resume capability. 46 columns total.
+> **Note:** Raw ticket data dump with consolidated SLA metrics, device info, assigned technician, and custom fields for Power BI analysis. Data is loaded by year with automatic resume capability. 52 columns total.
 >
 > **Loading Strategy:**
 > - **Historical school years**: Standard pagination with page tracking. Once complete and all tickets closed, triggers are auto-removed.
@@ -800,7 +806,7 @@ The Apps Script source code is in the `scripts/` folder of this repository.
 | [`Config.gs`](scripts/Config.gs) | Configuration reading from Config sheet, logging utilities |
 | [`ApiClient.gs`](scripts/ApiClient.gs) | HTTP requests with retry/exponential backoff for rate limiting |
 | [`Teams.gs`](scripts/Teams.gs) | Team data loading from API |
-| [`TicketData.gs`](scripts/TicketData.gs) | Bulk ticket data loader with consolidated SLA, device info, assigned technician, and custom fields (46 columns, year-based pagination) |
+| [`TicketData.gs`](scripts/TicketData.gs) | Bulk ticket data loader with consolidated SLA, device info, assigned technician, and custom fields (52 columns, year-based pagination) |
 | [`DailySnapshot.gs`](scripts/DailySnapshot.gs) | Daily backlog metrics capture for trending |
 | [`Menu.gs`](scripts/Menu.gs) | iiQ Data menu for data loader and analytics functions |
 | [`Triggers.gs`](scripts/Triggers.gs) | Time-driven trigger functions for automated updates |
@@ -1173,7 +1179,7 @@ These two sheets filter tickets approaching their respective SLA thresholds. Sam
 
 ### TicketData Sheet (After Refresh)
 
-The TicketData sheet includes 46 columns (A-AT) with consolidated SLA metrics, device info, assigned technician, and custom fields. Sample rows:
+The TicketData sheet includes 52 columns (A-AZ) with consolidated SLA metrics, device info, assigned technician, ticket custom fields, and location custom fields. Sample rows:
 
 | Column | Row 1 | Row 2 | Row 3 |
 |--------|-------|-------|-------|
@@ -1224,7 +1230,7 @@ The TicketData sheet includes 46 columns (A-AT) with consolidated SLA metrics, d
 | AS: CustomField2 | | | |
 | AT: CustomField3 | | | |
 
-> **Raw Data Export:** This sheet contains all 46 columns including consolidated SLA metrics, device info, assigned technician, and custom fields for custom analysis, pivot tables, or Power BI integration.
+> **Raw Data Export:** This sheet contains all 52 columns including consolidated SLA metrics, device info, assigned technician, ticket custom fields, and location custom fields for custom analysis, pivot tables, or Power BI integration.
 >
 > **SLA Columns (AD-AJ):**
 > - Threshold values are in minutes (240 = 4 hours)

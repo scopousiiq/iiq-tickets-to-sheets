@@ -7,7 +7,7 @@
  * Data Sheets (always created):
  * - Instructions: Setup and usage guide
  * - Config: API settings and progress tracking
- * - TicketData: Main data (46 columns including SLA metrics, device/asset, assigned technician, and custom fields)
+ * - TicketData: Main data (52 columns including SLA metrics, device/asset, assigned technician, ticket custom fields, and location custom fields)
  * - Teams: Team directory with Functional Area mapping
  * - DailySnapshot: Daily backlog metrics for trending
  * - Logs: Operation logs
@@ -65,7 +65,7 @@ function setupSpreadsheet() {
     'DATA SHEETS:\n' +
     '- Instructions (setup guide)\n' +
     '- Config (API settings) - CREDENTIALS WILL BE LOST!\n' +
-    '- TicketData (46 columns) - ALL DATA WILL BE LOST!\n' +
+    '- TicketData (52 columns) - ALL DATA WILL BE LOST!\n' +
     '- Teams (directory) - ALL DATA WILL BE LOST!\n' +
     '- DailySnapshot (trending) - ALL DATA WILL BE LOST!\n' +
     '- Logs (operations)\n\n' +
@@ -151,7 +151,7 @@ function setupSpreadsheet() {
   message.push('1. Fill in Config sheet with API credentials');
   message.push('2. Run "Verify Configuration" to check settings');
   message.push('3. Run "Refresh Teams" to load team directory');
-  message.push('4. (Optional) Run "Refresh Custom Fields" to enable custom field dropdowns');
+  message.push('4. (Optional) Run "Refresh Custom Fields" to list your ticket and location custom field IDs');
   message.push('5. Run "Continue Loading" to start loading ticket data');
 
   ui.alert('Setup Complete', message.join('\n'), ui.ButtonSet.OK);
@@ -184,7 +184,7 @@ function setupInstructionsSheet(ss) {
     ['Example: A "2025-2026" spreadsheet covers July 1, 2025 through June 30, 2026.'],
     ['Create a new spreadsheet for each school year.'],
     [''],
-    ['Data Flow: iiQ API → Google Apps Script → This Spreadsheet → Looker Studio / Power BI'],
+    ['Data Flow: iiQ API → Google Apps Script → This Spreadsheet → Google Data Studio / Power BI'],
     [''],
     [''],
     ['═══════════════════════════════════════════════════════════════════════════════'],
@@ -206,6 +206,27 @@ function setupInstructionsSheet(ss) {
     ['3. VERIFY CONFIGURATION'],
     ['   • Menu: iiQ Data > Setup > Verify Configuration'],
     ['   • Fix any issues reported before proceeding'],
+    [''],
+    ['3b. (OPTIONAL) ADD CUSTOM FIELD COLUMNS'],
+    ['   • Menu: iiQ Data > Setup > Refresh Custom Fields'],
+    ['   • Populates the CustomFields sheet with every custom field your district'],
+    ['     defines, labeled by Entity: "Ticket" or "Location"'],
+    ['   • Copy the CustomFieldTypeId (column C) of a field and paste it into Config:'],
+    ['       CUSTOM_FIELD_1/2/3            — up to 3 Ticket fields. These read'],
+    ['                                       values set on the ticket itself.'],
+    ['       LOCATION_CUSTOM_FIELD_1-5     — up to 5 Location fields. These read'],
+    ['                                       values set on a school/building (site'],
+    ['                                       code, region, building number) and are'],
+    ['                                       joined onto every ticket at that'],
+    ['                                       location. Useful for pivoting a'],
+    ['                                       dashboard by your own site identifier.'],
+    ['   • Check the Entity column: a Location field pasted into a Ticket slot will'],
+    ['     never resolve, and vice versa.'],
+    ['   • A field name also works, but ids are unambiguous — two different fields'],
+    ['     can share the same display name.'],
+    ['   • Set these BEFORE loading data: they are locked once loading starts.'],
+    ['   • Re-run this if you later change a field definition in iiQ, so the'],
+    ['     sheet picks up the new type right away.'],
     [''],
     ['4. LOAD TEAM DIRECTORY'],
     ['   • Menu: iiQ Data > Refresh Teams'],
@@ -256,7 +277,7 @@ function setupInstructionsSheet(ss) {
     [''],
     ['DATA SHEETS (populated by scripts):'],
     [''],
-    ['• TicketData (46 columns)'],
+    ['• TicketData (52 columns)'],
     ['  Main ticket data including SLA metrics and device info. Columns include:'],
     ['  - Ticket info: ID, Number, Subject, School Year, Status, Priority'],
     ['  - Dates: Created, Started, Modified, Closed, Due'],
@@ -265,10 +286,20 @@ function setupInstructionsSheet(ss) {
     ['  - Requester: ID, Name'],
     ['  - SLA: Thresholds, Actuals, Breach status (Response & Resolution), IsRunning'],
     ['  - Device/Asset: AssetTag, ModelName, SerialNumber'],
+    ['  - CustomField1-3: values from custom fields set on the ticket itself'],
+    ['  - LocationCustomField1-5: values from custom fields set on the ticket\'s'],
+    ['    LOCATION (site code, region, building number, etc.), joined on LocationId'],
     ['  - Values: IsClosed="Closed"/"Open", IsPastDue="Overdue"/"On Track", Breach=1/0'],
     [''],
     ['• Teams'],
     ['  Team directory loaded from iiQ. Add FunctionalArea values for grouping.'],
+    [''],
+    ['• CustomFields'],
+    ['  Reference list of every custom field your district defines, refreshed from'],
+    ['  iiQ. Entity column marks each as "Ticket" or "Location". Copy a'],
+    ['  CustomFieldTypeId from column C into the Config sheet to add it as a'],
+    ['  TicketData column. Safe to regenerate at any time — nothing reads it during'],
+    ['  a data load.'],
     [''],
     ['• DailySnapshot'],
     ['  Daily backlog metrics captured at 7 PM. Used for trending analysis.'],
@@ -333,6 +364,8 @@ function setupInstructionsSheet(ss) {
     ['iiQ Data > Setup'],
     ['  • Setup Spreadsheet — Create all sheets (safe to run multiple times)'],
     ['  • Verify Configuration — Check API settings'],
+    ['  • Refresh Custom Fields — List your district\'s ticket and location custom'],
+    ['    fields (with their IDs) on the CustomFields sheet'],
     ['  • Setup Automated Triggers — Create all recommended triggers'],
     ['  • View Trigger Status — Show installed triggers and schedule'],
     ['  • Remove Automated Triggers — Remove all triggers (required before destructive ops)'],
@@ -376,6 +409,24 @@ function setupInstructionsSheet(ss) {
     ['  → Run "Show Status" to see progress'],
     ['  → Each batch processes ~2000 tickets, large districts take multiple runs'],
     [''],
+    ['Custom field columns are blank'],
+    ['  → Run "Refresh Custom Fields", then confirm the value in Config matches a'],
+    ['    CustomFieldTypeId on the CustomFields sheet'],
+    ['  → Check the Entity column: a Location field in CUSTOM_FIELD_1/2/3 (or a'],
+    ['    Ticket field in LOCATION_CUSTOM_FIELD_1-5) will never resolve'],
+    ['  → If the Config _ID cell reads NOT_FOUND, the value was not recognized'],
+    ['  → Custom fields are read at row-write time, so existing rows stay blank'],
+    ['    until reloaded. Use "Clear Data + Reset Progress" then reload.'],
+    [''],
+    ['Location custom field is blank for some tickets only'],
+    ['  → Expected when that ticket\'s location has no value set for the field in'],
+    ['    iiQ. Values are per location, not per ticket.'],
+    [''],
+    ['"Configuration mismatch detected"'],
+    ['  → A locked value (school year, page size, batch size, or a custom field)'],
+    ['    was changed after loading began'],
+    ['  → Use "Clear Data + Reset Progress" to unlock, then reload'],
+    [''],
     ['Missing SLA data'],
     ['  → SLA data is fetched per-batch during ticket loading'],
     ['  → Tickets without assigned SLA policies will have blank SLA columns'],
@@ -404,11 +455,11 @@ function setupInstructionsSheet(ss) {
     ['DASHBOARD INTEGRATION'],
     ['═══════════════════════════════════════════════════════════════════════════════'],
     [''],
-    ['LOOKER STUDIO (Recommended):'],
-    ['1. Go to lookerstudio.google.com > Create > Report'],
+    ['GOOGLE DATA STUDIO (Recommended):'],
+    ['1. Go to datastudio.google.com > Create > Report'],
     ['2. Add Google Sheets connector > Select this spreadsheet > TicketData sheet'],
     ['3. Add DailySnapshot as a second data source if needed'],
-    ['4. See the Looker Studio build guides in the project repository for step-by-step instructions'],
+    ['4. See the Google Data Studio build guides in the project repository for step-by-step instructions'],
     [''],
     ['POWER BI:'],
     ['1. In Power BI Desktop: Get Data > Web'],
@@ -463,24 +514,45 @@ function setupInstructionsSheet(ss) {
   // Format title
   sheet.getRange(1, 1).setFontSize(16).setFontWeight('bold').setFontColor('#1a73e8');
 
-  // Format section headers
-  const sectionRows = [4, 19, 49, 81, 157, 191, 231, 251, 279];
-  sectionRows.forEach(row => {
-    if (row <= content.length) {
+  // Section headers, dividers and tables are located by scanning the content
+  // rather than by hardcoded row numbers — any edit to the text above used to
+  // silently shift the formatting onto the wrong rows.
+  const DIVIDER = '═';
+  for (let i = 0; i < content.length; i++) {
+    const line = String(content[i][0] || '');
+    const row = i + 1;
+
+    if (line.indexOf(DIVIDER) === 0) {
+      // Divider rule
+      sheet.getRange(row, 1).setFontColor('#dadce0');
+    } else if (line.trim() !== '' && i > 0 && String(content[i - 1][0] || '').indexOf(DIVIDER) === 0) {
+      // A heading is the non-blank line immediately following a divider. Each
+      // heading sits between two dividers, so the blank line after the closing
+      // one must not be picked up.
       sheet.getRange(row, 1).setFontWeight('bold').setFontColor('#1a73e8');
     }
-  });
-
-  // Format divider lines
-  const dividerRows = [3, 18, 48, 80, 156, 190, 230, 250, 278];
-  dividerRows.forEach(row => {
-    if (row <= content.length) {
-      sheet.getRange(row, 1).setFontColor('#dadce0');
-    }
-  });
+  }
 
   // Set text wrapping for long content
   sheet.getRange(1, 1, content.length, 1).setWrap(true);
+
+  // Tables are drawn with pipe characters, so they only line up in a monospaced
+  // face — and must not wrap, or the columns break apart. Applied as contiguous
+  // blocks so a multi-row table is one formatting call.
+  const isTableRow = (line) => (String(line || '').match(/\|/g) || []).length >= 2;
+  let blockStart = -1;
+  for (let i = 0; i <= content.length; i++) {
+    const inTable = i < content.length && isTableRow(content[i][0]);
+    if (inTable && blockStart === -1) {
+      blockStart = i;
+    } else if (!inTable && blockStart !== -1) {
+      sheet.getRange(blockStart + 1, 1, i - blockStart, 1)
+        .setFontFamily('Roboto Mono')
+        .setFontSize(9)
+        .setWrap(false);
+      blockStart = -1;
+    }
+  }
 
   // Freeze title row
   sheet.setFrozenRows(1);
@@ -506,59 +578,77 @@ function setupConfigSheet(ss, schoolYear) {
 
   // Headers and initial config values
   const configData = [
-    ['Key', 'Value'],                                                          // 1
-    ['', ''],                                                                  // 2
-    ['# API Configuration (Required)', ''],                                    // 3
-    ['API_BASE_URL', 'https://YOUR-DISTRICT.incidentiq.com'],                  // 4
-    ['BEARER_TOKEN', ''],                                                      // 5
-    ['SITE_ID', ''],                                                           // 6
-    ['MODULE', 'Ticketing'],                                                   // 7
-    ['', ''],                                                                  // 8
-    ['# School Year Configuration', ''],                                       // 9
-    ['SCHOOL_YEAR', defaultSchoolYear],                                        // 10
-    ['SCHOOL_YEAR_START', '07-01'],                                            // 11
-    ['', ''],                                                                  // 12
-    ['# Performance Settings (Optional)', ''],                                 // 13
-    ['PAGE_SIZE', '100'],                                                      // 14
-    ['THROTTLE_MS', '1000'],                                                   // 15
-    ['TICKET_BATCH_SIZE', '2000'],                                             // 16
-    ['STALE_DAYS', '7'],                                                       // 17
-    ['SLA_RISK_PERCENT', '75'],                                                // 18
-    ['', ''],                                                                  // 19
-    ['# Custom Field Columns (Optional - up to 3)', ''],                       // 20
-    ['CUSTOM_FIELD_1', ''],                                                    // 21
-    ['CUSTOM_FIELD_2', ''],                                                    // 22
-    ['CUSTOM_FIELD_3', ''],                                                    // 23
-    ['', ''],                                                                  // 24
-    ['# Progress Tracking - Managed Automatically', ''],                       // 25
-    ['TICKET_TOTAL_PAGES', ''],                                                // 26
-    ['TICKET_LAST_PAGE', '-1'],                                                // 27
-    ['TICKET_COMPLETE', 'FALSE'],                                              // 28
-    ['TICKET_LAST_FETCH', ''],                                                 // 29
-    ['CUSTOM_FIELD_1_ID', ''],                                                 // 30
-    ['CUSTOM_FIELD_2_ID', ''],                                                 // 31
-    ['CUSTOM_FIELD_3_ID', ''],                                                 // 32
-    ['', ''],                                                                  // 33
-    ['# Config Lock - Set when loading starts, cleared by "Clear Data + Reset"', ''], // 34
-    ['SCHOOL_YEAR_LOADED', ''],                                                // 35
-    ['PAGE_SIZE_LOADED', ''],                                                  // 36
-    ['BATCH_SIZE_LOADED', ''],                                                 // 37
-    ['MODULE_LOADED', ''],                                                     // 38
-    ['CUSTOM_FIELD_1_LOADED', ''],                                             // 39
-    ['CUSTOM_FIELD_2_LOADED', ''],                                             // 40
-    ['CUSTOM_FIELD_3_LOADED', ''],                                             // 41
-    ['', ''],                                                                  // 42
-    ['LAST_REFRESH', ''],                                                      // 43
-    ['', ''],                                                                  // 44
-    ['# Version Information', ''],                                             // 45
-    ['SCRIPT_VERSION', SCRIPT_VERSION],                                        // 46
-    ['LATEST_VERSION', ''],                                                    // 47
-    ['VERSION_CHECK_DATE', ''],                                                // 48
-    ['', ''],                                                                  // 49
-    ['# Dashboard Configuration', ''],                                         // 50
-    ['DASHBOARD_URL', ''],                                                     // 51
-    ['', ''],                                                                  // 52
-    ['# iiQ Telemetry (set FALSE to opt out — also disables automated polling)', ''], // 53
+    ['Key', 'Value'],                                                  // 1
+    ['', ''],                                                          // 2
+    ['# API Configuration (Required)', ''],                            // 3
+    ['API_BASE_URL', 'https://YOUR-DISTRICT.incidentiq.com'],          // 4
+    ['BEARER_TOKEN', ''],                                              // 5
+    ['SITE_ID', ''],                                                   // 6
+    ['MODULE', 'Ticketing'],                                           // 7
+    ['', ''],                                                          // 8
+    ['# School Year Configuration', ''],                               // 9
+    ['SCHOOL_YEAR', defaultSchoolYear],                                // 10
+    ['SCHOOL_YEAR_START', '07-01'],                                    // 11
+    ['', ''],                                                          // 12
+    ['# Performance Settings (Optional)', ''],                         // 13
+    ['PAGE_SIZE', '100'],                                              // 14
+    ['THROTTLE_MS', '1000'],                                           // 15
+    ['TICKET_BATCH_SIZE', '2000'],                                     // 16
+    ['STALE_DAYS', '7'],                                               // 17
+    ['SLA_RISK_PERCENT', '75'],                                        // 18
+    ['', ''],                                                          // 19
+    ['# Ticket Custom Field Columns (Optional - paste CustomFieldTypeId, up to 3)', ''],               // 20
+    ['CUSTOM_FIELD_1', ''],                                            // 21
+    ['CUSTOM_FIELD_2', ''],                                            // 22
+    ['CUSTOM_FIELD_3', ''],                                            // 23
+    ['', ''],                                                          // 24
+    ['# Location Custom Field Columns (Optional - paste CustomFieldTypeId, up to 5)', ''],      // 25
+    ['LOCATION_CUSTOM_FIELD_1', ''],                                   // 26
+    ['LOCATION_CUSTOM_FIELD_2', ''],                                   // 27
+    ['LOCATION_CUSTOM_FIELD_3', ''],                                   // 28
+    ['LOCATION_CUSTOM_FIELD_4', ''],                                   // 29
+    ['LOCATION_CUSTOM_FIELD_5', ''],                                   // 30
+    ['', ''],                                                          // 31
+    ['# Progress Tracking - Managed Automatically', ''],               // 32
+    ['TICKET_TOTAL_PAGES', ''],                                        // 33
+    ['TICKET_LAST_PAGE', '-1'],                                        // 34
+    ['TICKET_COMPLETE', 'FALSE'],                                      // 35
+    ['TICKET_LAST_FETCH', ''],                                         // 36
+    ['CUSTOM_FIELD_1_ID', ''],                                         // 37
+    ['CUSTOM_FIELD_2_ID', ''],                                         // 38
+    ['CUSTOM_FIELD_3_ID', ''],                                         // 39
+    ['LOCATION_CUSTOM_FIELD_1_ID', ''],                                // 40
+    ['LOCATION_CUSTOM_FIELD_2_ID', ''],                                // 41
+    ['LOCATION_CUSTOM_FIELD_3_ID', ''],                                // 42
+    ['LOCATION_CUSTOM_FIELD_4_ID', ''],                                // 43
+    ['LOCATION_CUSTOM_FIELD_5_ID', ''],                                // 44
+    ['LOCATION_CF_TYPE_CACHE', ''],                                    // 45
+    ['', ''],                                                          // 46
+    ['# Config Lock - Set when loading starts, cleared by "Clear Data + Reset"', ''], // 47
+    ['SCHOOL_YEAR_LOADED', ''],                                        // 48
+    ['PAGE_SIZE_LOADED', ''],                                          // 49
+    ['BATCH_SIZE_LOADED', ''],                                         // 50
+    ['MODULE_LOADED', ''],                                             // 51
+    ['CUSTOM_FIELD_1_LOADED', ''],                                     // 52
+    ['CUSTOM_FIELD_2_LOADED', ''],                                     // 53
+    ['CUSTOM_FIELD_3_LOADED', ''],                                     // 54
+    ['LOCATION_CUSTOM_FIELD_1_LOADED', ''],                            // 55
+    ['LOCATION_CUSTOM_FIELD_2_LOADED', ''],                            // 56
+    ['LOCATION_CUSTOM_FIELD_3_LOADED', ''],                            // 57
+    ['LOCATION_CUSTOM_FIELD_4_LOADED', ''],                            // 58
+    ['LOCATION_CUSTOM_FIELD_5_LOADED', ''],                            // 59
+    ['', ''],                                                          // 60
+    ['LAST_REFRESH', ''],                                              // 61
+    ['', ''],                                                          // 62
+    ['# Version Information', ''],                                     // 63
+    ['SCRIPT_VERSION', SCRIPT_VERSION],                                // 64
+    ['LATEST_VERSION', ''],                                            // 65
+    ['VERSION_CHECK_DATE', ''],                                        // 66
+    ['', ''],                                                          // 67
+    ['# Dashboard Configuration', ''],                                 // 68
+    ['DASHBOARD_URL', ''],                                             // 69
+    ['', ''],                                                          // 70
+    ['# iiQ Telemetry (set FALSE to opt out — also disables automated polling)', ''], // 71
     ['TELEMETRY_ENABLED', 'TRUE']                                              // 54
   ];
 
@@ -610,7 +700,9 @@ function setupTicketDataSheet(ss) {
     'AssignedToUserId', 'AssignedToUserName',
     'AssetId', 'AssetCategory',
     'CustomField1', 'CustomField2', 'CustomField3',
-    'RequesterRole'
+    'RequesterRole',
+    'LocationCustomField1', 'LocationCustomField2', 'LocationCustomField3',
+    'LocationCustomField4', 'LocationCustomField5'
   ];
 
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -1614,9 +1706,17 @@ function migrateConfigForCustomFields() {
 
   const data = sheet.getDataRange().getValues();
 
-  // Check if already migrated
+  // Ticket custom field rows are migrated separately from location ones: a sheet
+  // upgraded before v1.7.0 already has the ticket rows but none of the location
+  // rows, so each block checks for its own anchor key.
+  let hasTicketRows = false;
   for (let i = 0; i < data.length; i++) {
-    if (data[i][0] === 'CUSTOM_FIELD_1') return; // Already has custom field rows
+    if (data[i][0] === 'CUSTOM_FIELD_1') { hasTicketRows = true; break; }
+  }
+
+  if (hasTicketRows) {
+    migrateConfigForLocationCustomFields();
+    return;
   }
 
   // Find insertion points by looking for known anchor keys
@@ -1670,7 +1770,7 @@ function migrateConfigForCustomFields() {
     sheet.insertRowsAfter(slaRiskRow, 5); // blank + header + 3 fields
     sheet.getRange(slaRiskRow + 1, 1, 5, 2).setValues([
       ['', ''],
-      ['# Custom Field Columns (Optional - up to 3)', ''],
+      ['# Ticket Custom Field Columns (Optional - paste CustomFieldTypeId, up to 3)', ''],
       ['CUSTOM_FIELD_1', ''],
       ['CUSTOM_FIELD_2', ''],
       ['CUSTOM_FIELD_3', '']
@@ -1680,24 +1780,113 @@ function migrateConfigForCustomFields() {
   }
 
   logOperation('Config', 'MIGRATED', 'Added custom field configuration rows');
+
+  migrateConfigForLocationCustomFields();
+}
+
+/**
+ * Non-destructive migration: add LOCATION_CUSTOM_FIELD_* rows to Config sheets.
+ * Split out from migrateConfigForCustomFields so sheets already carrying the
+ * ticket custom field rows (anything from v1.3.0 onward) still pick these up.
+ * Safe to call repeatedly — returns early once LOCATION_CUSTOM_FIELD_1 exists.
+ */
+function migrateConfigForLocationCustomFields() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Config');
+  if (!sheet) return;
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][0] === 'LOCATION_CUSTOM_FIELD_1') return; // Already migrated
+  }
+
+  const N = LOCATION_CUSTOM_FIELD_COUNT;
+
+  // Insert bottom-to-top so earlier row numbers stay valid between blocks.
+  // 1. Config Lock section: _LOADED keys after the last CUSTOM_FIELD_*_LOADED
+  let anchor = -1;
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][0]).indexOf('CUSTOM_FIELD_') === 0 && String(data[i][0]).indexOf('_LOADED') > 0) anchor = i + 1;
+  }
+  if (anchor > 0) {
+    sheet.insertRowsAfter(anchor, N);
+    const rows = [];
+    for (let n = 1; n <= N; n++) rows.push(['LOCATION_CUSTOM_FIELD_' + n + '_LOADED', '']);
+    sheet.getRange(anchor + 1, 1, N, 2).setValues(rows);
+  }
+
+  // 2. Progress Tracking section: _ID keys after the last CUSTOM_FIELD_*_ID
+  const data2 = sheet.getDataRange().getValues();
+  anchor = -1;
+  for (let i = 0; i < data2.length; i++) {
+    const key = String(data2[i][0]);
+    if (key.indexOf('CUSTOM_FIELD_') === 0 && key.indexOf('_ID') === key.length - 3) anchor = i + 1;
+  }
+  if (anchor > 0) {
+    sheet.insertRowsAfter(anchor, N + 1);
+    const rows = [];
+    for (let n = 1; n <= N; n++) rows.push(['LOCATION_CUSTOM_FIELD_' + n + '_ID', '']);
+    rows.push(['LOCATION_CF_TYPE_CACHE', '']);
+    sheet.getRange(anchor + 1, 1, N + 1, 2).setValues(rows);
+  }
+
+  // 3. User-facing section: names after CUSTOM_FIELD_3 (or the last plain slot)
+  const data3 = sheet.getDataRange().getValues();
+  anchor = -1;
+  for (let i = 0; i < data3.length; i++) {
+    if (/^CUSTOM_FIELD_\d+$/.test(String(data3[i][0]))) anchor = i + 1;
+  }
+  if (anchor > 0) {
+    sheet.insertRowsAfter(anchor, N + 2); // blank + header + N fields
+    const rows = [['', ''], ['# Location Custom Field Columns (Optional - paste CustomFieldTypeId, up to ' + N + ')', '']];
+    for (let n = 1; n <= N; n++) rows.push(['LOCATION_CUSTOM_FIELD_' + n, '']);
+    sheet.getRange(anchor + 1, 1, N + 2, 2).setValues(rows);
+    sheet.getRange(anchor + 2, 1, 1, 2).setFontWeight('bold').setBackground('#e8f0fe');
+  }
+
+  logOperation('Config', 'MIGRATED', 'Added location custom field configuration rows');
+}
+
+/**
+ * Widen a sheet's grid to at least TICKET_COLUMN_COUNT columns.
+ *
+ * Reading or writing a fixed TICKET_COLUMN_COUNT-wide range throws
+ * "out of bounds" when the grid is narrower, which is exactly the state a sheet
+ * upgraded from an earlier column count is in. Called before any full-width
+ * range operation on TicketData.
+ */
+function ensureTicketGridWidth(sheet) {
+  if (!sheet) return;
+  const maxCols = sheet.getMaxColumns();
+  if (maxCols < TICKET_COLUMN_COUNT) {
+    sheet.insertColumnsAfter(maxCols, TICKET_COLUMN_COUNT - maxCols);
+  }
 }
 
 /**
  * Update TicketData header row to include newer columns.
- * Extends older headers to TICKET_COLUMN_COUNT (47) if needed.
- * Handles upgrades from 41-column, 44-column, 46-column, and earlier sheets.
+ * Extends older headers to TICKET_COLUMN_COUNT (52) if needed.
+ * Handles upgrades from 41-, 44-, 46- and 47-column sheets.
+ *
+ * newHeaders lists every column appended since the 41-column baseline, in
+ * order, so an upgrading sheet takes exactly the tail it is missing.
  *
  * @param {Sheet} sheet - TicketData sheet
  * @param {Object} config - Config object (unused currently, reserved for future dynamic naming)
  */
 function updateCustomFieldHeaders(sheet, config) {
   if (!sheet) return;
+  ensureTicketGridWidth(sheet);
   const lastCol = sheet.getLastColumn();
   if (lastCol >= TICKET_COLUMN_COUNT) return; // Already has enough columns
 
-  const newHeaders = ['AssetId', 'AssetCategory', 'CustomField1', 'CustomField2', 'CustomField3', 'RequesterRole'];
+  const newHeaders = [
+    'AssetId', 'AssetCategory', 'CustomField1', 'CustomField2', 'CustomField3', 'RequesterRole',
+    'LocationCustomField1', 'LocationCustomField2', 'LocationCustomField3',
+    'LocationCustomField4', 'LocationCustomField5'
+  ];
   const colsToAdd = TICKET_COLUMN_COUNT - lastCol;
-  if (colsToAdd > 0 && colsToAdd <= 6) {
+  if (colsToAdd > 0 && colsToAdd <= newHeaders.length) {
     const headers = newHeaders.slice(newHeaders.length - colsToAdd);
     sheet.getRange(1, lastCol + 1, 1, colsToAdd).setValues([headers]);
     sheet.getRange(1, lastCol + 1, 1, colsToAdd)
@@ -1710,36 +1899,46 @@ function updateCustomFieldHeaders(sheet, config) {
 
 /**
  * Setup CustomFields sheet with headers
- * This sheet stores available custom field definitions for dropdown selection
+ * This sheet lists available custom field definitions; districts copy a
+ * CustomFieldTypeId from column C into the Config sheet
  */
 function setupCustomFieldsSheet(ss) {
   deleteSheetIfExists(ss, 'CustomFields');
   const sheet = ss.insertSheet('CustomFields');
 
-  const headers = ['Name', 'CustomFieldTypeId', 'EditorType'];
-  sheet.getRange(1, 1, 1, 3).setValues([headers]);
+  const headers = ['Entity', 'Name', 'CustomFieldTypeId', 'EditorType'];
+  sheet.getRange(1, 1, 1, 4).setValues([headers]);
 
   // Format header
-  sheet.getRange(1, 1, 1, 3)
+  sheet.getRange(1, 1, 1, 4)
     .setFontWeight('bold')
     .setBackground('#7b1fa2')
     .setFontColor('white');
 
   // Column widths
-  sheet.setColumnWidth(1, 250);  // Name
-  sheet.setColumnWidth(2, 300);  // CustomFieldTypeId
-  sheet.setColumnWidth(3, 100);  // EditorType
+  sheet.setColumnWidth(1, 90);   // Entity
+  sheet.setColumnWidth(2, 250);  // Name
+  sheet.setColumnWidth(3, 300);  // CustomFieldTypeId
+  sheet.setColumnWidth(4, 130);  // EditorType
 
   sheet.setFrozenRows(1);
 
   // Add note explaining the sheet
   sheet.getRange('A1').setNote(
     'Custom Fields Reference\n\n' +
-    'This sheet lists all custom fields available in your district.\n\n' +
+    'This sheet lists all custom fields available in your district, for both\n' +
+    'entities that feed TicketData:\n\n' +
+    '  Ticket   — set on the ticket itself\n' +
+    '  Location — set on the school/building; joined onto each ticket by its location\n\n' +
     'To use a custom field:\n' +
     '1. Run "Refresh Custom Fields" from the menu to populate this sheet\n' +
-    '2. In Config sheet, select from CUSTOM_FIELD_1/2/3 dropdowns\n\n' +
-    'The dropdown options come from this sheet\'s Name column.'
+    '2. Copy the CustomFieldTypeId (column C) of the field you want\n' +
+    '3. Paste it into Config: CUSTOM_FIELD_1/2/3 for Ticket fields, or\n' +
+    '   LOCATION_CUSTOM_FIELD_1-5 for Location fields\n\n' +
+    'Match the Entity column to the slot: a Location field pasted into a Ticket\n' +
+    'slot will never resolve, and vice versa.\n\n' +
+    'Field names are also accepted, but ids are unambiguous — a district can have\n' +
+    'two different fields sharing the same display name.'
   );
 
   return true;
@@ -1747,7 +1946,8 @@ function setupCustomFieldsSheet(ss) {
 
 /**
  * Refresh the CustomFields sheet from the API
- * Populates available custom field definitions and updates Config dropdowns
+ * Populates available custom field definitions for both entities (Ticket and
+ * Location) and strips any stale list validation from the Config cells
  */
 function refreshCustomFields() {
   const ui = SpreadsheetApp.getUi();
@@ -1756,11 +1956,32 @@ function refreshCustomFields() {
   // Ensure Config rows exist
   migrateConfigForCustomFields();
 
+  // Fetching is separated from sheet-building so a sheet/validation failure is
+  // not reported as an API credentials problem, which sent one district chasing
+  // the wrong cause.
+  let ticketDefs;
   try {
-    const definitions = getTicketCustomFieldDefinitions();
+    ticketDefs = getTicketCustomFieldDefinitions();
+  } catch (e) {
+    ui.alert('Error Fetching Custom Fields',
+      'Could not reach the iiQ API: ' + e.message + '\n\nCheck that API_BASE_URL and BEARER_TOKEN are configured correctly in the Config sheet.',
+      ui.ButtonSet.OK);
+    return;
+  }
 
-    if (!definitions || definitions.length === 0) {
-      ui.alert('No Custom Fields', 'No ticket custom fields are defined in your district.', ui.ButtonSet.OK);
+  // Location fields are optional infrastructure — a district with none should
+  // still get its ticket fields listed, so this failure is not fatal.
+  let locationDefs = [];
+  try {
+    locationDefs = getLocationCustomFieldDefinitions();
+  } catch (e) {
+    logOperation('LocationCustomFields', 'WARNING', 'Could not fetch location custom fields: ' + e.message);
+  }
+
+  try {
+
+    if ((!ticketDefs || ticketDefs.length === 0) && (!locationDefs || locationDefs.length === 0)) {
+      ui.alert('No Custom Fields', 'No ticket or location custom fields are defined in your district.', ui.ButtonSet.OK);
       return;
     }
 
@@ -1771,92 +1992,155 @@ function refreshCustomFields() {
       sheet = ss.getSheetByName('CustomFields');
     }
 
+    // Sheets created before v1.7.0 have 3 columns and no Entity column — rebuild
+    // rather than try to shift existing data under a new leading column.
+    const headerRow = sheet.getRange(1, 1, 1, 4).getValues()[0];
+    if (String(headerRow[0]) !== 'Entity') {
+      setupCustomFieldsSheet(ss);
+      sheet = ss.getSheetByName('CustomFields');
+    }
+
     // Clear existing data (keep header)
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
-      sheet.getRange(2, 1, lastRow - 1, 3).clear();
+      sheet.getRange(2, 1, lastRow - 1, 4).clear();
     }
 
-    // Editor type labels
-    const editorTypes = {
-      0: 'Complex', 1: 'Text', 2: 'Number', 3: 'Date', 4: 'Dropdown',
-      5: 'Checkbox', 6: 'MultiSelect', 7: 'TextArea'
-    };
-
-    // Build data rows
-    const rows = [];
-    for (const def of definitions) {
-      const name = (def.CustomFieldType && def.CustomFieldType.Name) || '';
-      if (!name) continue; // Skip unnamed fields
-
-      const uuid = def.CustomFieldTypeId || '';
-      const editorTypeId = def.EditorTypeId || (def.CustomFieldType && def.CustomFieldType.EditorType) || 0;
-      const typeLabel = editorTypes[editorTypeId] || 'Type ' + editorTypeId;
-
-      rows.push([name, uuid, typeLabel]);
-    }
-
-    // Sort by name
-    rows.sort((a, b) => a[0].localeCompare(b[0]));
+    const rows = buildCustomFieldRows_('Ticket', ticketDefs)
+      .concat(buildCustomFieldRows_('Location', locationDefs));
 
     // Write data
     if (rows.length > 0) {
-      sheet.getRange(2, 1, rows.length, 3).setValues(rows);
+      sheet.getRange(2, 1, rows.length, 4).setValues(rows);
     }
 
-    // Update Config sheet dropdowns
-    updateCustomFieldDropdowns(ss);
+    // These cells take a pasted CustomFieldTypeId, so strip any list validation
+    clearCustomFieldValidations(ss);
+
+    // Refresh the editor type cache while the definitions are in hand. This is
+    // the district-facing way to correct a stale type without waiting out the TTL.
+    writeLocationCfTypeCache(locationDefs);
+
+    const ticketCount = rows.filter(r => r[0] === 'Ticket').length;
+    const locationCount = rows.filter(r => r[0] === 'Location').length;
 
     ui.alert('Custom Fields Refreshed',
-      `Found ${rows.length} custom fields.\n\n` +
-      'The CustomFields sheet has been updated and Config dropdowns are now active.\n\n' +
-      'Select custom fields from the CUSTOM_FIELD_1/2/3 dropdowns in the Config sheet.',
+      `Found ${ticketCount} ticket custom field(s) and ${locationCount} location custom field(s).\n\n` +
+      'The CustomFields sheet has been updated.\n\n' +
+      'To use a field, copy its CustomFieldTypeId (column C) and paste it into the Config sheet:\n' +
+      '  Ticket fields  → CUSTOM_FIELD_1/2/3\n' +
+      `  Location fields → LOCATION_CUSTOM_FIELD_1-${LOCATION_CUSTOM_FIELD_COUNT}\n\n` +
+      'Location field values are joined onto each ticket by the ticket\'s location.\n' +
+      'Check the Entity column so a Location field does not land in a Ticket slot.',
       ui.ButtonSet.OK);
 
   } catch (e) {
-    ui.alert('Error', 'Failed to fetch custom fields: ' + e.message + '\n\nMake sure API_BASE_URL and BEARER_TOKEN are configured.', ui.ButtonSet.OK);
+    logOperation('CustomFields', 'ERROR', 'Failed to build CustomFields sheet: ' + e.message);
+    ui.alert('Error Building CustomFields Sheet',
+      'The custom fields were fetched from iiQ successfully, but writing them to the sheet failed:\n\n' + e.message,
+      ui.ButtonSet.OK);
   }
 }
 
 /**
- * Update the Config sheet CUSTOM_FIELD_1/2/3 cells with dropdown validation
- * from the CustomFields sheet
+ * iiQ EditorTypes enum (Spark.Shared/Enums.cs) — only the values a district is
+ * likely to see on a ticket or location custom field are named.
  */
-function updateCustomFieldDropdowns(ss) {
-  const configSheet = ss.getSheetByName('Config');
-  const customFieldsSheet = ss.getSheetByName('CustomFields');
+const EDITOR_TYPE_LABELS = {
+  0: 'None', 1: 'Text', 2: 'MultilineText', 3: 'RichText', 4: 'Number',
+  5: 'NumberRange', 6: 'Date', 7: 'DateRange', 8: 'OnOff', 9: 'Select',
+  10: 'MultiSelect', 11: 'Email', 12: 'Phone', 13: 'Address', 14: 'FileUpload',
+  18: 'IPAddress', 21: 'IiqUser', 22: 'IiqLocation', 23: 'IiqAsset',
+  29: 'IiqModel', 33: 'IiqTeam', 35: 'IiqRoom'
+};
 
-  if (!configSheet || !customFieldsSheet) return;
+/**
+ * Turn custom field definitions into CustomFields sheet rows, sorted by name.
+ *
+ * Deduplicated by CustomFieldTypeId. The /custom-fields/for/* endpoints return
+ * one Item per field-to-filter-set mapping, not one per field, so a single field
+ * can come back dozens of times — same CustomFieldTypeId, same name, differing
+ * CustomFieldId and FilterSetId. Listing every mapping made the sheet unusable
+ * and pushed districts past the dropdown item cap.
+ *
+ * Distinct field types that happen to share a display name are kept as separate
+ * rows: they are genuinely different fields, and collapsing them would hide one.
+ *
+ * @param {string} entity - 'Ticket' or 'Location'
+ * @param {Array} definitions - CustomFieldDetail objects
+ * @returns {Array} - Rows of [entity, name, uuid, editorTypeLabel]
+ */
+function buildCustomFieldRows_(entity, definitions) {
+  const rows = [];
+  const seenTypeIds = {};
+  const nameCounts = {};
+  let mappingCount = 0;
 
-  const lastRow = customFieldsSheet.getLastRow();
-  if (lastRow < 2) return; // No custom fields
+  for (const def of (definitions || [])) {
+    const name = (def.CustomFieldType && def.CustomFieldType.Name) || '';
+    if (!name) continue; // Skip unnamed fields
 
-  // Get custom field names for dropdown
-  const names = customFieldsSheet.getRange(2, 1, lastRow - 1, 1).getValues()
-    .map(row => row[0])
-    .filter(name => name && name.trim() !== '');
+    const uuid = def.CustomFieldTypeId || '';
+    mappingCount++;
+    if (uuid && seenTypeIds[uuid]) continue; // Another mapping of a field already listed
+    if (uuid) seenTypeIds[uuid] = true;
 
-  if (names.length === 0) return;
+    const editorTypeId = def.EditorTypeId || (def.CustomFieldType && def.CustomFieldType.EditorType) || 0;
+    const typeLabel = EDITOR_TYPE_LABELS[editorTypeId] || 'Type ' + editorTypeId;
 
-  // Find CUSTOM_FIELD_1/2/3 rows in Config
-  const configData = configSheet.getRange(1, 1, configSheet.getLastRow(), 1).getValues();
-  const customFieldRows = [];
-  for (let i = 0; i < configData.length; i++) {
-    const key = String(configData[i][0]).trim();
-    if (key === 'CUSTOM_FIELD_1' || key === 'CUSTOM_FIELD_2' || key === 'CUSTOM_FIELD_3') {
-      customFieldRows.push(i + 1); // 1-indexed
-    }
+    const key = name.trim().toLowerCase();
+    nameCounts[key] = (nameCounts[key] || 0) + 1;
+
+    rows.push([entity, name, uuid, typeLabel]);
   }
 
-  // Add dropdown validation to each custom field config cell
-  const rule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(names, true)
-    .setAllowInvalid(true) // Allow empty or manual entry
-    .setHelpText('Select a custom field from the list, or leave blank')
-    .build();
+  if (mappingCount > rows.length) {
+    logOperation('CustomFields', 'DEDUPED',
+      `${entity}: collapsed ${mappingCount} field/filter-set mappings into ${rows.length} distinct field(s)`);
+  }
 
-  for (const row of customFieldRows) {
-    configSheet.getRange(row, 2).setDataValidation(rule);
+  // Config stores a field NAME, so a name shared by two field types cannot be
+  // resolved unambiguously — surface it rather than silently picking one.
+  const ambiguous = Object.keys(nameCounts).filter(k => nameCounts[k] > 1).length;
+  if (ambiguous > 0) {
+    logOperation('CustomFields', 'WARNING',
+      `${entity}: ${ambiguous} field name(s) are used by more than one field type. Selecting one by name may resolve to either — check the CustomFieldTypeId column.`);
+  }
+
+  rows.sort((a, b) => a[1].localeCompare(b[1]));
+  return rows;
+}
+
+/**
+ * Remove any list validation from the Config custom field cells.
+ *
+ * These cells take a CustomFieldTypeId pasted from the CustomFields sheet, not a
+ * selection from a list. A dropdown was the wrong affordance for three reasons:
+ * field names are not unique within a district, Sheets caps list validation at
+ * 500 items and districts exceed that, and the id is what actually gets stored
+ * and used. Names are still accepted for backward compatibility — see
+ * looksLikeCustomFieldGuid_ in Config.gs — but the id is the documented input.
+ *
+ * Called on Refresh Custom Fields so sheets carrying a validation rule from an
+ * earlier version get it stripped rather than keeping a stale 3-item list.
+ */
+function clearCustomFieldValidations(ss) {
+  const configSheet = ss.getSheetByName('Config');
+  if (!configSheet) return;
+
+  const configData = configSheet.getRange(1, 1, configSheet.getLastRow(), 1).getValues();
+  let cleared = 0;
+  for (let i = 0; i < configData.length; i++) {
+    const key = String(configData[i][0]).trim();
+    if (/^CUSTOM_FIELD_[123]$/.test(key) || /^LOCATION_CUSTOM_FIELD_\d+$/.test(key)) {
+      const cell = configSheet.getRange(i + 1, 2);
+      cell.clearDataValidations();
+      cell.setNote('Paste a CustomFieldTypeId from the CustomFields sheet (column C). A field name also works, but ids are unambiguous.');
+      cleared++;
+    }
+  }
+  if (cleared > 0) {
+    logOperation('CustomFields', 'INFO', `Cleared list validation on ${cleared} custom field config cell(s)`);
   }
 }
 
@@ -1949,9 +2233,20 @@ function verifyConfiguration() {
       ];
       for (const cf of cfFields) {
         if (cf.name && cf.id === 'NOT_FOUND') {
-          warnings.push(`Custom Field ${cf.label} "${cf.name}" was not found in your district. Check spelling or use "List Available Custom Fields" to see valid names.`);
+          warnings.push(`Custom Field ${cf.label} "${cf.name}" was not found in your district. Check spelling or use "Refresh Custom Fields" to see valid names.`);
         } else if (cf.name && !cf.id) {
           warnings.push(`Custom Field ${cf.label} "${cf.name}" will be resolved on the next data load.`);
+        }
+      }
+
+      // Check location custom field configuration
+      for (let i = 0; i < LOCATION_CUSTOM_FIELD_COUNT; i++) {
+        const name = config.locationCustomFields[i];
+        const id = config.locationCustomFieldIds[i];
+        if (name && id === 'NOT_FOUND') {
+          warnings.push(`Location Custom Field ${i + 1} "${name}" was not found in your district. Note that Location fields are separate from Ticket fields — use "Refresh Custom Fields" and check the Entity column.`);
+        } else if (name && !id) {
+          warnings.push(`Location Custom Field ${i + 1} "${name}" will be resolved on the next data load.`);
         }
       }
 
@@ -1997,6 +2292,32 @@ function verifyConfiguration() {
         cfMessage += `\n  ${cf.label}: ${cf.name} (resolved)`;
       } else {
         cfMessage += `\n  ${cf.label}: ${cf.name} (pending resolution)`;
+      }
+    }
+
+    // Location custom fields summary — only listed when at least one is set, so
+    // districts not using them don't see five "(not configured)" lines.
+    const anyLocationFields = config.locationCustomFields.some(n => n);
+    if (anyLocationFields) {
+      cfMessage += '\n\nLocation Custom Fields (joined by ticket location):';
+      for (let i = 0; i < LOCATION_CUSTOM_FIELD_COUNT; i++) {
+        const name = config.locationCustomFields[i];
+        const id = config.locationCustomFieldIds[i];
+        if (!name) continue;
+        if (id === 'NOT_FOUND') {
+          cfMessage += `\n  ${i + 1}: ${name} (not found)`;
+        } else if (id) {
+          cfMessage += `\n  ${i + 1}: ${name} (resolved)`;
+        } else {
+          cfMessage += `\n  ${i + 1}: ${name} (pending resolution)`;
+        }
+      }
+      const cache = config.locationCfTypeCache;
+      if (isLocationCfTypeCacheFresh(config)) {
+        const ageDays = Math.floor((Date.now() - new Date(cache.cached).getTime()) / 86400000);
+        cfMessage += `\n  Editor type cache: valid (${ageDays}d old, refreshes after ${LOCATION_CF_TYPE_CACHE_DAYS}d)`;
+      } else {
+        cfMessage += `\n  Editor type cache: will refresh on next data load`;
       }
     }
 

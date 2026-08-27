@@ -80,7 +80,7 @@ Go to Extensions > Apps Script > Triggers (clock icon) and add these triggers:
 
 | Sheet | What It Shows |
 |-------|---------------|
-| `TicketData` | All ticket data with SLA metrics, device info, assigned technician, and custom fields (46 columns) — your raw data source |
+| `TicketData` | All ticket data with SLA metrics, device info, assigned technician, ticket custom fields, and location custom fields (52 columns) — your raw data source |
 | `Teams` | Team directory — add your Functional Area labels here |
 | `DailySnapshot` | Historical backlog counts for trend analysis |
 
@@ -173,12 +173,12 @@ For updates, use **Manage deployments → Edit → New version** to keep the sam
 - [**Implementation Guide**](GUIDE.md) — Detailed setup, formulas, and how everything works
 - [**CLAUDE.md**](CLAUDE.md) — Technical reference for developers
 
-### Looker Studio Dashboard Guides
+### Google Data Studio Dashboard Guides
 
-Step-by-step build guides for creating Looker Studio dashboards from your data:
+Step-by-step build guides for creating Google Data Studio dashboards from your data:
 
-- [**Superintendent Dashboard**](lookerStudioDashboardSamples/superintendent-dashboard.md) — Strategic overview for district leadership (single-page, 6 KPIs, trend charts)
-- [**IT Director Dashboard**](lookerStudioDashboardSamples/it-director-dashboard.md) — Operational dashboard for daily execution and team management
+- [**Superintendent Dashboard**](dataStudioDashboardSamples/superintendent-dashboard.md) — Strategic overview for district leadership (single-page, 6 KPIs, trend charts)
+- [**IT Director Dashboard**](dataStudioDashboardSamples/it-director-dashboard.md) — Operational dashboard for daily execution and team management
 
 ## License
 

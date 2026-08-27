@@ -53,7 +53,7 @@ flowchart LR
 This means:
 - Analytics update automatically when data refreshes
 - Users can inspect and modify formulas without touching code
-- BI tools (Power BI, Looker Studio) connect directly to the sheets
+- BI tools (Power BI, Google Data Studio) connect directly to the sheets
 - The script layer is purely responsible for data extraction
 
 > **Scope per Spreadsheet:** One logical data boundary per spreadsheet (e.g., one school year, one fiscal quarter, one department). This keeps data volumes manageable within Google Sheets limits and simplifies the loading/refresh logic.
@@ -104,7 +104,7 @@ Follow this build order to avoid the most common pitfalls. Each phase builds on 
 | 13 | Advanced trigger strategy | Multi-trigger schedule for data freshness. |
 | 14 | Historical data handling | Special logic for static/archived data periods. |
 | 15 | Trigger safety / destructive op guards | `requireNoTriggers()` pattern for dangerous operations. |
-| 16 | BI tool documentation | Dashboard templates for Looker Studio / Power BI. |
+| 16 | BI tool documentation | Dashboard templates for Google Data Studio / Power BI. |
 
 ---
 
@@ -1012,7 +1012,7 @@ Create step-by-step dashboard build guides with:
 
 ## Appendix A — Data Type Safety Reference
 
-For values that will be consumed by BI tools (Power BI, Looker Studio), use these safe representations:
+For values that will be consumed by BI tools (Power BI, Google Data Studio), use these safe representations:
 
 | Concept | Unsafe | Safe | Why |
 | ------- | ------ | ---- | --- |

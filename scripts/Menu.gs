@@ -8,7 +8,7 @@
  * - Configured via SCHOOL_YEAR and SCHOOL_YEAR_START in Config sheet
  *
  * Data Loading:
- * - Ticket Data includes consolidated SLA metrics, device/asset, assigned technician, and custom fields (46 columns)
+ * - Ticket Data includes consolidated SLA metrics, device/asset, assigned technician, ticket custom fields, and location custom fields (52 columns)
  * - SLA data is fetched per-batch during ticket loading
  *
  * Refresh Strategy:
