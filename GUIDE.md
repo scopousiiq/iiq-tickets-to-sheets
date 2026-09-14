@@ -73,7 +73,7 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
 | `THROTTLE_MS` | 1000 | Milliseconds between API calls (increase if rate limited) |
 | `STALE_DAYS` | 7 | Days without update before a ticket shows in StaleTickets |
 | `SLA_RISK_PERCENT` | 75 | % of SLA used before ticket shows in AtRiskResponse/AtRiskResolution |
-| `TICKET_BATCH_SIZE` | 2000 | Tickets per batch during bulk load |
+| `TICKET_BATCH_SIZE` | 1250 | Tickets per batch during bulk load. Do not raise above 1250 — the SLA endpoint returns HTTP 500 beyond ~1300 tickets per batch, which blanks the SLA columns. |
 
 **School Year Configuration (set during Setup):**
 
@@ -1287,7 +1287,7 @@ If you're getting rate limited by Incident IQ:
 1. **Increase the delay between API calls**: Set `THROTTLE_MS` to `2000` (2 seconds) or `3000` (3 seconds) in the Config sheet
 2. **Check your Logs sheet**: Look for "RATE_LIMITED" or "RETRY" entries to see how often it's happening
 3. **Be patient during initial load**: Large districts may take several hours to fully load — that's normal
-4. **Reduce batch size if needed**: Lower `TICKET_BATCH_SIZE` from 2000 to 1000 if problems persist
+4. **Reduce batch size if needed**: Lower `TICKET_BATCH_SIZE` from 1250 to 1000 if problems persist
 
 ---
 

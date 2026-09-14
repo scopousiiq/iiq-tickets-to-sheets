@@ -1,6 +1,6 @@
 {
-  "version": "1.8.2",
-  "released": "2026-08-27",
+  "version": "1.8.3",
+  "released": "2026-09-14",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "New Issue Type Volume sheet — your top 50 issue types with the category each belongs to, and a filter to narrow to one category at a time. Add it via iiQ Data > Add Analytics Sheet > Issue & Requester > Issue Type Volume. Dashboard charts are also more readable: cards now grow with the number of bars instead of being a fixed height, every category label is shown, and each bar carries its value. Charts that mixed a percentage with a ticket count now put them on separate axes so both are visible. Reload the dashboard to pick this up."
+  "message": "SLA columns now fill in during a bulk load. Requests for SLA data were failing whenever a batch was larger than about 1300 tickets, which left the SLA columns \u2014 and the SLACompliance, AtRiskResponse, and AtRiskResolution sheets \u2014 blank. New copies of the template load tickets 1250 at a time and stay under that limit. If your SLA columns are blank, copy the current template. Do not set TICKET_BATCH_SIZE in Config above 1250."
 }

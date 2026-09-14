@@ -409,7 +409,7 @@ function setupInstructionsSheet(ss) {
     ['Loading seems stuck'],
     ['  → Check Logs sheet for errors'],
     ['  → Run "Show Status" to see progress'],
-    ['  → Each batch processes ~2000 tickets, large districts take multiple runs'],
+    ['  → Each batch processes ~1250 tickets, large districts take multiple runs'],
     [''],
     ['Custom field columns are blank'],
     ['  → Run "Refresh Custom Fields", then confirm the value in Config matches a'],
@@ -598,7 +598,7 @@ function setupConfigSheet(ss, schoolYear) {
     ['# Performance Settings (Optional)', ''],                         // 13
     ['PAGE_SIZE', '100'],                                              // 14
     ['THROTTLE_MS', '1000'],                                           // 15
-    ['TICKET_BATCH_SIZE', '2000'],                                     // 16
+    ['TICKET_BATCH_SIZE', '1250'],                                     // 16
     ['STALE_DAYS', '7'],                                               // 17
     ['SLA_RISK_PERCENT', '75'],                                        // 18
     ['', ''],                                                          // 19

@@ -4,6 +4,20 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.8.3 — SLA batch size lowered to stay under the API's filter cap (2026-09-14)
+
+### Fixed
+- **`TICKET_BATCH_SIZE` now defaults to 1250 instead of 2000, so SLA columns populate during bulk load.** Each batch's ticket IDs are sent to `POST /tickets/slas` as one filter per ticket. That endpoint returns **HTTP 500** once a request carries more than roughly 1300 filters, so at the old 2000 default every SLA request in a bulk load failed. The failure was silent: `fetchSlaForTicketIds` catches the error, logs `SLA_ERROR`, and returns an empty map, so tickets still wrote to the sheet with every SLA column blank.
+  - Verified against a non-production demo site: 1250 filters returned complete data in ~7s, while 1300, 1500, and 2000 each returned HTTP 500 after ~22s.
+  - `SLACompliance`, `AtRiskResponse`, and `AtRiskResolution` all read from those columns, so they were empty too.
+
+### Upgrade Notes
+- **New copies of the template pick this up automatically.** The 1250 default is written into the Config sheet at setup.
+- **Existing spreadsheets keep whatever `TICKET_BATCH_SIZE` their Config sheet already holds** — the default only applies to a blank cell, and the value is locked once loading starts. Districts seeing blank SLA columns should move to the current template.
+- Do not raise `TICKET_BATCH_SIZE` above 1250. Values past ~1300 reintroduce the HTTP 500.
+
+---
+
 ## v1.8.2 — Issue Type Volume sheet + dashboard chart legibility (2026-08-27)
 
 ### Added

@@ -387,7 +387,7 @@ Optional:
 - `SCHOOL_YEAR_START`: First day of school year in MM-DD format (default "07-01" for July 1)
 - `PAGE_SIZE`: Records per API call (default 100)
 - `THROTTLE_MS`: Delay between requests (default 1000)
-- `TICKET_BATCH_SIZE`: Tickets per page for bulk load (default 2000)
+- `TICKET_BATCH_SIZE`: Tickets per page for bulk load (default 1250 — above ~1300, POST /tickets/slas returns HTTP 500)
 - `STALE_DAYS`: Days to look back for recently closed tickets (default 7)
 - `SLA_RISK_PERCENT`: Percentage threshold for SLA risk warnings (default 75)
 - `CUSTOM_FIELD_1`: Ticket custom field name for column AR (from iiQ ticket custom field definitions)
