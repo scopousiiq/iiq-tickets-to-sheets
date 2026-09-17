@@ -40,6 +40,25 @@ function deleteSheetIfExists(ss, sheetName) {
 }
 
 /**
+ * Build a formula fragment listing a text column's distinct values.
+ *
+ * UNIQUE() compares case-sensitively but COUNTIFS() does not. Grouping a sheet
+ * with UNIQUE() and then counting with COUNTIFS() therefore gives a district
+ * whose catalog holds both "Issue Not Listed" and "Issue not listed" two rows
+ * in which every aggregate is the combined total of both spellings. Grouping on
+ * the lowercased value and labelling each group with the first spelling seen
+ * keeps one row per real entity and matches how the counts behave.
+ *
+ * @param {string} listExpr - Expression yielding a single column of values.
+ * @return {string} Formula fragment usable anywhere UNIQUE(listExpr) was.
+ */
+function distinctIgnoringCase(listExpr) {
+  return 'LET(dn_raw, ' + listExpr + ', ' +
+         'dn_low, BYROW(dn_raw, LAMBDA(x, LOWER(x))), ' +
+         'BYROW(UNIQUE(dn_low), LAMBDA(k, XLOOKUP(k, dn_low, dn_raw))))';
+}
+
+/**
  * Calculate the default school year based on today's date (July-June)
  * @return {string} School year string (e.g., "2025-2026")
  */
@@ -1185,7 +1204,7 @@ function setupTeamWorkloadSheet(ss) {
   // Note: Uses column L (TeamName) consistently for matching
   const mainFormula =
     '=LET(' +
-    'teams, UNIQUE(FILTER(TicketData!L2:L, TicketData!L2:L<>"", TicketData!L2:L<>"TeamName")),' +
+    'teams, ' + distinctIgnoringCase('FILTER(TicketData!L2:L, TicketData!L2:L<>"", TicketData!L2:L<>"TeamName")') + ',' +
     'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
     'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
     'col_a, teams,' +
@@ -1259,7 +1278,7 @@ function setupLocationBreakdownSheet(ss) {
   // Note: Uses column N (LocationName) consistently for matching
   const mainFormula =
     '=LET(' +
-    'locs, UNIQUE(FILTER(TicketData!N2:N, TicketData!N2:N<>"", TicketData!N2:N<>"LocationName")),' +
+    'locs, ' + distinctIgnoringCase('FILTER(TicketData!N2:N, TicketData!N2:N<>"", TicketData!N2:N<>"LocationName")') + ',' +
     'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
     'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
     'col_a, locs,' +
@@ -1330,7 +1349,7 @@ function setupFunctionalAreaSummarySheet(ss) {
   // Aggregates from TeamWorkload sheet
   const mainFormula =
     '=LET(' +
-    'fas, UNIQUE(FILTER(TeamWorkload!B2:B, TeamWorkload!B2:B<>"", TeamWorkload!A2:A<>"")),' +
+    'fas, ' + distinctIgnoringCase('FILTER(TeamWorkload!B2:B, TeamWorkload!B2:B<>"", TeamWorkload!A2:A<>"")') + ',' +
     'col_a, fas,' +
     'col_b, BYROW(fas, LAMBDA(f, COUNTIF(TeamWorkload!B:B, f))),' +
     'col_c, BYROW(fas, LAMBDA(f, SUMIF(TeamWorkload!B:B, f, TeamWorkload!C:C))),' +

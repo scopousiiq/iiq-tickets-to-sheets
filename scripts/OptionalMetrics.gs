@@ -481,7 +481,7 @@ function setupIssueCategoryVolumeSheet(ss) {
   // Main formula - aggregates by IssueCategoryName (column Y), with dynamic sorting
   const mainFormula =
     '=LET(' +
-    'cats, UNIQUE(FILTER(TicketData!Y2:Y, TicketData!Y2:Y<>"", TicketData!Y2:Y<>"IssueCategoryName")),' +
+    'cats, ' + distinctIgnoringCase('FILTER(TicketData!Y2:Y, TicketData!Y2:Y<>"", TicketData!Y2:Y<>"IssueCategoryName")') + ',' +
     'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
     'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
     'col_a, cats,' +
@@ -581,8 +581,8 @@ function setupIssueTypeVolumeSheet(ss) {
     'catFilter, $K$2,' +
     'useAll, OR(catFilter="", catFilter="All"),' +
     'types, IF(useAll,' +
-    '  UNIQUE(FILTER(TicketData!AA2:AA, TicketData!AA2:AA<>"", TicketData!AA2:AA<>"IssueTypeName")),' +
-    '  UNIQUE(FILTER(TicketData!AA2:AA, TicketData!AA2:AA<>"", TicketData!AA2:AA<>"IssueTypeName", TicketData!Y2:Y=catFilter))),' +
+    '  ' + distinctIgnoringCase('FILTER(TicketData!AA2:AA, TicketData!AA2:AA<>"", TicketData!AA2:AA<>"IssueTypeName")') + ',' +
+    '  ' + distinctIgnoringCase('FILTER(TicketData!AA2:AA, TicketData!AA2:AA<>"", TicketData!AA2:AA<>"IssueTypeName", TicketData!Y2:Y=catFilter)') + '),' +
     'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
     'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
     'col_a, types,' +
@@ -631,7 +631,7 @@ function setupIssueTypeVolumeSheet(ss) {
   // requireValueInRange rather than requireValueInList: list validation caps at
   // 500 items and category catalogs can exceed that in large districts.
   sheet.getRange('M1').setValue('CategorySource');
-  sheet.getRange('M2').setValue('={"All"; SORT(UNIQUE(FILTER(TicketData!Y2:Y, TicketData!Y2:Y<>"")))}');
+  sheet.getRange('M2').setValue('={"All"; SORT(' + distinctIgnoringCase('FILTER(TicketData!Y2:Y, TicketData!Y2:Y<>"")') + ')}');
   sheet.hideColumns(13);
   const catRule = SpreadsheetApp.newDataValidation()
     .requireValueInRange(sheet.getRange('M2:M2000'), true)
@@ -693,7 +693,7 @@ function setupPriorityAnalysisSheet(ss) {
   // Main formula - aggregates by Priority (column S)
   const mainFormula =
     '=LET(' +
-    'pris, UNIQUE(FILTER(TicketData!S2:S, TicketData!S2:S<>"", TicketData!S2:S<>"Priority")),' +
+    'pris, ' + distinctIgnoringCase('FILTER(TicketData!S2:S, TicketData!S2:S<>"", TicketData!S2:S<>"Priority")') + ',' +
     'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
     'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
     'col_a, pris,' +
@@ -905,7 +905,7 @@ function setupTechnicianPerformanceSheet(ss) {
   //   >0 to skip tickets with no SLA clock.
   const mainFormula =
     '=LET(' +
-    'techs, UNIQUE(FILTER(TicketData!AO2:AO, TicketData!AO2:AO<>"", TicketData!AO2:AO<>"AssignedToUserName")),' +
+    'techs, ' + distinctIgnoringCase('FILTER(TicketData!AO2:AO, TicketData!AO2:AO<>"", TicketData!AO2:AO<>"AssignedToUserName")') + ',' +
     'winStart, IF($P$2="", DATE(1900,1,1), $P$2),' +
     'winEnd, IF($Q$2="", TODAY(), $Q$2),' +
     'winEndExcl, winEnd+1,' +
@@ -1148,15 +1148,15 @@ function setupLocationTypeComparisonSheet(ss) {
   // Main formula - aggregates by LocationType (column O)
   const mainFormula =
     '=LET(' +
-    'types, UNIQUE(FILTER(TicketData!O2:O, TicketData!O2:O<>"", TicketData!O2:O<>"LocationType")),' +
+    'types, ' + distinctIgnoringCase('FILTER(TicketData!O2:O, TicketData!O2:O<>"", TicketData!O2:O<>"LocationType")') + ',' +
     'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
     'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
     'col_a, types,' +
-    'col_b, BYROW(types, LAMBDA(t, COUNTA(UNIQUE(FILTER(TicketData!N:N, TicketData!O:O=t))))),' +
+    'col_b, BYROW(types, LAMBDA(t, COUNTA(' + distinctIgnoringCase('FILTER(TicketData!N:N, TicketData!O:O=t)') + '))),' +
     'col_c, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open"))),' +
     'col_d, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
     'col_e, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
-    'col_f, BYROW(types, LAMBDA(t, LET(locs, COUNTA(UNIQUE(FILTER(TicketData!N:N, TicketData!O:O=t))), open, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open"), IF(locs>0, open/locs, 0)))),' +
+    'col_f, BYROW(types, LAMBDA(t, LET(locs, COUNTA(' + distinctIgnoringCase('FILTER(TicketData!N:N, TicketData!O:O=t)') + '), open, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open"), IF(locs>0, open/locs, 0)))),' +
     'col_g, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open", TicketData!R:R, ">=30"))),' +
     'col_h, BYROW(types, LAMBDA(t, LET(open, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open"), aged, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open", TicketData!R:R, ">=30"), IF(open>0, aged/open, 0)))),' +
     'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h),' +
@@ -1307,12 +1307,12 @@ function setupFrequentRequestersSheet(ss) {
   // Main formula - top 50 requesters by RequesterName (column AC), with dynamic sorting
   const mainFormula =
     '=LET(' +
-    'reqs, UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AC2:AC<>"RequesterName")),' +
+    'reqs, ' + distinctIgnoringCase('FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AC2:AC<>"RequesterName")') + ',' +
     'col_a, reqs,' +
     'col_b, BYROW(reqs, LAMBDA(r, COUNTIF(TicketData!AC:AC, r))),' +
     'col_c, BYROW(reqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Open"))),' +
     'col_d, BYROW(reqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!I:I, "Closed"))),' +
-    'col_e, BYROW(reqs, LAMBDA(r, IFERROR(INDEX(SORT(UNIQUE(FILTER(TicketData!Y:Y, TicketData!AC:AC=r, TicketData!Y:Y<>"")), 1, FALSE), 1), ""))),' +
+    'col_e, BYROW(reqs, LAMBDA(r, IFERROR(INDEX(SORT(' + distinctIgnoringCase('FILTER(TicketData!Y:Y, TicketData!AC:AC=r, TicketData!Y:Y<>"")') + ', 1, FALSE), 1), ""))),' +
     'col_f, BYROW(reqs, LAMBDA(r, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AC:AC, r, TicketData!I:I, "Closed"), "N/A"))),' +
     'sorted, SORT(HSTACK(col_a, col_b, col_c, col_d, col_e, col_f), $H$2, $I$2),' +
     'IFERROR(ARRAY_CONSTRAIN(sorted, 50, 6), sorted))';
@@ -2188,8 +2188,8 @@ function setupDevicesByRoleSheet(ss) {
     '=LET(' +
     'selectedRole, $K$2,' +
     'models, IF(selectedRole="All",' +
-    '  UNIQUE(FILTER(TicketData!AL2:AL, TicketData!AL2:AL<>"")),' +
-    '  UNIQUE(FILTER(TicketData!AL2:AL, TicketData!AL2:AL<>"", TicketData!AU2:AU=selectedRole))),' +
+    '  ' + distinctIgnoringCase('FILTER(TicketData!AL2:AL, TicketData!AL2:AL<>"")') + ',' +
+    '  ' + distinctIgnoringCase('FILTER(TicketData!AL2:AL, TicketData!AL2:AL<>"", TicketData!AU2:AU=selectedRole)') + '),' +
     'col_a, models,' +
     'col_b, BYROW(models, LAMBDA(m, IFERROR(INDEX(TicketData!AQ:AQ, MATCH(m, TicketData!AL:AL, 0)), ""))),' +
     'col_c, BYROW(models, LAMBDA(m, IF(selectedRole="All",' +
@@ -2287,7 +2287,7 @@ function setupDeviceReliabilitySheet(ss) {
   // Main formula - aggregates by ModelName (column AL)
   const mainFormula =
     '=LET(' +
-    'models, UNIQUE(FILTER(TicketData!AL2:AL, TicketData!AL2:AL<>"", TicketData!AL2:AL<>"ModelName")),' +
+    'models, ' + distinctIgnoringCase('FILTER(TicketData!AL2:AL, TicketData!AL2:AL<>"", TicketData!AL2:AL<>"ModelName")') + ',' +
     'col_a, models,' +
     'col_b, BYROW(models, LAMBDA(m, COUNTIF(TicketData!AL:AL, m))),' +
     'col_c, BYROW(models, LAMBDA(m, COUNTIFS(TicketData!AL:AL, m, TicketData!I:I, "Open"))),' +
@@ -2355,12 +2355,12 @@ function setupDeviceReliabilitySheet(ss) {
     '  {"Select a model from K2"},' +
     '  LET(' +
     '    totalForModel, COUNTIF(TicketData!AL:AL, selectedModel),' +
-    '    categories, UNIQUE(FILTER(TicketData!Y:Y, TicketData!AL:AL=selectedModel, TicketData!Y:Y<>"")),' +
+    '    categories, ' + distinctIgnoringCase('FILTER(TicketData!Y:Y, TicketData!AL:AL=selectedModel, TicketData!Y:Y<>"")') + ',' +
     '    counts, BYROW(categories, LAMBDA(c, COUNTIFS(TicketData!AL:AL, selectedModel, TicketData!Y:Y, c))),' +
     '    pcts, MAP(counts, LAMBDA(c, IFERROR(c/totalForModel, 0))),' +
     '    topTypes, BYROW(categories, LAMBDA(c, TEXTJOIN(", ", TRUE, ' +
     '      LET(' +
-    '        types, UNIQUE(FILTER(TicketData!AA:AA, TicketData!AL:AL=selectedModel, TicketData!Y:Y=c, TicketData!AA:AA<>"")),' +
+    '        types, ' + distinctIgnoringCase('FILTER(TicketData!AA:AA, TicketData!AL:AL=selectedModel, TicketData!Y:Y=c, TicketData!AA:AA<>"")') + ',' +
     '        typeCounts, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!AL:AL, selectedModel, TicketData!Y:Y, c, TicketData!AA:AA, t))),' +
     '        sorted, SORT(HSTACK(types, typeCounts), 2, FALSE),' +
     '        topN, IF(ROWS(sorted)>3, CHOOSEROWS(sorted, 1, 2, 3), sorted),' +
@@ -2375,7 +2375,7 @@ function setupDeviceReliabilitySheet(ss) {
   sheet.getRange('P1').setValue('ModelDropdownSource');
   const modelDropdownFormula =
     '=LET(' +
-    'models, UNIQUE(FILTER(TicketData!AL2:AL, TicketData!AL2:AL<>"", TicketData!AL2:AL<>"ModelName")),' +
+    'models, ' + distinctIgnoringCase('FILTER(TicketData!AL2:AL, TicketData!AL2:AL<>"", TicketData!AL2:AL<>"ModelName")') + ',' +
     'counts, BYROW(models, LAMBDA(m, COUNTIF(TicketData!AL:AL, m))),' +
     'SORT(models, counts, FALSE))';
   sheet.getRange('P2').setValue(modelDropdownFormula);
@@ -2527,7 +2527,7 @@ function setupBacklogAgingByTeamSheet(ss) {
   // Single LET formula: entities as rows, age buckets as columns
   const mainFormula =
     '=LET(' +
-    'teams, UNIQUE(FILTER(TicketData!L2:L, TicketData!L2:L<>"", TicketData!L2:L<>"TeamName")),' +
+    'teams, ' + distinctIgnoringCase('FILTER(TicketData!L2:L, TicketData!L2:L<>"", TicketData!L2:L<>"TeamName")') + ',' +
     'col_a, teams,' +
     'col_b, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "Open", TicketData!R:R, ">=0", TicketData!R:R, "<=7"))),' +
     'col_c, BYROW(teams, LAMBDA(t, COUNTIFS(TicketData!L:L, t, TicketData!I:I, "Open", TicketData!R:R, ">=8", TicketData!R:R, "<=14"))),' +
@@ -2581,7 +2581,7 @@ function setupBacklogAgingByLocationTypeSheet(ss) {
 
   const mainFormula =
     '=LET(' +
-    'types, UNIQUE(FILTER(TicketData!O2:O, TicketData!O2:O<>"", TicketData!O2:O<>"LocationType")),' +
+    'types, ' + distinctIgnoringCase('FILTER(TicketData!O2:O, TicketData!O2:O<>"", TicketData!O2:O<>"LocationType")') + ',' +
     'col_a, types,' +
     'col_b, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open", TicketData!R:R, ">=0", TicketData!R:R, "<=7"))),' +
     'col_c, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!O:O, t, TicketData!I:I, "Open", TicketData!R:R, ">=8", TicketData!R:R, "<=14"))),' +
@@ -2634,7 +2634,7 @@ function setupBacklogAgingByPrioritySheet(ss) {
 
   const mainFormula =
     '=LET(' +
-    'pris, UNIQUE(FILTER(TicketData!S2:S, TicketData!S2:S<>"", TicketData!S2:S<>"Priority")),' +
+    'pris, ' + distinctIgnoringCase('FILTER(TicketData!S2:S, TicketData!S2:S<>"", TicketData!S2:S<>"Priority")') + ',' +
     'col_a, pris,' +
     'col_b, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Open", TicketData!R:R, ">=0", TicketData!R:R, "<=7"))),' +
     'col_c, BYROW(pris, LAMBDA(p, COUNTIFS(TicketData!S:S, p, TicketData!I:I, "Open", TicketData!R:R, ">=8", TicketData!R:R, "<=14"))),' +
@@ -3048,7 +3048,7 @@ function setupFrequentFlyersSheet(ss) {
 
   // Location filter dropdown — populated dynamically from TicketData (hidden column Q)
   sheet.getRange('Q1').setValue('LocationSource');
-  sheet.getRange('Q2').setValue('={"All"; SORT(UNIQUE(FILTER(TicketData!N2:N, TicketData!N2:N<>"")))}');
+  sheet.getRange('Q2').setValue('={"All"; SORT(' + distinctIgnoringCase('FILTER(TicketData!N2:N, TicketData!N2:N<>"")') + ')}');
   sheet.hideColumns(17); // Hide column Q
   const locationRule = SpreadsheetApp.newDataValidation()
     .requireValueInRange(sheet.getRange('Q2:Q2000'), true)
@@ -3078,13 +3078,13 @@ function setupFrequentFlyersSheet(ss) {
     // Build requester pool using exact FILTER logic (4-branch: applyRole × applyLocation)
     'allReqs, IF(applyRole,' +
     '  IF(applyLocation,' +
-    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", IF(selectedRole="Exclude Agent", TicketData!AU2:AU<>"Agent", TicketData!AU2:AU=selectedRole), TicketData!N2:N=selectedLocation)),' +
+    '    ' + distinctIgnoringCase('FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", IF(selectedRole="Exclude Agent", TicketData!AU2:AU<>"Agent", TicketData!AU2:AU=selectedRole), TicketData!N2:N=selectedLocation)') + ',' +
     '    IF(selectedRole="Exclude Agent",' +
-    '      UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU<>"Agent")),' +
-    '      UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU=selectedRole)))),' +
+    '      ' + distinctIgnoringCase('FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU<>"Agent")') + ',' +
+    '      ' + distinctIgnoringCase('FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU=selectedRole)') + ')),' +
     '  IF(applyLocation,' +
-    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!N2:N=selectedLocation)),' +
-    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"")))),' +
+    '    ' + distinctIgnoringCase('FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!N2:N=selectedLocation)') + ',' +
+    '    ' + distinctIgnoringCase('FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"")') + ')),' +
     // Role/location criteria always present in COUNTIFS via criterion strings (2-branch: date only)
     'counts, IF(hasDateFilter,' +
     '  BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo, TicketData!AU:AU, roleCriterion, TicketData!N:N, locationCriterion))),' +
@@ -3161,13 +3161,13 @@ function setupFrequentFlyersSheet(ss) {
     'applyLocation, selectedLocation<>"All",' +
     'allReqs, IF(applyRole,' +
     '  IF(applyLocation,' +
-    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", IF(selectedRole="Exclude Agent", TicketData!AU2:AU<>"Agent", TicketData!AU2:AU=selectedRole), TicketData!N2:N=selectedLocation)),' +
+    '    ' + distinctIgnoringCase('FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", IF(selectedRole="Exclude Agent", TicketData!AU2:AU<>"Agent", TicketData!AU2:AU=selectedRole), TicketData!N2:N=selectedLocation)') + ',' +
     '    IF(selectedRole="Exclude Agent",' +
-    '      UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU<>"Agent")),' +
-    '      UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU=selectedRole)))),' +
+    '      ' + distinctIgnoringCase('FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU<>"Agent")') + ',' +
+    '      ' + distinctIgnoringCase('FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!AU2:AU=selectedRole)') + ')),' +
     '  IF(applyLocation,' +
-    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!N2:N=selectedLocation)),' +
-    '    UNIQUE(FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"")))),' +
+    '    ' + distinctIgnoringCase('FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"", TicketData!N2:N=selectedLocation)') + ',' +
+    '    ' + distinctIgnoringCase('FILTER(TicketData!AC2:AC, TicketData!AC2:AC<>"")') + ')),' +
     'counts, IF(hasDateFilter,' +
     '  BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!E:E, ">="&dateFrom, TicketData!E:E, "<="&dateTo, TicketData!AU:AU, roleCriterion, TicketData!N:N, locationCriterion))),' +
     '  BYROW(allReqs, LAMBDA(r, COUNTIFS(TicketData!AC:AC, r, TicketData!AU:AU, roleCriterion, TicketData!N:N, locationCriterion)))),' +

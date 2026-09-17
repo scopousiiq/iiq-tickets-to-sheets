@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.8.4 — Analytics sheets no longer split a category across two rows (2026-09-17)
+
+### Fixed
+- **Name-keyed analytics sheets showed duplicate rows carrying identical numbers.** `UNIQUE` compares text case-sensitively but `COUNTIFS` does not. Every rollup grouped with `UNIQUE` and aggregated with `COUNTIFS` therefore gave a district holding two capitalizations of the same catalog entry — `Issue Not Listed` and `Issue not listed` — two rows in which *every* figure was the combined total of both spellings, inflating the column total by a full copy of that group.
+  - Reported on `IssueCategoryVolume`, but the same defect was latent in **20 formulas across 15 sheets**: `IssueCategoryVolume`, `IssueTypeVolume`, `TeamWorkload`, `LocationBreakdown`, `FunctionalAreaSummary`, `PriorityAnalysis`, `TechnicianPerformance`, `LocationTypeComparison`, `FrequentRequesters`, `FrequentFlyers`, `DevicesByRole`, `DeviceReliability`, and the three `BacklogAgingBy*` sheets.
+  - Grouping now runs through a new `distinctIgnoringCase()` helper, which groups on the lowercased value and labels each group with the first spelling encountered — matching how the counts already behaved. Dropdown sources were fixed too; previously a dropdown offered both spellings and either one filtered to the merged total.
+  - Device models were affected as often as issue categories (`MacBook Air` / `Macbook Air`, `iMac` / `Imac`), since neither catalog forces consistent capitalization.
+  - Verified against synthetic data: all 20 rewritten formulas produce output identical to the originals wherever no spelling collision exists, and collapse to one correct row where one does.
+
+### Upgrade Notes
+- **Formula-only change — no API calls and no reload.** Re-create the affected analytics sheets from **iiQ Data > Add Analytics Sheet** to pick up the corrected formulas, or copy the current template.
+- Row counts on these sheets will drop where duplicates were present. The remaining row carries the total that was previously printed twice; it was never a per-row undercount.
+
+---
+
 ## v1.8.3 — SLA batch size lowered to stay under the API's filter cap (2026-09-14)
 
 ### Fixed

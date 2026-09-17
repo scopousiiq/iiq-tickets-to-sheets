@@ -1,6 +1,6 @@
 {
-  "version": "1.8.3",
-  "released": "2026-09-14",
+  "version": "1.8.4",
+  "released": "2026-09-17",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "SLA columns now fill in during a bulk load. Requests for SLA data were failing whenever a batch was larger than about 1300 tickets, which left the SLA columns \u2014 and the SLACompliance, AtRiskResponse, and AtRiskResolution sheets \u2014 blank. New copies of the template load tickets 1250 at a time and stay under that limit. If your SLA columns are blank, copy the current template. Do not set TICKET_BATCH_SIZE in Config above 1250."
+  "message": "Analytics sheets that group by name no longer show a category twice. Where a district's catalog held two capitalizations of the same entry (for example \"Issue Not Listed\" and \"Issue not listed\"), the sheet printed two rows whose every number was the combined total of both, inflating the column total. This affected issue categories, issue types, device models, teams, locations, priorities and technicians. Re-create the affected analytics sheets, or copy the current template, to pick up the fix."
 }
