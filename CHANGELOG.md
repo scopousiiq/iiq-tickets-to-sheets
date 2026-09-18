@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.8.5 — SLA lookups are chunked, fixing blank SLA columns for good (2026-09-18)
+
+### Fixed
+- **SLA data is now fetched in chunks of 500 tickets, independent of `TICKET_BATCH_SIZE`.** `fetchSlaForTicketIds` sent every ticket in a bulk-load batch to `POST /tickets/slas` as one request, one filter per ticket. That endpoint fails with HTTP 500 once a single request runs past roughly 20 seconds — and **how many filters that takes depends on how fast the district's data is**, so no batch size was safe everywhere. Lowering the batch to 1250 in v1.8.3 fixed it on a fast site and not on a slower one, where 1250 filters still 500'd while 1133 took 18.8s to squeak through. Chunking at 500 keeps every SLA call a few seconds long regardless of district size.
+- **A failed SLA request no longer discards the SLA data that did come back.** The old single `try`/`catch` returned an empty map for the whole batch, so one failure blanked every SLA column for those tickets. Each chunk is now caught on its own; the tickets in the surviving chunks keep their SLA values, and the Logs sheet records which chunks failed and how many.
+
+### Changed
+- `TICKET_BATCH_SIZE` is once again purely a pagination setting. It no longer bounds the SLA request, and the warnings added in v1.8.3 about keeping it at or below 1250 no longer apply.
+
+### Upgrade Notes
+- New copies of the template pick this up automatically.
+- Existing spreadsheets need the updated script. The Config sheet needs no change — `TICKET_BATCH_SIZE` at any value is now safe for SLA data.
+
+---
+
 ## v1.8.4 — Analytics sheets no longer split a category across two rows (2026-09-17)
 
 ### Fixed

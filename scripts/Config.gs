@@ -19,7 +19,7 @@
  */
 
 /** Current script version — update when releasing new versions */
-const SCRIPT_VERSION = '1.8.4';
+const SCRIPT_VERSION = '1.8.5';
 
 /**
  * How many Location custom field slots the sheet exposes.
@@ -174,8 +174,6 @@ function getConfig() {
     throttleMs: getIntValue(rawConfig['THROTTLE_MS'], 1000),
     staleDays: getIntValue(rawConfig['STALE_DAYS'], 7),
     slaRiskPercent: getIntValue(rawConfig['SLA_RISK_PERCENT'], 75),
-    // Caps the per-batch filter count sent to POST /tickets/slas, which returns
-    // HTTP 500 above ~1300 filters. Raising this past 1250 breaks SLA columns.
     ticketBatchSize: getIntValue(rawConfig['TICKET_BATCH_SIZE'], 1250),
     // School year configuration
     schoolYear: schoolYear,

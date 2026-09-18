@@ -73,7 +73,7 @@ Additional analytics sheets can be added via **iiQ Data > Add Analytics Sheet**.
 | `THROTTLE_MS` | 1000 | Milliseconds between API calls (increase if rate limited) |
 | `STALE_DAYS` | 7 | Days without update before a ticket shows in StaleTickets |
 | `SLA_RISK_PERCENT` | 75 | % of SLA used before ticket shows in AtRiskResponse/AtRiskResolution |
-| `TICKET_BATCH_SIZE` | 1250 | Tickets per batch during bulk load. Do not raise above 1250 — the SLA endpoint returns HTTP 500 beyond ~1300 tickets per batch, which blanks the SLA columns. |
+| `TICKET_BATCH_SIZE` | 1250 | Tickets per batch during bulk load |
 
 **School Year Configuration (set during Setup):**
 

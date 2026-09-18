@@ -1,6 +1,6 @@
 {
-  "version": "1.8.4",
-  "released": "2026-09-17",
+  "version": "1.8.5",
+  "released": "2026-09-18",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "Analytics sheets that group by name no longer show a category twice. Where a district's catalog held two capitalizations of the same entry (for example \"Issue Not Listed\" and \"Issue not listed\"), the sheet printed two rows whose every number was the combined total of both, inflating the column total. This affected issue categories, issue types, device models, teams, locations, priorities and technicians. Re-create the affected analytics sheets, or copy the current template, to pick up the fix."
+  "message": "SLA columns now fill in reliably on districts of any size. SLA data is fetched in smaller chunks, so the requests no longer time out and return an error the way they did on larger or slower districts \u2014 and if one chunk does fail, the rest of the SLA data still loads instead of the whole batch coming back blank. TICKET_BATCH_SIZE in Config is now just a pagination setting and is safe at any value."
 }

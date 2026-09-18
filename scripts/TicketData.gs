@@ -1216,8 +1216,20 @@ function extractTicketRow(ticket, now, year, slaMap, customFieldIds, customField
 }
 
 /**
+ * Maximum ticket filters sent to POST /tickets/slas in a single request.
+ *
+ * The endpoint takes one filter per ticket and returns HTTP 500 once a request
+ * runs past roughly 20 seconds. How many filters that takes varies by tenant:
+ * 1250 filters come back in ~7s against a small site but 500 against a slower
+ * one, where even 1133 filters needed 18.8s. This is deliberately independent
+ * of TICKET_BATCH_SIZE — sizing the SLA call off the pagination batch is what
+ * made SLA columns blank whenever a district's data was slow enough.
+ */
+const SLA_CHUNK_SIZE = 500;
+
+/**
  * Fetch SLA data for a batch of ticket IDs
- * Makes a single API call with all ticket IDs
+ * Splits the IDs into SLA_CHUNK_SIZE requests and merges the results
  *
  * @param {Array} ticketIds - Array of TicketId values
  * @returns {Map} - Map of TicketId -> SLA metrics object
@@ -1229,76 +1241,95 @@ function fetchSlaForTicketIds(ticketIds) {
     return slaMap;
   }
 
-  // Build endpoint - fetch all tickets in one call
-  const endpoint = `/v1.0/tickets/slas?$p=0&$s=${ticketIds.length}`;
+  let failedChunks = 0;
+  let totalChunks = 0;
 
-  // Build filter with TicketIds - each ticket ID is a separate filter entry
-  // Multiple filters with same Facet act as OR condition
-  const payload = {
-    Filters: ticketIds.map(id => ({
-      Facet: 'Ticket',
-      Id: id
-    }))
-  };
+  for (let offset = 0; offset < ticketIds.length; offset += SLA_CHUNK_SIZE) {
+    const chunk = ticketIds.slice(offset, offset + SLA_CHUNK_SIZE);
+    totalChunks++;
 
-  try {
-    const response = makeApiRequest(endpoint, 'POST', payload);
+    // Each ticket ID is a separate filter entry; multiple filters with the
+    // same Facet act as an OR condition
+    const endpoint = `/v1.0/tickets/slas?$p=0&$s=${chunk.length}`;
+    const payload = {
+      Filters: chunk.map(id => ({
+        Facet: 'Ticket',
+        Id: id
+      }))
+    };
 
-    if (!response || !response.Items) {
-      return slaMap;
-    }
-
-    // Process each SLA item
-    for (const item of response.Items) {
-      const ticketId = item.TicketId;
-      if (!ticketId) continue;
-
-      // Skip tickets with no SLA assigned
-      if (!item.Sla || !item.SlaTimes || item.SlaTimes.length === 0) {
-        continue;
+    try {
+      const response = makeApiRequest(endpoint, 'POST', payload);
+      if (response && response.Items) {
+        collectSlaItems_(response.Items, slaMap);
       }
-
-      const sla = item.Sla || {};
-      const slaTimes = item.SlaTimes || [];
-      const metrics = sla.Metrics || [];
-
-      // Find response metric and resolution metric by Name field
-      const responseMetric = metrics.find(m => m.Name === 'Response Time') || {};
-      const resolutionMetric = metrics.find(m => m.Name === 'Resolution Time') || {};
-
-      // Find actual times from SlaTimes by Name field
-      const responseTime = slaTimes.find(t => t.Name === 'Response Time') || {};
-      const resolutionTime = slaTimes.find(t => t.Name === 'Resolution Time') || {};
-
-      const responseThreshold = responseMetric.ValueInMinutes || null;
-      const responseActual = responseTime.LogMinutes || null;
-      const resolutionThreshold = resolutionMetric.ValueInMinutes || null;
-      const resolutionActual = resolutionTime.LogMinutes || null;
-
-      // Calculate breach status
-      const responseBreach = (responseActual !== null && responseThreshold !== null && responseActual > responseThreshold);
-      const resolutionBreach = (resolutionActual !== null && resolutionThreshold !== null && resolutionActual > resolutionThreshold);
-
-      // Check if SLA is still running
-      const isRunning = slaTimes.some(t => t.IsRunning === true);
-
-      slaMap.set(ticketId, {
-        slaName: sla.SlaName || sla.Name || '',
-        responseThreshold: responseThreshold,
-        responseActual: responseActual,
-        responseBreach: responseBreach,
-        resolutionThreshold: resolutionThreshold,
-        resolutionActual: resolutionActual,
-        resolutionBreach: resolutionBreach,
-        isRunning: isRunning
-      });
+    } catch (error) {
+      // A failed chunk must not discard the SLA data the other chunks returned
+      failedChunks++;
+      logOperation('Ticket Data', 'SLA_ERROR',
+        `SLA chunk ${totalChunks} (${chunk.length} tickets) failed: ${error.message}`);
     }
-  } catch (error) {
-    logOperation('Ticket Data', 'SLA_ERROR', `Failed to fetch SLA data: ${error.message}`);
-    // Return empty map - tickets will still be written without SLA data
+  }
+
+  if (failedChunks > 0) {
+    logOperation('Ticket Data', 'SLA_ERROR',
+      `${failedChunks} of ${totalChunks} SLA chunks failed; those tickets have blank SLA columns`);
   }
 
   return slaMap;
+}
+
+/**
+ * Parse SLA response items into the shared ticket -> metrics map
+ *
+ * @param {Array} items - Items array from a /tickets/slas response
+ * @param {Map} slaMap - Map to populate, keyed by TicketId
+ */
+function collectSlaItems_(items, slaMap) {
+  for (const item of items) {
+    const ticketId = item.TicketId;
+    if (!ticketId) continue;
+
+    // Skip tickets with no SLA assigned
+    if (!item.Sla || !item.SlaTimes || item.SlaTimes.length === 0) {
+      continue;
+    }
+
+    const sla = item.Sla || {};
+    const slaTimes = item.SlaTimes || [];
+    const metrics = sla.Metrics || [];
+
+    // Find response metric and resolution metric by Name field
+    const responseMetric = metrics.find(m => m.Name === 'Response Time') || {};
+    const resolutionMetric = metrics.find(m => m.Name === 'Resolution Time') || {};
+
+    // Find actual times from SlaTimes by Name field
+    const responseTime = slaTimes.find(t => t.Name === 'Response Time') || {};
+    const resolutionTime = slaTimes.find(t => t.Name === 'Resolution Time') || {};
+
+    const responseThreshold = responseMetric.ValueInMinutes || null;
+    const responseActual = responseTime.LogMinutes || null;
+    const resolutionThreshold = resolutionMetric.ValueInMinutes || null;
+    const resolutionActual = resolutionTime.LogMinutes || null;
+
+    // Calculate breach status
+    const responseBreach = (responseActual !== null && responseThreshold !== null && responseActual > responseThreshold);
+    const resolutionBreach = (resolutionActual !== null && resolutionThreshold !== null && resolutionActual > resolutionThreshold);
+
+    // Check if SLA is still running
+    const isRunning = slaTimes.some(t => t.IsRunning === true);
+
+    slaMap.set(ticketId, {
+      slaName: sla.SlaName || sla.Name || '',
+      responseThreshold: responseThreshold,
+      responseActual: responseActual,
+      responseBreach: responseBreach,
+      resolutionThreshold: resolutionThreshold,
+      resolutionActual: resolutionActual,
+      resolutionBreach: resolutionBreach,
+      isRunning: isRunning
+    });
+  }
 }
 
 /**
