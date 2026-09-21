@@ -227,8 +227,8 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 ### Issue & Requester
 | Sheet | Question Answered | Key Metrics |
 |-------|-------------------|-------------|
-| IssueCategoryVolume | "What types of problems are we handling?" | Open/Closed by category, breach rate per category |
-| IssueTypeVolume | "Which specific issues are driving volume?" | Top 50 issue types with parent category, filterable by category |
+| IssueCategoryVolume | "What types of problems are we handling?" | Total volume and share by category, plus open, avg resolution, breach rate |
+| IssueTypeVolume | "Which specific issues are driving volume?" | The 50 highest-volume issue types with parent category, filterable by category |
 | PriorityAnalysis | "Are high-priority tickets handled faster?" | Metrics by priority level, response/resolution times |
 | FrequentRequesters | "Who generates the most tickets?" | Top 50 requesters with category and resolution data |
 

@@ -676,7 +676,7 @@ iiQ Data > Add Analytics Sheet >
 | **Functional Area Summary** | "How are functional areas performing?" | Aggregated metrics by functional area |
 | **Location Breakdown** | "Which locations generate the most tickets?" | Per-location: open, created, closed |
 | **Location Type Comparison** | "Which school types generate most tickets?" | Metrics by Elementary/Middle/High/Admin |
-| **Issue Category Volume** | "What types of problems are we handling?" | Open/Closed by category, breach rate per category |
+| **Issue Category Volume** | "What types of problems are we handling?" | Total volume and share by category, plus open, avg resolution, breach rate |
 | **Priority Analysis** | "Are high-priority tickets handled faster?" | Metrics by priority level, response times |
 | **Frequent Requesters** | "Who generates the most tickets?" | Top 50 requesters with category data |
 | **Device Reliability** | "Which device models generate the most tickets?" | Total/Open/Closed by model, avg resolution, breach rate |
@@ -1350,8 +1350,8 @@ The result: charts/badges appear automatically when you add a registered analyti
 | Team | `FunctionalAreaSummary` | Horizontal bar | Open / aged tickets by Functional Area |
 | Location | `LocationBreakdown` | Horizontal bar | Open ticket counts per location |
 | Location | `LocationTypeComparison` | Horizontal bar | Open / aged tickets by school type |
-| Issue | `IssueCategoryVolume` | Horizontal bar | Open ticket counts by issue category |
-| Issue | `IssueTypeVolume` | Horizontal bar | Open ticket counts by issue type (top 50) |
+| Issue | `IssueCategoryVolume` | Horizontal bar | Total ticket volume by issue category |
+| Issue | `IssueTypeVolume` | Horizontal bar | Total ticket volume by issue type (top 50) |
 | Issue | `PriorityAnalysis` | Bar | Open count and avg resolution time by priority |
 | Issue | `FrequentRequesters` | Horizontal bar | Top users by total ticket count |
 | Device | `DeviceReliability` | Horizontal bar | Tickets and avg resolution time by device model |

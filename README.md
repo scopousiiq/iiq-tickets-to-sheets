@@ -108,7 +108,7 @@ Use **iiQ Data > Add Analytics Sheet** to add any of these 25 optional sheets:
 | SLA & Response | First Contact Resolution, Response Distribution, Response Trends, Queue Time Analysis, Queue Time by Team, Queue Time Trend |
 | Team & Staff | Technician Performance, Functional Area Summary |
 | Location | Location Breakdown, Location Type Comparison |
-| Issue & Requester | Issue Category Volume, Priority Analysis, Frequent Requesters |
+| Issue & Requester | Issue Category Volume, Issue Type Volume, Priority Analysis, Frequent Requesters |
 | Device | Device Reliability, Devices by Role, User Frequent Flyers |
 
 > **Flexible & Customizable:** Districts can delete any analytics sheet and recreate it later via the menu. Default sheets (marked with ★ in the menu) can also be recreated if accidentally deleted.

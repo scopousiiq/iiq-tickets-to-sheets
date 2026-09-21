@@ -4,6 +4,68 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.9.0 — Issue volume sheets work on historical data, and Breach Rate stops claiming perfection (2026-09-21)
+
+`IssueCategoryVolume` and `IssueTypeVolume` reported almost nothing useful on a
+workbook holding a finished school year: every column was either a
+month-to-date count against a month the data never reached, or a count of open
+tickets on a queue that had been drained. A "Volume" sheet had no volume column.
+
+### Added
+- **`Total` and `% of Total` columns on both sheets.** All-time ticket count per
+  category or type, and its share of the workbook. These are the figures the
+  sheets are named for, and unlike `Open` and the month-to-date columns they
+  stay meaningful after a school year closes out. Both sheets now sort by
+  `Total` descending by default.
+- **Automatic live/historical detection.** When a workbook has had no ticket
+  activity for over 45 days, the `Created`/`Closed` columns report the last
+  month with activity instead of the current one. The column headers name the
+  month in force — `Created (Jun 2026)` rather than `Created (MTD)` — and a new
+  **Data Mode** cell beside the sort controls states which mode is active and
+  when activity ended. Detected from the data; there is nothing to configure,
+  and reloading current-year data switches it back on its own.
+
+### Fixed
+- **`Breach Rate` reported `0.0%` on workbooks holding no SLA data at all.** The
+  guard only fell through to `N/A` when a category had no closed tickets, so a
+  district whose SLA columns were never populated saw flawless compliance across
+  every row rather than a missing-data marker. Breach Rate now reads `N/A`
+  unless at least one ticket in the workbook carries a breach flag. This was
+  wrong in the dangerous direction — a district could have reported perfect SLA
+  performance it had no data to support.
+- **`IssueTypeVolume` silently dropped its highest-volume issue types.** The
+  top-50 cap was applied *after* sorting by the display column, which defaults
+  to `Open`. On a workbook with few open tickets nearly every type ties at zero,
+  so which 50 survived was discovery order, not volume — on one district sheet
+  the second-largest issue type, and over 40% of all ticket volume, was missing
+  with nothing on the sheet to say so. The cap now always keeps the 50 largest types
+  by `Total`, and `Sort Col#` reorders those 50 rather than changing which ones
+  appear. Column A's header reports the cut when one happens, e.g.
+  `Issue Type (top 50 of 210 by volume)`.
+
+### Changed
+- Dashboard charts for both sheets now plot `Total` instead of `Open`, and are
+  retitled `Issue Category — Ticket Volume` and `Issue Type — Ticket Volume
+  (Top 50)`. An open-ticket bar chart is empty on a historical workbook.
+- Instructions sheet: Troubleshooting gains entries for the `N/A` breach rate,
+  the month-scoped Created/Closed columns, and a missing issue type.
+
+### Known Limitations
+- `Avg Resolution (days)` reads the stored `AgeDays` column, which holds whole
+  truncated days — a ticket resolved in 0.9 days records as 0. Averages
+  therefore run roughly half a day low. Unchanged in this release; fixing it
+  means changing what the loader writes, which would require a full reload.
+- On `IssueTypeVolume`, the `Category` column shows the first category found for
+  a type. A type used under more than one category shows only one of them.
+
+### Upgrade Notes
+- New copies of the template pick this up automatically.
+- Existing spreadsheets need the updated script, then **Rebuild** the two sheets
+  from the Analytics menu — the column layout changed, so the old sheets must be
+  recreated rather than recalculated. No data reload is required.
+
+---
+
 ## v1.8.5 — SLA lookups are chunked, fixing blank SLA columns for good (2026-09-18)
 
 ### Fixed

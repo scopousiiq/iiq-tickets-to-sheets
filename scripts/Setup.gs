@@ -59,6 +59,59 @@ function distinctIgnoringCase(listExpr) {
 }
 
 /**
+ * Days of no ticket activity after which a workbook is treated as historical.
+ *
+ * Sized to clear a K-12 summer lull on a small district without flipping a
+ * live sheet that simply had a quiet week.
+ */
+const HISTORICAL_IDLE_DAYS = 45;
+
+/**
+ * Build the LET bindings that decide whether a workbook holds live or
+ * historical data, and which month the period columns should report on.
+ *
+ * A workbook loaded with a finished school year has no tickets in the current
+ * month, so every month-to-date column reads zero and the sheet looks broken.
+ * Anchoring the period to the newest ticket in the data instead of TODAY()
+ * keeps those columns populated once refreshes stop, without changing what a
+ * live sheet reports.
+ *
+ * Defines: lastAct, isHist, refDate, pStart, pEnd. Emit before any binding
+ * that uses them, and note that a consumer must not reuse those names.
+ *
+ * @return {string} LET bindings, each terminated by a comma.
+ */
+function dataWindowBindings() {
+  return 'lastAct, MAX(MAX(TicketData!E2:E), MAX(TicketData!G2:G), MAX(TicketData!H2:H)),' +
+         'isHist, AND(lastAct>0, lastAct<TODAY()-' + HISTORICAL_IDLE_DAYS + '),' +
+         'refDate, IF(isHist, lastAct, TODAY()),' +
+         'pStart, DATE(YEAR(refDate), MONTH(refDate), 1),' +
+         'pEnd, DATE(YEAR(refDate), MONTH(refDate)+1, 1),';
+}
+
+/**
+ * Header formula for a period column, naming the month it actually covers.
+ *
+ * @param {string} prefix - Column word, e.g. 'Created'.
+ * @return {string} Formula yielding 'Created (MTD)' or 'Created (Jun 2026)'.
+ */
+function periodHeaderFormula(prefix) {
+  return '=IFERROR(LET(' + dataWindowBindings() +
+         '"' + prefix + ' ("&IF(isHist, TEXT(refDate,"mmm yyyy"), "MTD")&")"), "' + prefix + '")';
+}
+
+/**
+ * Formula for the Data Mode cell, telling the reader which window is in force.
+ *
+ * @return {string} Formula yielding a one-line mode description.
+ */
+function dataModeFormula() {
+  return '=IFERROR(LET(' + dataWindowBindings() +
+         'IF(isHist, "Historical — activity ends "&TEXT(lastAct,"mmm d, yyyy")&"; period columns cover that month",' +
+         ' "Live — period columns cover the current month")), "")';
+}
+
+/**
  * Calculate the default school year based on today's date (July-June)
  * @return {string} School year string (e.g., "2025-2026")
  */
@@ -366,8 +419,10 @@ function setupInstructionsSheet(ss) {
     ['  • Location Type Comparison — Metrics by school type (Elementary/Middle/High)'],
     [''],
     ['Issue & Requester:'],
-    ['  • Issue Category Volume — Open/Closed by category, breach rate'],
-    ['  • Issue Type Volume — Top 50 issue types, filterable by category'],
+    ['  • Issue Category Volume — Total volume and share by category, plus open,'],
+    ['    average resolution and breach rate'],
+    ['  • Issue Type Volume — The 50 highest-volume issue types, filterable by'],
+    ['    category'],
     ['  • Priority Analysis — Metrics by priority level'],
     ['  • Frequent Requesters — Top 50 requesters with category data'],
     [''],
@@ -451,6 +506,21 @@ function setupInstructionsSheet(ss) {
     ['Missing SLA data'],
     ['  → SLA data is fetched per-batch during ticket loading'],
     ['  → Tickets without assigned SLA policies will have blank SLA columns'],
+    ['  → Breach Rate reads "N/A" when no ticket in the workbook carries SLA data.'],
+    ['    That means the data is missing, not that nothing breached.'],
+    [''],
+    ['Created/Closed columns read zero on a finished school year'],
+    ['  → These columns report a single month. Analytics sheets detect a workbook'],
+    ['    with no ticket activity for over 45 days and switch that month to the'],
+    ['    last active one instead of the current one.'],
+    ['  → The column header names the month in force, and the Data Mode cell to the'],
+    ['    right of the sort controls says which mode the sheet is using.'],
+    ['  → Nothing to configure. Reloading current-year data switches it back.'],
+    [''],
+    ['An issue type is missing from Issue Type Volume'],
+    ['  → The sheet shows only the 50 highest-volume types. Its column A header'],
+    ['    reports the total when more exist, e.g. "top 50 of 210 by volume".'],
+    ['  → Set Category Filter to that type\'s category to see it.'],
     [''],
     ['Formula errors in analytics sheets'],
     ['  → Ensure TicketData has data loaded'],

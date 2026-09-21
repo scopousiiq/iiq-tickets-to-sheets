@@ -1,6 +1,6 @@
 {
-  "version": "1.8.5",
-  "released": "2026-09-18",
+  "version": "1.9.0",
+  "released": "2026-09-21",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "SLA columns now fill in reliably on districts of any size. SLA data is fetched in smaller chunks, so the requests no longer time out and return an error the way they did on larger or slower districts \u2014 and if one chunk does fail, the rest of the SLA data still loads instead of the whole batch coming back blank. TICKET_BATCH_SIZE in Config is now just a pagination setting and is safe at any value."
+  "message": "Issue Category Volume and Issue Type Volume now work on a finished school year. Both sheets gain Total and % of Total columns and sort by volume by default. The Created and Closed columns detect a workbook that has stopped updating and report its last active month instead of an empty current month, naming that month in the header. Breach Rate now reads N/A instead of 0% when the workbook holds no SLA data, and Issue Type Volume always keeps the 50 largest types by volume instead of dropping them."
 }

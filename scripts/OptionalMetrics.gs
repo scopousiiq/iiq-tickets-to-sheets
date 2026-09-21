@@ -468,69 +468,102 @@ function generateMonthRange(minDate, maxDate, monthNames) {
 /**
  * Setup IssueCategoryVolume sheet
  * Question: "What types of problems are we spending the most time on?"
+ *
+ * Leads with Total so the sheet answers its own name on any dataset. The
+ * period columns follow the data window rather than TODAY(), so a workbook
+ * holding a finished school year still reports a populated month instead of a
+ * column of zeros — see dataWindowBindings().
+ *
  * Deletes existing sheet if present for clean slate
  */
 function setupIssueCategoryVolumeSheet(ss) {
   deleteSheetIfExists(ss, 'IssueCategoryVolume');
   const sheet = ss.insertSheet('IssueCategoryVolume');
 
-  // Headers - includes sort controls
-  const headers = ['Issue Category', 'Open', 'Created (MTD)', 'Closed (MTD)', 'Avg Resolution (days)', 'Breach Rate', 'Last Refreshed', 'Sort Col#', 'Desc?'];
+  // Headers - A-H are data, I-L are info/controls. E and F are formulas
+  // because their label names the month the data window resolved to.
+  const headers = ['Issue Category', 'Total', '% of Total', 'Open', '', '',
+                   'Avg Resolution (days)', 'Breach Rate',
+                   'Last Refreshed', 'Sort Col#', 'Desc?', 'Data Mode'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange('E1').setFormula(periodHeaderFormula('Created'));
+  sheet.getRange('F1').setFormula(periodHeaderFormula('Closed'));
 
-  // Main formula - aggregates by IssueCategoryName (column Y), with dynamic sorting
+  // Main formula - aggregates by IssueCategoryName (column Y), with dynamic
+  // sorting. Breach Rate reports N/A rather than 0% when the workbook carries
+  // no SLA data at all: a district with SLA columns unpopulated was otherwise
+  // shown flawless compliance it had not earned.
+  const breachExpr =
+    'IF(NOT(hasSla), "N/A", LET(' +
+    'total, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Closed"), ' +
+    'breached, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Closed", TicketData!AF:AF, 1)' +
+    '+COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Closed", TicketData!AI:AI, 1), ' +
+    'IF(total>0, breached/total, "N/A")))';
+
   const mainFormula =
     '=LET(' +
     'cats, ' + distinctIgnoringCase('FILTER(TicketData!Y2:Y, TicketData!Y2:Y<>"", TicketData!Y2:Y<>"IssueCategoryName")') + ',' +
-    'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
-    'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
+    dataWindowBindings() +
+    'grand, COUNTA(TicketData!Y2:Y),' +
+    'hasSla, COUNT(TicketData!AF2:AF)+COUNT(TicketData!AI2:AI)>0,' +
     'col_a, cats,' +
-    'col_b, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Open"))),' +
-    'col_c, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
-    'col_d, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
-    'col_e, BYROW(cats, LAMBDA(c, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!Y:Y, c, TicketData!I:I, "Closed"), "N/A"))),' +
-    'col_f, BYROW(cats, LAMBDA(c, LET(total, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Closed"), breached, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Closed", TicketData!AF:AF, 1)+COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Closed", TicketData!AI:AI, 1), IF(total>0, breached/total, "N/A")))),' +
-    'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f),' +
-    'SORT(data, $H$2, $I$2))';
+    'col_b, BYROW(cats, LAMBDA(c, COUNTIF(TicketData!Y:Y, c))),' +
+    'col_c, BYROW(cats, LAMBDA(c, IF(grand>0, COUNTIF(TicketData!Y:Y, c)/grand, 0))),' +
+    'col_d, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!I:I, "Open"))),' +
+    'col_e, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!E:E, ">="&pStart, TicketData!E:E, "<"&pEnd))),' +
+    'col_f, BYROW(cats, LAMBDA(c, COUNTIFS(TicketData!Y:Y, c, TicketData!H:H, ">="&pStart, TicketData!H:H, "<"&pEnd))),' +
+    'col_g, BYROW(cats, LAMBDA(c, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!Y:Y, c, TicketData!I:I, "Closed"), "N/A"))),' +
+    'col_h, BYROW(cats, LAMBDA(c, ' + breachExpr + ')),' +
+    'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h),' +
+    'IFERROR(SORT(data, $J$2, $K$2), data))';
 
   sheet.getRange('A2').setValue(mainFormula);
-  sheet.getRange('G2').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
+  sheet.getRange('I2').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
 
-  // Default sort settings (column 2 = Open, descending)
-  sheet.getRange('H2').setValue(2);
-  sheet.getRange('I2').setValue('FALSE');
+  // Default sort settings (column 2 = Total, descending) - the busiest
+  // categories are what the sheet exists to surface, and unlike Open they
+  // stay meaningful after a school year closes out.
+  sheet.getRange('J2').setValue(2);
+  sheet.getRange('K2').setValue('FALSE');
+  sheet.getRange('L2').setFormula(dataModeFormula());
 
-  // Format header
-  sheet.getRange(1, 1, 1, headers.length)
+  // Format header - data columns teal, controls orange so they read as inputs
+  sheet.getRange(1, 1, 1, 8)
     .setFontWeight('bold')
     .setBackground('#00897b')
     .setFontColor('white');
+  sheet.getRange(1, 9, 1, 4)
+    .setFontWeight('bold')
+    .setBackground('#ff9800')
+    .setFontColor('white');
 
   // Format columns
-  sheet.getRange('E:E').setNumberFormat('0.0');   // Avg Resolution
-  sheet.getRange('F:F').setNumberFormat('0.0%');  // Breach Rate
+  sheet.getRange('C:C').setNumberFormat('0.0%');  // % of Total
+  sheet.getRange('G:G').setNumberFormat('0.0');   // Avg Resolution
+  sheet.getRange('H:H').setNumberFormat('0.0%');  // Breach Rate
 
   // Column widths
   sheet.setColumnWidth(1, 200);  // Issue Category
-  sheet.setColumnWidth(7, 180);  // Last Refreshed
-  sheet.setColumnWidth(8, 80);   // Sort Col#
-  sheet.setColumnWidth(9, 60);   // Desc?
+  sheet.setColumnWidth(9, 180);  // Last Refreshed
+  sheet.setColumnWidth(10, 80);  // Sort Col#
+  sheet.setColumnWidth(11, 60);  // Desc?
+  sheet.setColumnWidth(12, 320); // Data Mode
 
   sheet.setFrozenRows(1);
 
   // Add data validation for sort column
   const sortColRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(['1', '2', '3', '4', '5', '6'], true)
-    .setHelpText('1=Category, 2=Open, 3=Created, 4=Closed, 5=AvgRes, 6=Breach')
+    .requireValueInList(['1', '2', '3', '4', '5', '6', '7', '8'], true)
+    .setHelpText('1=Category, 2=Total, 3=%, 4=Open, 5=Created, 6=Closed, 7=AvgRes, 8=Breach')
     .build();
-  sheet.getRange('H2').setDataValidation(sortColRule);
+  sheet.getRange('J2').setDataValidation(sortColRule);
 
   // Add data validation for sort order
   const sortOrderRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(['FALSE', 'TRUE'], true)
     .setHelpText('FALSE=Descending, TRUE=Ascending')
     .build();
-  sheet.getRange('I2').setDataValidation(sortOrderRule);
+  sheet.getRange('K2').setDataValidation(sortOrderRule);
 
   // Add notes
   sheet.getRange('A1').setNote(
@@ -541,10 +574,31 @@ function setupIssueCategoryVolumeSheet(ss) {
     '- Justify budget for equipment replacement\n' +
     '- Target training for common user issues\n' +
     '- Prioritize automation opportunities\n\n' +
+    'Total and % of Total cover every ticket in the workbook, so they stay\n' +
+    'meaningful whether the data is live or a finished school year.\n\n' +
     'Use Sort Col# and Desc? to change sorting.'
   );
-  sheet.getRange('H2').setNote('Sort column: 1=Category, 2=Open, 3=Created, 4=Closed, 5=AvgRes, 6=Breach');
-  sheet.getRange('I2').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
+  sheet.getRange('E1').setNote(
+    'Tickets created in the period named in the header.\n\n' +
+    'On a live workbook that is the current month. On a workbook whose data\n' +
+    'has stopped updating it is the last month with activity, so the column\n' +
+    'still reports something instead of zero. See Data Mode.'
+  );
+  sheet.getRange('F1').setNote('Tickets closed in the period named in the header. See Data Mode.');
+  sheet.getRange('H1').setNote(
+    'Share of closed tickets that breached response or resolution SLA.\n\n' +
+    'Reads N/A when the workbook holds no SLA data at all — that is a data\n' +
+    'gap, not perfect compliance. Check that SLA columns in TicketData are\n' +
+    'populated before reading this column.'
+  );
+  sheet.getRange('J1').setNote('Sort column: 1=Category, 2=Total, 3=%, 4=Open, 5=Created, 6=Closed, 7=AvgRes, 8=Breach');
+  sheet.getRange('K1').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
+  sheet.getRange('L1').setNote(
+    'Whether this workbook is being treated as live or historical.\n\n' +
+    'Historical means no ticket activity for over ' + HISTORICAL_IDLE_DAYS + ' days, so the\n' +
+    'Created and Closed columns report the last active month rather than\n' +
+    'the current one. Detected automatically; nothing to configure.'
+  );
 
   return true;
 }
@@ -559,99 +613,134 @@ function setupIssueCategoryVolumeSheet(ss) {
  * pool before aggregating — without it, a full-catalog sweep would run
  * thousands of full-column COUNTIFS on every recalculation.
  *
+ * The cap is applied to the 50 largest types by Total, before the display
+ * sort. Ranking by the display column instead meant that on a workbook with
+ * few open tickets the cap fell in a mass of ties and dropped the highest
+ * volume types outright, which is the opposite of what the sheet is for.
+ *
  * Deletes existing sheet if present for clean slate
  */
 function setupIssueTypeVolumeSheet(ss) {
   deleteSheetIfExists(ss, 'IssueTypeVolume');
   const sheet = ss.insertSheet('IssueTypeVolume');
 
-  // Headers - A-H are data/info, I-K are controls
-  const headers = ['Issue Type', 'Category', 'Open', 'Created (MTD)', 'Closed (MTD)',
-                   'Avg Resolution (days)', 'Breach Rate', 'Last Refreshed',
-                   'Sort Col#', 'Desc?', 'Category Filter'];
+  // Headers - A-I are data, J-N are info/controls. A, F and G are formulas:
+  // A reports how many types the cap is hiding, F and G name their period.
+  const headers = ['', 'Category', 'Total', '% of Total', 'Open', '', '',
+                   'Avg Resolution (days)', 'Breach Rate',
+                   'Last Refreshed', 'Sort Col#', 'Desc?', 'Category Filter', 'Data Mode'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange('F1').setFormula(periodHeaderFormula('Created'));
+  sheet.getRange('G1').setFormula(periodHeaderFormula('Closed'));
+
+  const typePool =
+    'IF(useAll,' +
+    '  ' + distinctIgnoringCase('FILTER(TicketData!AA2:AA, TicketData!AA2:AA<>"", TicketData!AA2:AA<>"IssueTypeName")') + ',' +
+    '  ' + distinctIgnoringCase('FILTER(TicketData!AA2:AA, TicketData!AA2:AA<>"", TicketData!AA2:AA<>"IssueTypeName", TicketData!Y2:Y=catFilter)') + ')';
+
+  // Column A header names the cap so a missing type is explained in place
+  // rather than looking like a calculation error.
+  sheet.getRange('A1').setFormula(
+    '=IFERROR(LET(' +
+    'catFilter, $M$2,' +
+    'useAll, OR(catFilter="", catFilter="All"),' +
+    'n, ROWS(' + typePool + '),' +
+    'IF(n>50, "Issue Type (top 50 of "&n&" by volume)", "Issue Type")), "Issue Type")'
+  );
 
   // Aggregates by IssueTypeName (column AA), carrying the parent
   // IssueCategoryName (column Y) so a row is readable without cross-referencing
   // the category sheet. Category filter narrows the type pool before the
   // per-type aggregations run.
-  const stack = 'HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g)';
+  const stack = 'HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h, col_i)';
+  const breachExpr =
+    'IF(NOT(hasSla), "N/A", LET(' +
+    'total, COUNTIFS(TicketData!AA:AA, t, TicketData!I:I, "Closed"), ' +
+    'breached, COUNTIFS(TicketData!AA:AA, t, TicketData!I:I, "Closed", TicketData!AF:AF, 1)' +
+    '+COUNTIFS(TicketData!AA:AA, t, TicketData!I:I, "Closed", TicketData!AI:AI, 1), ' +
+    'IF(total>0, breached/total, "N/A")))';
+
   const mainFormula =
     '=LET(' +
-    'catFilter, $K$2,' +
+    'catFilter, $M$2,' +
     'useAll, OR(catFilter="", catFilter="All"),' +
-    'types, IF(useAll,' +
-    '  ' + distinctIgnoringCase('FILTER(TicketData!AA2:AA, TicketData!AA2:AA<>"", TicketData!AA2:AA<>"IssueTypeName")') + ',' +
-    '  ' + distinctIgnoringCase('FILTER(TicketData!AA2:AA, TicketData!AA2:AA<>"", TicketData!AA2:AA<>"IssueTypeName", TicketData!Y2:Y=catFilter)') + '),' +
-    'mtdStart, DATE(YEAR(TODAY()),MONTH(TODAY()),1),' +
-    'mtdEnd, DATE(YEAR(TODAY()),MONTH(TODAY())+1,1),' +
+    'types, ' + typePool + ',' +
+    dataWindowBindings() +
+    'grand, COUNTA(TicketData!AA2:AA),' +
+    'hasSla, COUNT(TicketData!AF2:AF)+COUNT(TicketData!AI2:AI)>0,' +
     'col_a, types,' +
     'col_b, BYROW(types, LAMBDA(t, IFERROR(INDEX(FILTER(TicketData!Y:Y, TicketData!AA:AA=t, TicketData!Y:Y<>""), 1), ""))),' +
-    'col_c, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!AA:AA, t, TicketData!I:I, "Open"))),' +
-    'col_d, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!AA:AA, t, TicketData!E:E, ">="&mtdStart, TicketData!E:E, "<"&mtdEnd))),' +
-    'col_e, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!AA:AA, t, TicketData!H:H, ">="&mtdStart, TicketData!H:H, "<"&mtdEnd))),' +
-    'col_f, BYROW(types, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AA:AA, t, TicketData!I:I, "Closed"), "N/A"))),' +
-    'col_g, BYROW(types, LAMBDA(t, LET(total, COUNTIFS(TicketData!AA:AA, t, TicketData!I:I, "Closed"), breached, COUNTIFS(TicketData!AA:AA, t, TicketData!I:I, "Closed", TicketData!AF:AF, 1)+COUNTIFS(TicketData!AA:AA, t, TicketData!I:I, "Closed", TicketData!AI:AI, 1), IF(total>0, breached/total, "N/A")))),' +
-    'sorted, IFERROR(SORT(' + stack + ', $I$2, $J$2), ' + stack + '),' +
-    'IFERROR(ARRAY_CONSTRAIN(sorted, 50, 7), sorted))';
+    'col_c, BYROW(types, LAMBDA(t, COUNTIF(TicketData!AA:AA, t))),' +
+    'col_d, BYROW(types, LAMBDA(t, IF(grand>0, COUNTIF(TicketData!AA:AA, t)/grand, 0))),' +
+    'col_e, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!AA:AA, t, TicketData!I:I, "Open"))),' +
+    'col_f, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!AA:AA, t, TicketData!E:E, ">="&pStart, TicketData!E:E, "<"&pEnd))),' +
+    'col_g, BYROW(types, LAMBDA(t, COUNTIFS(TicketData!AA:AA, t, TicketData!H:H, ">="&pStart, TicketData!H:H, "<"&pEnd))),' +
+    'col_h, BYROW(types, LAMBDA(t, IFERROR(AVERAGEIFS(TicketData!R:R, TicketData!AA:AA, t, TicketData!I:I, "Closed"), "N/A"))),' +
+    'col_i, BYROW(types, LAMBDA(t, ' + breachExpr + ')),' +
+    'byVolume, IFERROR(SORT(' + stack + ', 3, FALSE), ' + stack + '),' +
+    'top, IFERROR(ARRAY_CONSTRAIN(byVolume, 50, 9), byVolume),' +
+    'IFERROR(SORT(top, $K$2, $L$2), top))';
 
   sheet.getRange('A2').setValue(mainFormula);
-  sheet.getRange('H2').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
+  sheet.getRange('J2').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
 
-  // Default controls: sort by Open (column 3) descending, all categories
-  sheet.getRange('I2').setValue(3);
-  sheet.getRange('J2').setValue('FALSE');
-  sheet.getRange('K2').setValue('All');
+  // Default controls: sort by Total (column 3) descending, all categories
+  sheet.getRange('K2').setValue(3);
+  sheet.getRange('L2').setValue('FALSE');
+  sheet.getRange('M2').setValue('All');
+  sheet.getRange('N2').setFormula(dataModeFormula());
 
   // Format header - data columns teal, controls orange so they read as inputs
-  sheet.getRange(1, 1, 1, 8)
+  sheet.getRange(1, 1, 1, 9)
     .setFontWeight('bold')
     .setBackground('#00695c')
     .setFontColor('white');
-  sheet.getRange(1, 9, 1, 3)
+  sheet.getRange(1, 10, 1, 5)
     .setFontWeight('bold')
     .setBackground('#ff9800')
     .setFontColor('white');
 
   // Format columns
-  sheet.getRange('F:F').setNumberFormat('0.0');   // Avg Resolution
-  sheet.getRange('G:G').setNumberFormat('0.0%');  // Breach Rate
+  sheet.getRange('D:D').setNumberFormat('0.0%');  // % of Total
+  sheet.getRange('H:H').setNumberFormat('0.0');   // Avg Resolution
+  sheet.getRange('I:I').setNumberFormat('0.0%');  // Breach Rate
 
   // Column widths
   sheet.setColumnWidth(1, 260);  // Issue Type - names run long
   sheet.setColumnWidth(2, 200);  // Category
-  sheet.setColumnWidth(8, 180);  // Last Refreshed
-  sheet.setColumnWidth(9, 80);   // Sort Col#
-  sheet.setColumnWidth(10, 60);  // Desc?
-  sheet.setColumnWidth(11, 200); // Category Filter
+  sheet.setColumnWidth(10, 180); // Last Refreshed
+  sheet.setColumnWidth(11, 80);  // Sort Col#
+  sheet.setColumnWidth(12, 60);  // Desc?
+  sheet.setColumnWidth(13, 200); // Category Filter
+  sheet.setColumnWidth(14, 320); // Data Mode
 
   sheet.setFrozenRows(1);
 
-  // Category filter dropdown - populated dynamically from TicketData (hidden column M).
+  // Category filter dropdown - populated dynamically from TicketData (hidden column P).
   // requireValueInRange rather than requireValueInList: list validation caps at
   // 500 items and category catalogs can exceed that in large districts.
-  sheet.getRange('M1').setValue('CategorySource');
-  sheet.getRange('M2').setValue('={"All"; SORT(' + distinctIgnoringCase('FILTER(TicketData!Y2:Y, TicketData!Y2:Y<>"")') + ')}');
-  sheet.hideColumns(13);
+  sheet.getRange('P1').setValue('CategorySource');
+  sheet.getRange('P2').setValue('={"All"; SORT(' + distinctIgnoringCase('FILTER(TicketData!Y2:Y, TicketData!Y2:Y<>"")') + ')}');
+  sheet.hideColumns(16);
   const catRule = SpreadsheetApp.newDataValidation()
-    .requireValueInRange(sheet.getRange('M2:M2000'), true)
+    .requireValueInRange(sheet.getRange('P2:P2000'), true)
     .setAllowInvalid(false)
     .build();
-  sheet.getRange('K2').setDataValidation(catRule);
+  sheet.getRange('M2').setDataValidation(catRule);
 
   // Add data validation for sort column
   const sortColRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(['1', '2', '3', '4', '5', '6', '7'], true)
-    .setHelpText('1=Type, 2=Category, 3=Open, 4=Created, 5=Closed, 6=AvgRes, 7=Breach')
+    .requireValueInList(['1', '2', '3', '4', '5', '6', '7', '8', '9'], true)
+    .setHelpText('1=Type, 2=Category, 3=Total, 4=%, 5=Open, 6=Created, 7=Closed, 8=AvgRes, 9=Breach')
     .build();
-  sheet.getRange('I2').setDataValidation(sortColRule);
+  sheet.getRange('K2').setDataValidation(sortColRule);
 
   // Add data validation for sort order
   const sortOrderRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(['FALSE', 'TRUE'], true)
     .setHelpText('FALSE=Descending, TRUE=Ascending')
     .build();
-  sheet.getRange('J2').setDataValidation(sortOrderRule);
+  sheet.getRange('L2').setDataValidation(sortOrderRule);
 
   // Add notes
   sheet.getRange('A1').setNote(
@@ -664,14 +753,35 @@ function setupIssueTypeVolumeSheet(ss) {
     '- Target training at the single most common user error\n' +
     '- Justify a specific part or accessory purchase\n' +
     '- Spot issue types that are chronically breaching SLA\n\n' +
-    'Set Category Filter to narrow to one category, then sort by Open.'
+    'The 50 rows are always the 50 largest types by Total; Sort Col# reorders\n' +
+    'those 50 without changing which ones are shown. Set Category Filter to\n' +
+    'narrow to one category and see its types instead.'
   );
-  sheet.getRange('I1').setNote('Sort column: 1=Type, 2=Category, 3=Open, 4=Created, 5=Closed, 6=AvgRes, 7=Breach');
-  sheet.getRange('J1').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
-  sheet.getRange('K1').setNote(
+  sheet.getRange('F1').setNote(
+    'Tickets created in the period named in the header.\n\n' +
+    'On a live workbook that is the current month. On a workbook whose data\n' +
+    'has stopped updating it is the last month with activity, so the column\n' +
+    'still reports something instead of zero. See Data Mode.'
+  );
+  sheet.getRange('G1').setNote('Tickets closed in the period named in the header. See Data Mode.');
+  sheet.getRange('I1').setNote(
+    'Share of closed tickets that breached response or resolution SLA.\n\n' +
+    'Reads N/A when the workbook holds no SLA data at all — that is a data\n' +
+    'gap, not perfect compliance. Check that SLA columns in TicketData are\n' +
+    'populated before reading this column.'
+  );
+  sheet.getRange('K1').setNote('Sort column: 1=Type, 2=Category, 3=Total, 4=%, 5=Open, 6=Created, 7=Closed, 8=AvgRes, 9=Breach');
+  sheet.getRange('L1').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
+  sheet.getRange('M1').setNote(
     'Category filter. "All" = every issue type across all categories;\n' +
     'or pick one category to see only its types.\n\n' +
     'Narrowing to a single category also makes the sheet recalculate faster.'
+  );
+  sheet.getRange('N1').setNote(
+    'Whether this workbook is being treated as live or historical.\n\n' +
+    'Historical means no ticket activity for over ' + HISTORICAL_IDLE_DAYS + ' days, so the\n' +
+    'Created and Closed columns report the last active month rather than\n' +
+    'the current one. Detected automatically; nothing to configure.'
   );
 
   return true;

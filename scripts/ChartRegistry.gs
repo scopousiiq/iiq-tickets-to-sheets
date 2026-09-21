@@ -498,11 +498,11 @@ const CHART_REGISTRY = [
     category: 'Issue & Requester',
     tabLabel: 'Issue',
     charts: [{
-      title: 'Issue Category — Open Tickets',
+      title: 'Issue Category — Ticket Volume',
       type: 'horizontalBar',
       labelCol: 0,
       series: [
-        { header: 'Open', col: 1, color: 'darkBlue' }
+        { header: 'Total Tickets', col: 1, color: 'darkBlue' }
       ],
       rowStart: 2,
       rowMode: 'contiguous'
@@ -513,11 +513,11 @@ const CHART_REGISTRY = [
     category: 'Issue & Requester',
     tabLabel: 'Issue',
     charts: [{
-      title: 'Issue Type — Open Tickets (Top 50)',
+      title: 'Issue Type — Ticket Volume (Top 50)',
       type: 'horizontalBar',
       labelCol: 0,
       series: [
-        { header: 'Open', col: 2, color: 'teal' }
+        { header: 'Total Tickets', col: 2, color: 'teal' }
       ],
       rowStart: 2,
       rowMode: 'contiguous'
