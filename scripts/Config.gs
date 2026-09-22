@@ -19,7 +19,7 @@
  */
 
 /** Current script version — update when releasing new versions */
-const SCRIPT_VERSION = '1.8.5';
+const SCRIPT_VERSION = '1.9.0';
 
 /**
  * How many Location custom field slots the sheet exposes.
