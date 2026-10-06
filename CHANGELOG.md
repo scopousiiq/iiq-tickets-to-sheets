@@ -4,6 +4,39 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.10.0 — Issue Not Listed by Category (2026-10-06)
+
+Every category in iiQ can carry its own "Issue not listed" issue, and they all
+share that name. `IssueTypeVolume` groups by issue type name, so Software >
+Issue not listed and WiFi > Issue not listed collapsed into one row, and there
+was no way to see which parts of the issue catalog requesters were falling
+through.
+
+### Added
+- **`IssueNotListed` analytics sheet** (iiQ Data > Add Analytics Sheet > Issue &
+  Requester > Issue Not Listed by Category). One row per category that
+  not-listed tickets were filed under, with:
+  - `Not Listed` and `% of Not Listed`: count and share of all not-listed tickets.
+  - `Category Total` and `% of Category`: how much of each category's volume
+    is not-listed. A high figure points at a category whose issue list needs
+    new entries.
+  - `Open`, period `Created`/`Closed` (following the same live/historical data
+    window as the other volume sheets), and `Avg Resolution (days)`.
+  - The column A header gives the overall count and its share of all tickets.
+  - A ticket list in columns Q–V (ticket number, created, category, subject,
+    status, team), newest 500 first, filterable by category. The subjects show
+    what the missing issues actually are.
+- Tickets are matched on iiQ's built-in "Issue not listed" issue type ID, so a
+  renamed issue is still counted, plus any issue type whose name contains the
+  **Match Text** control (default `not listed`). Districts with their own
+  catch-all, such as "Other", can set it there.
+- Device-model tickets, where iiQ files the not-listed issue under a child
+  category that is itself named "Issue not listed", are grouped by the asset's
+  model (`Device: <model>`) instead of under one uninformative row.
+- Registered in the dashboard's Issue tab as a horizontal bar chart.
+
+---
+
 ## v1.9.0 — Issue volume sheets work on historical data, and Breach Rate stops claiming perfection (2026-09-21)
 
 `IssueCategoryVolume` and `IssueTypeVolume` reported almost nothing useful on a

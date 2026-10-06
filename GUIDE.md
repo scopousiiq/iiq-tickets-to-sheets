@@ -652,6 +652,8 @@ iiQ Data > Add Analytics Sheet >
 │   └── Location Type Comparison
 ├── Issue & Requester
 │   ├── Issue Category Volume
+│   ├── Issue Type Volume
+│   ├── Issue Not Listed by Category
 │   ├── Priority Analysis
 │   └── Frequent Requesters
 ├── Device
@@ -677,6 +679,7 @@ iiQ Data > Add Analytics Sheet >
 | **Location Breakdown** | "Which locations generate the most tickets?" | Per-location: open, created, closed |
 | **Location Type Comparison** | "Which school types generate most tickets?" | Metrics by Elementary/Middle/High/Admin |
 | **Issue Category Volume** | "What types of problems are we handling?" | Total volume and share by category, plus open, avg resolution, breach rate |
+| **Issue Not Listed by Category** | "Where is our issue catalog missing what people report?" | "Issue not listed" tickets per category (Software vs WiFi), share of each category, and a filterable list of their subjects |
 | **Priority Analysis** | "Are high-priority tickets handled faster?" | Metrics by priority level, response times |
 | **Frequent Requesters** | "Who generates the most tickets?" | Top 50 requesters with category data |
 | **Device Reliability** | "Which device models generate the most tickets?" | Total/Open/Closed by model, avg resolution, breach rate |
@@ -872,6 +875,7 @@ Formula-based analytics sheets (31 total, no scripts needed):
     ├── LocationTypeComparison  → reads from TicketData (by school type)
     ├── IssueCategoryVolume     → reads from TicketData (by category)
     ├── IssueTypeVolume         → reads from TicketData (by issue type)
+    ├── IssueNotListed          → reads from TicketData (not-listed tickets by category)
     ├── PriorityAnalysis        → reads from TicketData (by priority)
     ├── FrequentRequesters      → reads from TicketData (top requesters)
     ├── QueueTimeAnalysis       → reads from TicketData (queue time stats)
@@ -892,7 +896,7 @@ Formula-based analytics sheets (31 total, no scripts needed):
    - Creates data sheets: Config, TicketData, Teams, DailySnapshot, Logs
    - Creates 8 default analytics sheets with formulas configured for the specified school year's month range
 3. **Or create manually:** Set up each sheet with headers as shown in Part 1
-4. **Add more analytics later:** Use **iiQ Data > Add Analytics Sheet** to add any of the 23 optional analytics sheets
+4. **Add more analytics later:** Use **iiQ Data > Add Analytics Sheet** to add any of the 26 optional analytics sheets
 
 ### Step 2: Add the Apps Script Code
 
@@ -1352,12 +1356,13 @@ The result: charts/badges appear automatically when you add a registered analyti
 | Location | `LocationTypeComparison` | Horizontal bar | Open / aged tickets by school type |
 | Issue | `IssueCategoryVolume` | Horizontal bar | Total ticket volume by issue category |
 | Issue | `IssueTypeVolume` | Horizontal bar | Total ticket volume by issue type (top 50) |
+| Issue | `IssueNotListed` | Horizontal bar | "Issue not listed" tickets by the category they were filed under |
 | Issue | `PriorityAnalysis` | Bar | Open count and avg resolution time by priority |
 | Issue | `FrequentRequesters` | Horizontal bar | Top users by total ticket count |
 | Device | `DeviceReliability` | Horizontal bar | Tickets and avg resolution time by device model |
 | Device | `DevicesByRole` | Horizontal bar | Device-by-model counts filtered by RequesterRole |
 
-**Total dashboard coverage:** 33 registered analytics sheets — 28 chart cards + 5 KPI badges. Tabs with no registered sheets present are omitted entirely from the rendered page, so the layout stays clean for districts that haven't added the optional sheets yet.
+**Total dashboard coverage:** 34 registered analytics sheets — 29 chart cards + 5 KPI badges. Tabs with no registered sheets present are omitted entirely from the rendered page, so the layout stays clean for districts that haven't added the optional sheets yet.
 
 ### Adding a new analytics sheet to the dashboard
 
@@ -1430,6 +1435,7 @@ Once your data is flowing, here are some ideas for getting more value:
 | Queue Time Trend | QueueTimeTrend | SLA & Response |
 | Issue Category Volume | IssueCategoryVolume | Issue & Requester |
 | Issue Type Volume | IssueTypeVolume | Issue & Requester |
+| Issue Not Listed by Category | IssueNotListed | Issue & Requester |
 | Priority Analysis | PriorityAnalysis | Issue & Requester |
 | Frequent Requesters | FrequentRequesters | Issue & Requester |
 | Device Reliability | DeviceReliability | Device |

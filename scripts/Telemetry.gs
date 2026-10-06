@@ -73,6 +73,7 @@ const TELEMETRY_CANONICAL_ANALYTICS = [
   'LocationTypeComparison',
   'IssueCategoryVolume',
   'IssueTypeVolume',
+  'IssueNotListed',
   'PriorityAnalysis',
   'FrequentRequesters',
   'DeviceReliability',

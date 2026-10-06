@@ -99,7 +99,7 @@ Go to Extensions > Apps Script > Triggers (clock icon) and add these triggers:
 
 ### Additional Analytics (add via menu)
 
-Use **iiQ Data > Add Analytics Sheet** to add any of these 25 optional sheets:
+Use **iiQ Data > Add Analytics Sheet** to add any of these 26 optional sheets:
 
 | Category | Available Sheets |
 |----------|------------------|
@@ -108,7 +108,7 @@ Use **iiQ Data > Add Analytics Sheet** to add any of these 25 optional sheets:
 | SLA & Response | First Contact Resolution, Response Distribution, Response Trends, Queue Time Analysis, Queue Time by Team, Queue Time Trend |
 | Team & Staff | Technician Performance, Functional Area Summary |
 | Location | Location Breakdown, Location Type Comparison |
-| Issue & Requester | Issue Category Volume, Issue Type Volume, Priority Analysis, Frequent Requesters |
+| Issue & Requester | Issue Category Volume, Issue Type Volume, Issue Not Listed by Category, Priority Analysis, Frequent Requesters |
 | Device | Device Reliability, Devices by Role, User Frequent Flyers |
 
 > **Flexible & Customizable:** Districts can delete any analytics sheet and recreate it later via the menu. Default sheets (marked with ★ in the menu) can also be recreated if accidentally deleted.
@@ -154,7 +154,7 @@ The dashboard discovers sheets via `ChartRegistry.gs`. Add a registered sheet vi
 | SLA | `SLACompliance`, `FirstContactResolution`, `ResponseDistribution`, `ResponseTrends`, `QueueTimeAnalysis`, `QueueTimeByTeam`, `QueueTimeTrend` | line / bar / horizontal bar |
 | Team | `TeamWorkload`, `TechnicianPerformance`, `FunctionalAreaSummary` | horizontal bar |
 | Location | `LocationBreakdown`, `LocationTypeComparison` | horizontal bar |
-| Issue | `IssueCategoryVolume`, `IssueTypeVolume`, `PriorityAnalysis`, `FrequentRequesters` | bar / horizontal bar |
+| Issue | `IssueCategoryVolume`, `IssueTypeVolume`, `IssueNotListed`, `PriorityAnalysis`, `FrequentRequesters` | bar / horizontal bar |
 | Device | `DeviceReliability`, `DevicesByRole` | horizontal bar |
 
 Total: 28 chart sheets + 5 KPI badge sheets = 33 registered. Empty tabs (no registered sheets present in that category) are omitted entirely.

@@ -19,6 +19,7 @@
  * - FunctionalAreaSummary: Aggregated by functional area
  * - IssueCategoryVolume: What types of problems are we handling?
  * - IssueTypeVolume: Which specific issues inside a category drive volume?
+ * - IssueNotListed: Which categories get "Issue not listed" tickets, and what do they say?
  * - PriorityAnalysis: Are high-priority tickets handled faster?
  * - FirstContactResolution: How many tickets resolved same-day?
  * - TechnicianPerformance: Individual technician workload and metrics
@@ -217,6 +218,15 @@ function addIssueTypeVolumeSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   setupIssueTypeVolumeSheet(ss);
   SpreadsheetApp.getUi().alert('Created', 'IssueTypeVolume sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Add Issue Not Listed sheet (deletes and recreates if exists)
+ */
+function addIssueNotListedSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  setupIssueNotListedSheet(ss);
+  SpreadsheetApp.getUi().alert('Created', 'IssueNotListed sheet has been created.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
@@ -782,6 +792,231 @@ function setupIssueTypeVolumeSheet(ss) {
     'Historical means no ticket activity for over ' + HISTORICAL_IDLE_DAYS + ' days, so the\n' +
     'Created and Closed columns report the last active month rather than\n' +
     'the current one. Detected automatically; nothing to configure.'
+  );
+
+  return true;
+}
+
+/**
+ * iiQ's system issue type for "Issue not listed" (Constants.IssueTypes.IssueNotListed).
+ * Every category's not-listed issue is created against this type, so matching on
+ * it still finds those tickets after a district renames the issue.
+ */
+const ISSUE_NOT_LISTED_TYPE_ID = '10000000-0000-0000-0000-000000000001';
+
+/**
+ * LET bindings shared by the IssueNotListed summary and its ticket list.
+ *
+ * A ticket counts as not listed when its issue type is the system not-listed
+ * type, or its issue type name contains the Match Text control ($M$2).
+ *
+ * The group key is normally the parent issue category, which is what turns
+ * one undifferentiated "Issue not listed" count into Software vs WiFi. For
+ * device-model categories iiQ instead creates a child category that is itself
+ * named "Issue not listed", so the category says nothing; those tickets are
+ * grouped by the asset's model instead.
+ *
+ * Defines: nlText, nlHit, nlKey.
+ *
+ * @return {string} LET bindings, each terminated by a comma.
+ */
+function issueNotListedBindings() {
+  return 'nlText, TRIM($M$2),' +
+         'nlHit, ARRAYFORMULA(((TicketData!Z2:Z="' + ISSUE_NOT_LISTED_TYPE_ID + '")' +
+         '+(nlText<>"")*ISNUMBER(SEARCH(nlText, TicketData!AA2:AA)))>0),' +
+         'nlKey, MAP(FILTER(TicketData!Y2:Y, nlHit), FILTER(TicketData!AL2:AL, nlHit), LAMBDA(c, m, ' +
+         'IF(OR(c="", LOWER(c)="issue not listed", AND(nlText<>"", ISNUMBER(SEARCH(nlText, c)))), ' +
+         'IF(m<>"", "Device: "&m, "(No category)"), c))),';
+}
+
+/**
+ * Setup IssueNotListed sheet
+ * Question: "Where is our issue catalog missing the problems people report?"
+ *
+ * IssueTypeVolume groups by issue type name, and every category's not-listed
+ * issue shares the same name, so it reports a single combined row. This sheet
+ * splits those tickets by the category they were filed under, and lists the
+ * tickets themselves so the subjects show what the catalog is missing.
+ *
+ * Deletes existing sheet if present for clean slate
+ */
+function setupIssueNotListedSheet(ss) {
+  deleteSheetIfExists(ss, 'IssueNotListed');
+  const sheet = ss.insertSheet('IssueNotListed');
+
+  // A-I summary, J-O info/controls, Q-V ticket list. A, G and H are formulas:
+  // A carries the overall total, G and H name their period.
+  const headers = ['', 'Not Listed', '% of Not Listed', 'Category Total', '% of Category',
+                   'Open', '', '', 'Avg Resolution (days)',
+                   'Last Refreshed', 'Sort Col#', 'Desc?', 'Match Text', 'Ticket List Category', 'Data Mode',
+                   '', 'Ticket #', 'Created', 'Category', 'Subject', 'Status', 'Team'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange('G1').setFormula(periodHeaderFormula('Created'));
+  sheet.getRange('H1').setFormula(periodHeaderFormula('Closed'));
+  sheet.getRange('A1').setFormula(
+    '=IFERROR(LET(' + issueNotListedBindings() +
+    'n, ROWS(nlKey), grand, COUNTA(TicketData!A2:A),' +
+    '"Issue Category ("&n&" not listed, "&TEXT(n/grand, "0.0%")&" of all tickets)"), "Issue Category")'
+  );
+
+  const filtered = col => 'FILTER(TicketData!' + col + '2:' + col + ', nlHit)';
+
+  const mainFormula =
+    '=IFERROR(LET(' +
+    issueNotListedBindings() +
+    dataWindowBindings() +
+    'nlState, ' + filtered('I') + ',' +
+    'nlCreated, ' + filtered('E') + ',' +
+    'nlClosed, ' + filtered('H') + ',' +
+    'nlAge, ' + filtered('R') + ',' +
+    'n, ROWS(nlKey),' +
+    'keys, ' + distinctIgnoringCase('nlKey') + ',' +
+    'col_a, keys,' +
+    'col_b, BYROW(keys, LAMBDA(k, SUMPRODUCT(--(nlKey=k)))),' +
+    'col_c, MAP(col_b, LAMBDA(b, b/n)),' +
+    'col_d, BYROW(keys, LAMBDA(k, IF(k="(No category)", "N/A", ' +
+    'IF(LEFT(k, 8)="Device: ", COUNTIF(TicketData!AL2:AL, MID(k, 9, 500)), COUNTIF(TicketData!Y2:Y, k))))),' +
+    'col_e, MAP(col_b, col_d, LAMBDA(b, d, IF(AND(ISNUMBER(d), d>0), b/d, "N/A"))),' +
+    'col_f, BYROW(keys, LAMBDA(k, SUMPRODUCT((nlKey=k)*(nlState="Open")))),' +
+    'col_g, BYROW(keys, LAMBDA(k, SUMPRODUCT((nlKey=k)*(nlCreated>=pStart)*(nlCreated<pEnd)))),' +
+    'col_h, BYROW(keys, LAMBDA(k, SUMPRODUCT((nlKey=k)*(nlClosed>=pStart)*(nlClosed<pEnd)))),' +
+    'col_i, BYROW(keys, LAMBDA(k, IFERROR(AVERAGE(FILTER(nlAge, nlKey=k, nlState="Closed")), "N/A"))),' +
+    'data, HSTACK(col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h, col_i),' +
+    'IFERROR(SORT(data, $K$2, $L$2), data)), "")';
+
+  // Newest first and capped, since a busy catalog gap can run to thousands of
+  // tickets and the point is to read recent subjects, not export them all.
+  const listFormula =
+    '=IFERROR(LET(' +
+    issueNotListedBindings() +
+    'sel, TRIM($N$2),' +
+    'useAll, OR(sel="", sel="All"),' +
+    'nlRows, HSTACK(' + filtered('B') + ', ' + filtered('E') + ', nlKey, ' +
+    filtered('C') + ', ' + filtered('J') + ', ' + filtered('L') + '),' +
+    'picked, FILTER(nlRows, (useAll+(nlKey=sel))>0),' +
+    'ARRAY_CONSTRAIN(SORT(picked, 2, FALSE), 500, 6)), "")';
+
+  sheet.getRange('A2').setValue(mainFormula);
+  sheet.getRange('Q2').setValue(listFormula);
+  sheet.getRange('J2').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
+
+  // Default controls: sort by Not Listed (column 2) descending, iiQ's default
+  // issue name, every category in the ticket list
+  sheet.getRange('K2').setValue(2);
+  sheet.getRange('L2').setValue('FALSE');
+  sheet.getRange('M2').setValue('not listed');
+  sheet.getRange('N2').setValue('All');
+  sheet.getRange('O2').setFormula(dataModeFormula());
+
+  // Format header - summary teal, controls orange so they read as inputs,
+  // ticket list blue-grey to set it apart from the summary
+  sheet.getRange(1, 1, 1, 9)
+    .setFontWeight('bold')
+    .setBackground('#00897b')
+    .setFontColor('white');
+  sheet.getRange(1, 10, 1, 6)
+    .setFontWeight('bold')
+    .setBackground('#ff9800')
+    .setFontColor('white');
+  sheet.getRange(1, 17, 1, 6)
+    .setFontWeight('bold')
+    .setBackground('#546e7a')
+    .setFontColor('white');
+
+  // Format columns
+  sheet.getRange('C:C').setNumberFormat('0.0%');       // % of Not Listed
+  sheet.getRange('E:E').setNumberFormat('0.0%');       // % of Category
+  sheet.getRange('I:I').setNumberFormat('0.0');        // Avg Resolution
+  sheet.getRange('R:R').setNumberFormat('yyyy-mm-dd'); // Created
+
+  // Column widths
+  sheet.setColumnWidth(1, 300);  // Issue Category - header carries the total
+  sheet.setColumnWidth(10, 180); // Last Refreshed
+  sheet.setColumnWidth(11, 80);  // Sort Col#
+  sheet.setColumnWidth(12, 60);  // Desc?
+  sheet.setColumnWidth(13, 120); // Match Text
+  sheet.setColumnWidth(14, 200); // Ticket List Category
+  sheet.setColumnWidth(15, 320); // Data Mode
+  sheet.setColumnWidth(16, 30);  // gutter
+  sheet.setColumnWidth(19, 200); // Category
+  sheet.setColumnWidth(20, 360); // Subject
+
+  sheet.setFrozenRows(1);
+
+  // Ticket list dropdown - the categories the summary found, from hidden column X.
+  // requireValueInRange because list validation caps at 500 items.
+  sheet.getRange('X1').setValue('CategorySource');
+  sheet.getRange('X2').setValue('=IFERROR({"All"; SORT(FILTER(A2:A, A2:A<>""))}, "All")');
+  sheet.hideColumns(24);
+  const catRule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(sheet.getRange('X2:X2000'), true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange('N2').setDataValidation(catRule);
+
+  const sortColRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['1', '2', '3', '4', '5', '6', '7', '8', '9'], true)
+    .setHelpText('1=Category, 2=Not Listed, 3=% of NL, 4=Cat Total, 5=% of Cat, 6=Open, 7=Created, 8=Closed, 9=AvgRes')
+    .build();
+  sheet.getRange('K2').setDataValidation(sortColRule);
+
+  const sortOrderRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['FALSE', 'TRUE'], true)
+    .setHelpText('FALSE=Descending, TRUE=Ascending')
+    .build();
+  sheet.getRange('L2').setDataValidation(sortOrderRule);
+
+  // Add notes
+  sheet.getRange('A1').setNote(
+    'Issue Not Listed Analysis\n\n' +
+    'Question: "Where is our issue catalog missing the problems people report?"\n\n' +
+    'Each row is a category that requesters filed "Issue not listed" tickets\n' +
+    'under, e.g. Software > Issue not listed vs WiFi > Issue not listed.\n\n' +
+    'Use this to:\n' +
+    '- Find categories whose issue list needs new entries\n' +
+    '- Read the ticket subjects (columns Q-V) to see what those entries should be\n' +
+    '- Check whether catalog changes are bringing the counts down\n\n' +
+    'Rows starting "Device:" are device-model tickets, where iiQ files the\n' +
+    'not-listed issue under its own "Issue not listed" category; they are\n' +
+    'grouped by the asset model instead. "(No category)" has neither.'
+  );
+  sheet.getRange('D1').setNote(
+    'Every ticket in the category, listed or not. On a "Device:" row, every\n' +
+    'ticket on that device model.'
+  );
+  sheet.getRange('E1').setNote(
+    'Not Listed as a share of Category Total. A high figure means requesters\n' +
+    'in that category often cannot find their problem in the issue list.'
+  );
+  sheet.getRange('G1').setNote(
+    'Not-listed tickets created in the period named in the header.\n\n' +
+    'On a live workbook that is the current month. On a workbook whose data\n' +
+    'has stopped updating it is the last month with activity. See Data Mode.'
+  );
+  sheet.getRange('H1').setNote('Not-listed tickets closed in the period named in the header. See Data Mode.');
+  sheet.getRange('K1').setNote('Sort column: 1=Category, 2=Not Listed, 3=% of Not Listed, 4=Category Total, 5=% of Category, 6=Open, 7=Created, 8=Closed, 9=AvgRes');
+  sheet.getRange('L1').setNote('FALSE=Descending (high to low), TRUE=Ascending (low to high)');
+  sheet.getRange('M1').setNote(
+    'Text that marks an issue type as "not listed", matched anywhere in the\n' +
+    'issue type name, ignoring case. Default: not listed\n\n' +
+    'Tickets on iiQ\'s built-in "Issue not listed" type are always counted,\n' +
+    'even if it was renamed. Change this if your district uses its own\n' +
+    'catch-all name, e.g. "Other". Clear it to count only the built-in type.'
+  );
+  sheet.getRange('N1').setNote(
+    'Which category the ticket list in columns Q-V shows. "All" = every\n' +
+    'not-listed ticket. The list shows the 500 most recent.'
+  );
+  sheet.getRange('O1').setNote(
+    'Whether this workbook is being treated as live or historical.\n\n' +
+    'Historical means no ticket activity for over ' + HISTORICAL_IDLE_DAYS + ' days, so the\n' +
+    'Created and Closed columns report the last active month rather than\n' +
+    'the current one. Detected automatically; nothing to configure.'
+  );
+  sheet.getRange('Q1').setNote(
+    'Not-listed tickets, newest first, capped at 500. Filter with\n' +
+    'Ticket List Category (N2). The subjects are the best guide to which\n' +
+    'issues the catalog should add.'
   );
 
   return true;

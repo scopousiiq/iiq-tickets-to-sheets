@@ -93,6 +93,7 @@ function onOpen() {
       .addSubMenu(ui.createMenu('Issue & Requester')
         .addItem('Issue Category Volume', 'addIssueCategoryVolumeSheet')
         .addItem('Issue Type Volume', 'addIssueTypeVolumeSheet')
+        .addItem('Issue Not Listed by Category', 'addIssueNotListedSheet')
         .addItem('Priority Analysis', 'addPriorityAnalysisSheet')
         .addItem('Frequent Requesters', 'addFrequentRequestersSheet'))
       .addSubMenu(ui.createMenu('Device')

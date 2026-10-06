@@ -1,6 +1,6 @@
 {
-  "version": "1.9.0",
-  "released": "2026-09-21",
+  "version": "1.10.0",
+  "released": "2026-10-06",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "Issue Category Volume and Issue Type Volume now work on a finished school year. Both sheets gain Total and % of Total columns and sort by volume by default. The Created and Closed columns detect a workbook that has stopped updating and report its last active month instead of an empty current month, naming that month in the header. Breach Rate now reads N/A instead of 0% when the workbook holds no SLA data, and Issue Type Volume always keeps the 50 largest types by volume instead of dropping them."
+  "message": "New Issue Not Listed by Category sheet: splits \"Issue not listed\" tickets by the category they were filed under (e.g. Software vs WiFi), shows what share of each category they make up, and lists the tickets' subjects so you can see which issues your catalog is missing. Add it from iiQ Data > Add Analytics Sheet > Issue & Requester."
 }

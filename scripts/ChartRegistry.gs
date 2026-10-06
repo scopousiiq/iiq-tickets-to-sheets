@@ -524,6 +524,21 @@ const CHART_REGISTRY = [
     }]
   },
   {
+    sheetName: 'IssueNotListed',
+    category: 'Issue & Requester',
+    tabLabel: 'Issue',
+    charts: [{
+      title: 'Issue Not Listed — by Category',
+      type: 'horizontalBar',
+      labelCol: 0,
+      series: [
+        { header: 'Not Listed', col: 1, color: 'orange' }
+      ],
+      rowStart: 2,
+      rowMode: 'contiguous'
+    }]
+  },
+  {
     sheetName: 'PriorityAnalysis',
     category: 'Issue & Requester',
     tabLabel: 'Issue',

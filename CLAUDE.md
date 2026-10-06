@@ -49,7 +49,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively). Skips if loading incomplete. |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
 | `Triggers.gs` | Time-driven trigger functions (no UI dialogs) |
-| `OptionalMetrics.gs` | Additional analytics sheets added via menu (25 optional + 8 default KPI sheets = 33 total) |
+| `OptionalMetrics.gs` | Additional analytics sheets added via menu (26 optional + 8 default KPI sheets = 34 total) |
 | `Dashboard.gs` | Web-app entry point (`doGet`), registry-driven `getDashboardData()`, `showDashboardUrl` menu handler |
 | `Dashboard.html` | Full-page tabbed dashboard (KPIs, badges, category tabs, Chart.js cards) |
 | `ChartRegistry.gs` | Declarative sheet→chart(s) map — **register new analytics sheets here or the dashboard won't discover them** |
@@ -229,6 +229,7 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 |-------|-------------------|-------------|
 | IssueCategoryVolume | "What types of problems are we handling?" | Total volume and share by category, plus open, avg resolution, breach rate |
 | IssueTypeVolume | "Which specific issues are driving volume?" | The 50 highest-volume issue types with parent category, filterable by category |
+| IssueNotListed | "Which categories get 'Issue not listed' tickets?" | Not-listed tickets split by the category they were filed under (Software vs WiFi), share of each category, plus a filterable list of the tickets' subjects. Matches iiQ's built-in not-listed issue type ID plus a configurable Match Text |
 | PriorityAnalysis | "Are high-priority tickets handled faster?" | Metrics by priority level, response/resolution times |
 | FrequentRequesters | "Who generates the most tickets?" | Top 50 requesters with category and resolution data |
 
