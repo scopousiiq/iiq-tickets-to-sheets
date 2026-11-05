@@ -99,7 +99,7 @@ Go to Extensions > Apps Script > Triggers (clock icon) and add these triggers:
 
 ### Additional Analytics (add via menu)
 
-Use **iiQ Data > Add Analytics Sheet** to add any of these 26 optional sheets:
+Use **iiQ Data > Add Analytics Sheet** to add any of these 27 optional sheets:
 
 | Category | Available Sheets |
 |----------|------------------|
@@ -109,7 +109,7 @@ Use **iiQ Data > Add Analytics Sheet** to add any of these 26 optional sheets:
 | Team & Staff | Technician Performance, Functional Area Summary |
 | Location | Location Breakdown, Location Type Comparison |
 | Issue & Requester | Issue Category Volume, Issue Type Volume, Issue Not Listed by Category, Priority Analysis, Frequent Requesters |
-| Device | Device Reliability, Devices by Role, User Frequent Flyers |
+| Device | Device Reliability, Devices by Role, User Frequent Flyers, Asset Frequent Flyers |
 
 > **Flexible & Customizable:** Districts can delete any analytics sheet and recreate it later via the menu. Default sheets (marked with ★ in the menu) can also be recreated if accidentally deleted.
 
@@ -144,6 +144,7 @@ The dashboard discovers sheets via `ChartRegistry.gs`. Add a registered sheet vi
 | `StaleTickets` | Stale Tickets | Backlog |
 | `ReopenRate` | Reopened Tickets | Backlog |
 | `FrequentFlyers` | Frequent Flyers | Device |
+| `AssetFrequentFlyers` | Asset Frequent Flyers | Device |
 
 **Chart cards (sheet exists → Chart.js visualization on its category tab):**
 

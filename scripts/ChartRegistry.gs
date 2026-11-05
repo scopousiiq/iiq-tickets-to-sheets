@@ -607,6 +607,12 @@ const CHART_REGISTRY = [
     category: 'Device',
     tabLabel: 'Device',
     kpiBadge: { label: 'Frequent Flyers', color: 'purple', rowStart: 5 }
+  },
+  {
+    sheetName: 'AssetFrequentFlyers',
+    category: 'Device',
+    tabLabel: 'Device',
+    kpiBadge: { label: 'Asset Frequent Flyers', color: 'teal', rowStart: 5 }
   }
 ];
 

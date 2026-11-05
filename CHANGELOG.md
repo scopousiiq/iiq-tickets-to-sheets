@@ -4,6 +4,54 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.11.0 — Asset Frequent Flyers (2026-11-05)
+
+`FrequentFlyers` answers "which people keep filing tickets", and
+`DeviceReliability` answers "which device models break most". Neither shows a
+single device that keeps coming back for repair. That per-device view matters
+most where a fee policy charges per incident, because several damages to one
+device tend to be filed as separate tickets.
+
+### Added
+- **`AssetFrequentFlyers` analytics sheet** (iiQ Data > Add Analytics Sheet >
+  Device > Asset Frequent Flyers). The device-side counterpart of
+  `FrequentFlyers`:
+  - **Left:** each device with at least **Min Tickets** tickets (default 3):
+    Asset Tag, Model, Serial, Ticket Count, Most Recent Ticket. Sorted by count,
+    then by most recent ticket.
+  - **Right:** the selected device's tickets: Ticket #, Created Date, Issue
+    Type, Issue Category, Status, Requester.
+  - **Controls:** Min Tickets, Date From, Date To, Location, and a Selected
+    Asset Tag dropdown. There is no Role filter; the question is about devices,
+    not who filed.
+- Devices are grouped by asset ID, not asset tag. A re-tagged device stays one
+  row, shown under its latest tag, and its drill-down includes tickets filed
+  under the old tag. A device without a tag is listed by serial number.
+  Tickets with no device are not counted.
+- Counting is a single FILTER + QUERY group-by pass. A per-device COUNTIFS
+  would not finish for a district with tens of thousands of Chromebooks.
+- Date To is inclusive and compared as a real date, so tickets created late on
+  the end date are counted.
+- Registered on the dashboard's Device tab as an **Asset Frequent Flyers** KPI
+  badge, and in telemetry's analytics-sheet list.
+
+### Known limits
+- TicketData stores only the first device attached to a ticket, so a ticket
+  with two devices counts toward the first one only.
+- The sheet is a view, not an alert. It does not notify anyone when a device
+  crosses the threshold.
+
+### Docs
+- GUIDE, README and the in-sheet Instructions tab list the new sheet. The GUIDE
+  menu tree and the Instructions tab now also list Devices by Role and User
+  Frequent Flyers, which had been missing there.
+
+### Upgrade Notes
+- **Formula-only addition — no API calls, no reload, no Config change.** On an
+  existing install, update the script and pick the sheet from the menu.
+
+---
+
 ## v1.10.0 — Issue Not Listed by Category (2026-10-06)
 
 Every category in iiQ can carry its own "Issue not listed" issue, and they all

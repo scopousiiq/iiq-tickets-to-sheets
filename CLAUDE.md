@@ -49,7 +49,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `DailySnapshot.gs` | Captures daily backlog metrics (cannot be calculated retroactively). Skips if loading incomplete. |
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
 | `Triggers.gs` | Time-driven trigger functions (no UI dialogs) |
-| `OptionalMetrics.gs` | Additional analytics sheets added via menu (26 optional + 8 default KPI sheets = 34 total) |
+| `OptionalMetrics.gs` | Additional analytics sheets added via menu (27 optional + 8 default KPI sheets = 35 total) |
 | `Dashboard.gs` | Web-app entry point (`doGet`), registry-driven `getDashboardData()`, `showDashboardUrl` menu handler |
 | `Dashboard.html` | Full-page tabbed dashboard (KPIs, badges, category tabs, Chart.js cards) |
 | `ChartRegistry.gs` | Declarative sheet→chart(s) map — **register new analytics sheets here or the dashboard won't discover them** |
@@ -238,7 +238,8 @@ All analytics sheets can be added/recreated via **iiQ Data > Add Analytics Sheet
 |-------|-------------------|-------------|
 | DeviceReliability | "Which device models generate the most tickets?" | Total/Open/Closed by model, avg resolution, breach rate |
 | DevicesByRole | "Which device models are used by which staff roles?" | Device counts by model filtered by RequesterRole |
-| FrequentFlyers | "Which users or devices have recurring issues?" | Users and devices exceeding ticket threshold, with date, role, and location filters |
+| FrequentFlyers | "Which users have recurring issues?" | Requesters exceeding a ticket threshold, with date, role, and location filters, plus a per-requester ticket drill-down |
+| AssetFrequentFlyers | "Which devices keep coming back for repair?" | Individual devices (grouped by AssetId) exceeding a ticket threshold, with date and location filters, plus a per-device ticket drill-down |
 
 ## TicketData Column Layout (52 columns)
 
@@ -449,7 +450,7 @@ Use **Deploy → Manage deployments → Edit (pencil) → New version** — this
 **How the dashboard discovers charts:**
 
 - Fixed KPI row at the top is always computed from TicketData directly.
-- Below that, gold KPI badges show counts for list-style sheets (AtRiskResponse, AtRiskResolution, StaleTickets, FrequentFlyers, ReopenRate) — only the ones that actually exist.
+- Below that, gold KPI badges show counts for list-style sheets (AtRiskResponse, AtRiskResolution, StaleTickets, FrequentFlyers, AssetFrequentFlyers, ReopenRate) — only the ones that actually exist.
 - Tabs (Volume, Backlog, SLA, Team, Location, Issue, Device) are built dynamically from `scripts/ChartRegistry.gs`. If you've added a registered sheet via **iiQ Data > Add Analytics Sheet**, its chart appears automatically; delete the sheet and the chart disappears on the next refresh.
 - Empty tabs (no registered sheets in that category) are omitted entirely.
 

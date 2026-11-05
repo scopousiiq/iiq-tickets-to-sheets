@@ -78,7 +78,8 @@ const TELEMETRY_CANONICAL_ANALYTICS = [
   'FrequentRequesters',
   'DeviceReliability',
   'DevicesByRole',
-  'FrequentFlyers'
+  'FrequentFlyers',
+  'AssetFrequentFlyers'
 ];
 
 // ---- Wire protocol constant: do NOT edit without coordinating a server change ----

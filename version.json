@@ -1,6 +1,6 @@
 {
-  "version": "1.10.0",
-  "released": "2026-10-06",
+  "version": "1.11.0",
+  "released": "2026-11-05",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "New Issue Not Listed by Category sheet: splits \"Issue not listed\" tickets by the category they were filed under (e.g. Software vs WiFi), shows what share of each category they make up, and lists the tickets' subjects so you can see which issues your catalog is missing. Add it from iiQ Data > Add Analytics Sheet > Issue & Requester."
+  "message": "New Asset Frequent Flyers sheet: lists individual devices (e.g. Chromebooks) with repeat tickets in a date range, with a drill-down to each device's tickets, so you can spot devices that keep coming back for repair. Add it from iiQ Data > Add Analytics Sheet > Device."
 }

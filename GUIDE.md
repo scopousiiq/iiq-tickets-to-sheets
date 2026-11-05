@@ -657,7 +657,10 @@ iiQ Data > Add Analytics Sheet >
 │   ├── Priority Analysis
 │   └── Frequent Requesters
 ├── Device
-│   └── Device Reliability
+│   ├── Device Reliability
+│   ├── Devices by Role
+│   ├── User Frequent Flyers
+│   └── Asset Frequent Flyers
 ├── ─────────────
 └── Regenerate All Monthly Sheets
 ```
@@ -683,6 +686,8 @@ iiQ Data > Add Analytics Sheet >
 | **Priority Analysis** | "Are high-priority tickets handled faster?" | Metrics by priority level, response times |
 | **Frequent Requesters** | "Who generates the most tickets?" | Top 50 requesters with category data |
 | **Device Reliability** | "Which device models generate the most tickets?" | Total/Open/Closed by model, avg resolution, breach rate |
+| **User Frequent Flyers** | "Which users have recurring issues?" | Requesters with N+ tickets, with a drill-down to each one's tickets |
+| **Asset Frequent Flyers** | "Which devices keep coming back for repair?" | Individual devices with N+ tickets, with a drill-down to each one's tickets. See [Asset Frequent Flyers](#asset-frequent-flyers) |
 
 > **How to Add a Sheet:**
 > 1. Go to **iiQ Data > Add Analytics Sheet**
@@ -698,6 +703,35 @@ iiQ Data > Add Analytics Sheet >
 > - All formulas are visible and editable
 > - Modify age buckets, thresholds, or calculations as needed
 > - Create your own analytics sheets using TicketData as the source
+
+#### Asset Frequent Flyers
+
+**Question answered:** "Which devices keep coming back for repair?"
+
+Use it to spot individual devices, usually Chromebooks, that are repaired again and again. When a fee policy charges per incident, several damages to one device tend to be filed as separate tickets, so the per-device count is the one to watch.
+
+**Layout:**
+- **Left (columns A–E):** one row per device with at least **Min Tickets** tickets: Asset Tag, Model, Serial, Ticket Count, Most Recent Ticket. Sorted by ticket count, then by most recent ticket.
+- **Right (columns I–N):** the tickets for the device picked in **H2**: Ticket #, Created Date, Issue Type, Issue Category, Status, Requester. Newest first.
+
+**Controls (row 2):**
+
+| Cell | Control | Default |
+|------|---------|---------|
+| A2 | Min Tickets | 3 |
+| B2 | Date From (ticket created date) | blank = all time |
+| C2 | Date To, inclusive | blank = today |
+| D2 | Location (the ticket's location) | All |
+| H2 | Selected Asset Tag (dropdown of the devices at left) | blank |
+
+**How devices are counted:**
+- Devices are grouped by their iiQ asset ID, not by asset tag. A device that was re-tagged stays one row, shown under its most recent tag, and its drill-down includes tickets filed under the old tag.
+- A device with no asset tag is listed by serial number (`SN 12345`).
+- Tickets with no device attached are not counted.
+
+**Limits:**
+- **Only the first device on a ticket is counted.** TicketData stores one device per ticket, so a ticket with two devices counts toward the first one only. This is rare for single-device repair tickets.
+- **This is a view, not an alert.** The sheet does not notify anyone when a device crosses the threshold. Open it, or check the Asset Frequent Flyers badge on the dashboard.
 
 ---
 
@@ -881,7 +915,8 @@ Formula-based analytics sheets (31 total, no scripts needed):
     ├── QueueTimeAnalysis       → reads from TicketData (queue time stats)
     ├── QueueTimeByTeam         → reads from TicketData (queue time per team)
     ├── QueueTimeTrend          → reads from TicketData (monthly queue time trend)
-    └── DeviceReliability       → reads from TicketData (column AL: ModelName)
+    ├── DeviceReliability       → reads from TicketData (column AL: ModelName)
+    └── AssetFrequentFlyers     → reads from TicketData (column AP: AssetId)
 ```
 
 ---
@@ -896,7 +931,7 @@ Formula-based analytics sheets (31 total, no scripts needed):
    - Creates data sheets: Config, TicketData, Teams, DailySnapshot, Logs
    - Creates 8 default analytics sheets with formulas configured for the specified school year's month range
 3. **Or create manually:** Set up each sheet with headers as shown in Part 1
-4. **Add more analytics later:** Use **iiQ Data > Add Analytics Sheet** to add any of the 26 optional analytics sheets
+4. **Add more analytics later:** Use **iiQ Data > Add Analytics Sheet** to add any of the 27 optional analytics sheets
 
 ### Step 2: Add the Apps Script Code
 
@@ -1325,7 +1360,8 @@ The result: charts/badges appear automatically when you add a registered analyti
 | `AtRiskResolution` | At-Risk Resolution | How many open tickets are approaching Resolution SLA breach? |
 | `StaleTickets` | Stale Tickets | How many open tickets have had no recent activity? |
 | `ReopenRate` | Reopened Tickets | How many tickets were closed-then-reopened? |
-| `FrequentFlyers` | Frequent Flyers | How many users / devices generate recurring tickets? |
+| `FrequentFlyers` | Frequent Flyers | How many users generate recurring tickets? |
+| `AssetFrequentFlyers` | Asset Frequent Flyers | How many individual devices generate recurring tickets? |
 
 **Chart cards** — Chart.js visualizations grouped by tab. Each card maps 1-to-1 to a registered analytics sheet.
 
@@ -1439,6 +1475,7 @@ Once your data is flowing, here are some ideas for getting more value:
 | Priority Analysis | PriorityAnalysis | Issue & Requester |
 | Frequent Requesters | FrequentRequesters | Issue & Requester |
 | Device Reliability | DeviceReliability | Device |
+| Asset Frequent Flyers | AssetFrequentFlyers | Device |
 | Backlog Aging by Functional Area | BacklogAgingByFA | Backlog & Quality |
 | Backlog Aging by Team | BacklogAgingByTeam | Backlog & Quality |
 | Backlog Aging by Location Type | BacklogAgingByLocationType | Backlog & Quality |

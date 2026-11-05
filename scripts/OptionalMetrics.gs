@@ -3580,3 +3580,198 @@ function setupFrequentFlyersSheet(ss) {
 
   return true;
 }
+
+// ============================================================================
+// ASSET FREQUENT FLYERS - Individual devices with repeat tickets
+// ============================================================================
+
+/**
+ * Add Asset Frequent Flyers sheet (deletes and recreates if exists)
+ */
+function addAssetFrequentFlyersSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  setupAssetFrequentFlyersSheet(ss);
+  SpreadsheetApp.getUi().alert('Created',
+    'AssetFrequentFlyers sheet has been created.\n\n' +
+    'Shows devices with recurring tickets (left) and ticket details (right).\n' +
+    'Select an asset tag from the H2 dropdown to see its tickets.',
+    SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Setup AssetFrequentFlyers sheet - individual devices with repeat tickets,
+ * with a ticket drill-down. The device-side counterpart of FrequentFlyers.
+ * Question: "Which devices keep coming back for repair?"
+ *
+ * Groups on AssetId (AP), not AssetTag: tags can be reassigned, the UUID can't.
+ * The tag shown is the one on the device's most recent row in TicketData, and
+ * the hidden column F carries the AssetId so the drill-down follows the device
+ * even across a re-tag.
+ *
+ * Counting is one FILTER + QUERY group-by pass rather than a COUNTIFS per
+ * device: a district can have tens of thousands of distinct Chromebooks, and
+ * per-device COUNTIFS over the full TicketData would not finish.
+ *
+ * TicketData holds only the first attached device per ticket, so a ticket
+ * with several devices counts toward the first one only.
+ */
+function setupAssetFrequentFlyersSheet(ss) {
+  deleteSheetIfExists(ss, 'AssetFrequentFlyers');
+  const sheet = ss.insertSheet('AssetFrequentFlyers');
+
+  // === CONTROLS SECTION (Row 1-2) ===
+  sheet.getRange(1, 1, 1, 4).setValues([['Min Tickets', 'Date From', 'Date To', 'Location']]);
+  sheet.getRange('H1').setValue('Selected Asset Tag');
+  sheet.getRange('A2').setValue(3);
+  sheet.getRange('D2').setValue('All');
+
+  [sheet.getRange('A1:D1'), sheet.getRange('H1')].forEach(r => r
+    .setFontWeight('bold')
+    .setBackground('#ff9800')
+    .setFontColor('white'));
+
+  sheet.getRange('A1').setNote('Minimum ticket count for a device to appear (default: 3)');
+  sheet.getRange('B1').setNote('Start date (YYYY-MM-DD). Leave blank for all time.');
+  sheet.getRange('C1').setNote('End date (YYYY-MM-DD), inclusive. Leave blank for today.');
+  sheet.getRange('D1').setNote('Location filter. "All" = all locations; or pick a specific location name.');
+  sheet.getRange('H1').setNote('Select an asset tag from the list to see that device\'s tickets');
+  sheet.getRange('B2:C2').setNumberFormat('yyyy-mm-dd');
+
+  // Location dropdown — populated dynamically from TicketData (hidden column Q)
+  sheet.getRange('Q1').setValue('LocationSource');
+  sheet.getRange('Q2').setValue('={"All"; SORT(' + distinctIgnoringCase('FILTER(TicketData!N2:N, TicketData!N2:N<>"")') + ')}');
+  sheet.getRange('D2').setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireValueInRange(sheet.getRange('Q2:Q2000'), true)
+    .setAllowInvalid(false)
+    .build());
+
+  // Date bounds shared by both formulas. The end bound is the day AFTER Date To,
+  // compared with "<", so tickets created at any time on the end date count.
+  // A blank Date From becomes 0, which every real date passes.
+  const dateBindings =
+    'dFrom, IF($B$2="", 0, $B$2),' +
+    'dEnd, IF($C$2="", TODAY(), $C$2) + 1,' +
+    'loc, $D$2,';
+  const rowConditions =
+    'TicketData!E2:E>=dFrom, TicketData!E2:E<dEnd, (loc="All")+(TicketData!N2:N=loc)';
+
+  // === DEVICE FREQUENT FLYERS SECTION (Row 4+, Columns A-G) ===
+  sheet.getRange(4, 1, 1, 7).setValues([[
+    'Asset Tag', 'Model', 'Serial', 'Ticket Count', 'Most Recent Ticket', 'Asset ID', 'Last Refreshed'
+  ]]);
+
+  // Tag/model/serial come from the device's last row in TicketData (XLOOKUP
+  // searching bottom-up). A device with no tag is labelled by serial so every
+  // row stays selectable in the H2 dropdown.
+  const deviceFormula =
+    '=LET(' +
+    'minTix, $A$2,' +
+    dateBindings +
+    'assetIds, FILTER(TicketData!AP2:AP, TicketData!AP2:AP<>"", ' + rowConditions + '),' +
+    'created, FILTER(TicketData!E2:E, TicketData!AP2:AP<>"", ' + rowConditions + '),' +
+    'grouped, QUERY(HSTACK(assetIds, created), ' +
+    '"select Col1, count(Col1), max(Col2) group by Col1 ' +
+    'order by count(Col1) desc, max(Col2) desc label count(Col1) \'\', max(Col2) \'\'", 0),' +
+    // "" when nothing qualifies (or nothing matched at all), so the empty
+    // message below prints once instead of being broadcast across HSTACK
+    'qualified, IFERROR(FILTER(grouped, INDEX(grouped, 0, 2)>=minTix), ""),' +
+    'ids, INDEX(qualified, 0, 1),' +
+    'labels, BYROW(ids, LAMBDA(a, LET(' +
+    '  t, XLOOKUP(a, TicketData!AP2:AP, TicketData!AK2:AK, "", 0, -1),' +
+    '  s, XLOOKUP(a, TicketData!AP2:AP, TicketData!AM2:AM, "", 0, -1),' +
+    '  IF(t<>"", t, IF(s<>"", "SN " & s, "(no tag)"))))),' +
+    'models, BYROW(ids, LAMBDA(a, XLOOKUP(a, TicketData!AP2:AP, TicketData!AL2:AL, "", 0, -1))),' +
+    'serials, BYROW(ids, LAMBDA(a, XLOOKUP(a, TicketData!AP2:AP, TicketData!AM2:AM, "", 0, -1))),' +
+    'IF(INDEX(qualified, 1, 1)="", "No devices meet threshold",' +
+    '  HSTACK(labels, models, serials, INDEX(qualified, 0, 2), INDEX(qualified, 0, 3), ids)))';
+
+  sheet.getRange('A5').setValue(deviceFormula);
+  sheet.getRange('G5').setValue('=IFERROR(VLOOKUP("LAST_REFRESH", Config!A:B, 2, FALSE), "")');
+
+  sheet.getRange(4, 1, 1, 7)
+    .setFontWeight('bold')
+    .setBackground('#1976d2')
+    .setFontColor('white');
+
+  // Dropdown source reads the finished table rather than recomputing it
+  sheet.getRange('P1').setValue('DropdownSource');
+  sheet.getRange('P2').setValue('=IF(ISNUMBER($D$5), FILTER($A$5:$A, $A$5:$A<>""), "")');
+  sheet.getRange('H2').setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireValueInRange(sheet.getRange('P2:P2000'), true)
+    .setAllowInvalid(false)
+    .build());
+
+  // === DEVICE TICKET DETAIL SECTION (Row 4+, Columns I-N) ===
+  sheet.getRange(4, 9, 1, 6).setValues([[
+    'Ticket #', 'Created Date', 'Issue Type', 'Issue Category', 'Status', 'Requester'
+  ]]);
+
+  // Resolves the selected label back to its AssetId via the table, then applies
+  // the same date/location filters so the list matches the count at left.
+  const detailFormula =
+    '=LET(' +
+    'sel, $H$2,' +
+    dateBindings +
+    'assetId, IFERROR(XLOOKUP(sel, $A$5:$A, $F$5:$F), ""),' +
+    'IF(sel="", "Select an asset tag from H2",' +
+    '  IF(assetId="", "No device with that tag in the list at left",' +
+    '    IFERROR(SORT(FILTER(' +
+    '      HSTACK(TicketData!B2:B, TicketData!E2:E, TicketData!AA2:AA, TicketData!Y2:Y, TicketData!J2:J, TicketData!AC2:AC),' +
+    '      TicketData!AP2:AP=assetId, ' + rowConditions + '), 2, FALSE),' +
+    '      "No tickets found for this device in the date range"))))';
+
+  sheet.getRange('I5').setValue(detailFormula);
+
+  sheet.getRange(4, 9, 1, 6)
+    .setFontWeight('bold')
+    .setBackground('#388e3c')
+    .setFontColor('white');
+
+  // === FORMATTING ===
+  sheet.getRange('A3').setValue('DEVICE FREQUENT FLYERS');
+  sheet.getRange('I3').setValue('DEVICE TICKET DETAILS');
+  sheet.getRange('A3:G3').merge().setFontWeight('bold').setFontSize(11);
+  sheet.getRange('I3:N3').merge().setFontWeight('bold').setFontSize(11);
+
+  sheet.getRange('E5:E').setNumberFormat('yyyy-mm-dd');  // Most Recent Ticket
+  sheet.getRange('J5:J').setNumberFormat('yyyy-mm-dd');  // Created Date
+
+  sheet.setColumnWidth(1, 130);  // Asset Tag
+  sheet.setColumnWidth(2, 180);  // Model
+  sheet.setColumnWidth(3, 140);  // Serial
+  sheet.setColumnWidth(4, 150);  // Ticket Count / Location filter
+  sheet.setColumnWidth(5, 130);  // Most Recent Ticket
+  sheet.setColumnWidth(7, 120);  // Last Refreshed
+  sheet.setColumnWidth(8, 160);  // Selected Asset Tag
+  sheet.setColumnWidth(9, 80);   // Ticket #
+  sheet.setColumnWidth(10, 100); // Created Date
+  sheet.setColumnWidth(11, 160); // Issue Type
+  sheet.setColumnWidth(12, 150); // Issue Category
+  sheet.setColumnWidth(13, 120); // Status
+  sheet.setColumnWidth(14, 160); // Requester
+
+  sheet.hideColumns(6);   // F: Asset ID (drill-down key)
+  sheet.hideColumns(16);  // P: dropdown source
+  sheet.hideColumns(17);  // Q: location source
+
+  sheet.setFrozenRows(4);
+
+  sheet.getRange('A3').setNote(
+    'Asset Frequent Flyers\n\n' +
+    'Question: "Which devices keep coming back for repair?"\n\n' +
+    'DEVICE FREQUENT FLYERS (left):\n' +
+    '- One row per individual device (grouped by asset ID, so a re-tagged device stays one row)\n' +
+    '- Tickets with no device attached are not counted\n' +
+    '- Only the first device on a ticket is counted\n\n' +
+    'DEVICE TICKET DETAILS (right):\n' +
+    '- Select an asset tag from the H2 dropdown to see that device\'s tickets\n\n' +
+    'CONTROLS (row 2):\n' +
+    '- Min Tickets: Only show devices with this many+ tickets\n' +
+    '- Date From/To: Filter by ticket created date (both ends inclusive)\n' +
+    '- Location: The ticket\'s location; "All" shows every location\n' +
+    '- Selected Asset Tag: Pick from dropdown to see ticket details\n\n' +
+    'This sheet is a view, not an alert: it does not notify anyone when a device crosses the threshold.'
+  );
+
+  return true;
+}
