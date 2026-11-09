@@ -1,6 +1,6 @@
 {
-  "version": "1.11.0",
-  "released": "2026-11-05",
+  "version": "1.12.0",
+  "released": "2026-11-09",
   "releaseUrl": "https://github.com/scopousiiq/iiq-tickets-to-sheets/releases/latest",
-  "message": "New Asset Frequent Flyers sheet: lists individual devices (e.g. Chromebooks) with repeat tickets in a date range, with a drill-down to each device's tickets, so you can spot devices that keep coming back for repair. Add it from iiQ Data > Add Analytics Sheet > Device."
+  "message": "New Overview tab on the web dashboard: tickets closed this month by technician, plus Response Time and Resolution Time trends. Works without SLAs. Update the script, then redeploy the web app (Deploy > Manage deployments > Edit > New version)."
 }

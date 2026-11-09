@@ -1352,6 +1352,16 @@ The result: charts/badges appear automatically when you add a registered analyti
 - Average resolution (days)
 - SLA breach rate (%)
 
+**Overview tab** (always present once tickets are loaded, computed from `TicketData` — no analytics sheet or SLA needed). It is the first tab.
+
+| Card | What it shows |
+|------|---------------|
+| Technicians — Closed Month to Date | Tickets closed since the 1st of the current month, per assigned technician (column AO), most first; closed tickets with no technician appear as "(Unassigned)" |
+| Response Time — Created to Started | Average and median hours from CreatedDate to StartedDate, by the month tickets were created. Tickets never started are left out |
+| Resolution Time — Created to Closed | Average and median days from CreatedDate to ClosedDate, by the month tickets were created. Open tickets are left out |
+
+These mirror the Response Time and Resolution Time widgets in iiQ under Reports > Work Orders, which work without SLAs. iiQ counts only business hours (the site's work hours, weekdays, minus holidays and breaks); the sheet has no work-hours calendar, so these cards use calendar time and will read higher than iiQ's numbers, especially for tickets that sit over a weekend.
+
 **KPI badges** — list-style sheets whose value is the row count. The badge appears only if the sheet exists.
 
 | Sheet | Badge label | Question answered |

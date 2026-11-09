@@ -128,6 +128,7 @@ Use **iiQ Data > Add Analytics Sheet** to add any of these 27 optional sheets:
 Ship a shareable URL to leadership instead of asking them to open the sheet. The project includes a deployable Apps Script Web App that renders a full-page, brand-styled dashboard with:
 
 - **Fixed KPI row** at the top (Open, Closed, Avg Resolution, SLA Breach %) — computed directly from `TicketData`, always present.
+- **Overview tab** (always present once tickets are loaded, no SLA needed) — Technicians Closed Month to Date, Response Time (Created → Started), and Resolution Time (Created → Closed) by month, computed directly from `TicketData`.
 - **Gold KPI badges** for list-style analytics sheets — counts only, no chart.
 - **Tabbed category views** with Chart.js visualizations — tabs and charts appear automatically based on which analytics sheets are present in your spreadsheet (registered in `scripts/ChartRegistry.gs`).
 

@@ -4,6 +4,40 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.12.0 — Dashboard Overview tab (2026-11-09)
+
+Districts that don't use SLAs had no response or resolution times on the web
+dashboard, because those charts read the SLA columns. iiQ's own Reports > Work
+Orders shows both without SLAs, from ticket timestamps. There was also no
+quick view of what each technician has closed this month.
+
+### Added
+- **Overview tab** on the web dashboard, shown first, with three cards:
+  - **Technicians — Closed Month to Date:** tickets closed since the 1st of
+    the current month, per assigned technician. Closed tickets with no
+    technician show as "(Unassigned)".
+  - **Response Time — Created to Started:** average and median hours, by the
+    month tickets were created. Tickets not yet started are left out.
+  - **Resolution Time — Created to Closed:** average and median days, by the
+    month tickets were created. Open tickets are left out.
+- The tab is computed directly from `TicketData`. It needs no analytics sheet,
+  no SLA, and no extra API calls.
+
+### Known limits
+- iiQ measures response and resolution in business hours (the site's work
+  hours, weekdays, minus holidays and breaks). The sheet has no work-hours
+  calendar, so these cards use calendar time and read higher than iiQ's
+  numbers, especially for tickets that sit over a weekend.
+- "Closed" is credited to the technician assigned to the ticket, the same way
+  iiQ's agent stats count it, not to whoever clicked Close.
+
+### Upgrade Notes
+- **No reload, no Config change.** Update the script, then redeploy the web app
+  with **Deploy > Manage deployments > Edit > New version** so the existing
+  dashboard link picks up the new tab.
+
+---
+
 ## v1.11.0 — Asset Frequent Flyers (2026-11-05)
 
 `FrequentFlyers` answers "which people keep filing tickets", and

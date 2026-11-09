@@ -50,7 +50,7 @@ iiQ API  →  Google Apps Script  →  Google Sheets  →  Power BI
 | `Menu.gs` | Creates "iiQ Data" menu in Google Sheets |
 | `Triggers.gs` | Time-driven trigger functions (no UI dialogs) |
 | `OptionalMetrics.gs` | Additional analytics sheets added via menu (27 optional + 8 default KPI sheets = 35 total) |
-| `Dashboard.gs` | Web-app entry point (`doGet`), registry-driven `getDashboardData()`, `showDashboardUrl` menu handler |
+| `Dashboard.gs` | Web-app entry point (`doGet`), registry-driven `getDashboardData()`, built-in Overview tab (`buildOverviewGroup_`), `showDashboardUrl` menu handler |
 | `Dashboard.html` | Full-page tabbed dashboard (KPIs, badges, category tabs, Chart.js cards) |
 | `ChartRegistry.gs` | Declarative sheet→chart(s) map — **register new analytics sheets here or the dashboard won't discover them** |
 
@@ -450,6 +450,7 @@ Use **Deploy → Manage deployments → Edit (pencil) → New version** — this
 **How the dashboard discovers charts:**
 
 - Fixed KPI row at the top is always computed from TicketData directly.
+- The **Overview** tab (first tab) is also computed from TicketData in `buildOverviewGroup_()` (Dashboard.gs), not from the registry: Technicians Closed Month to Date (by AO), Response Time (E→F) and Resolution Time (E→H) by created month, average + median, calendar time. Works without SLAs; iiQ's in-product versions use business hours, so iiQ's numbers are lower.
 - Below that, gold KPI badges show counts for list-style sheets (AtRiskResponse, AtRiskResolution, StaleTickets, FrequentFlyers, AssetFrequentFlyers, ReopenRate) — only the ones that actually exist.
 - Tabs (Volume, Backlog, SLA, Team, Location, Issue, Device) are built dynamically from `scripts/ChartRegistry.gs`. If you've added a registered sheet via **iiQ Data > Add Analytics Sheet**, its chart appears automatically; delete the sheet and the chart disappears on the next refresh.
 - Empty tabs (no registered sheets in that category) are omitted entirely.

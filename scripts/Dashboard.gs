@@ -19,10 +19,12 @@
 /** Column indexes in TicketData used by the fixed KPI row. */
 const DASH_COL = {
   CREATED: 4,            // E
+  STARTED: 5,            // F
   CLOSED_DATE: 7,        // H
   IS_CLOSED: 8,          // I  "Open" / "Closed"
   AGE_DAYS: 17,          // R
-  RESOLUTION_BREACH: 34  // AI
+  RESOLUTION_BREACH: 34, // AI
+  TECHNICIAN: 40         // AO AssignedToUserName
 };
 
 /**
@@ -183,6 +185,8 @@ function getDashboardData() {
   });
 
   const categoryGroups = [];
+  const overview = buildOverviewGroup_(rows);
+  if (overview) categoryGroups.push(overview);
   CATEGORY_ORDER.forEach(cat => {
     if (chartsByCategory[cat]) categoryGroups.push(chartsByCategory[cat]);
   });
@@ -231,6 +235,126 @@ function computeKpis_(rows) {
     slaBreachPct: closed > 0 ? Math.round((breachCount / closed) * 1000) / 10 : 0
   };
 }
+
+/**
+ * Overview tab — computed straight from TicketData, so it appears on every
+ * install without adding an analytics sheet, and works for districts that
+ * don't use SLAs.
+ *
+ * Response and Resolution follow iiQ's Reports > Work Orders definitions:
+ * Response = CreatedDate → StartedDate (tickets that have been started),
+ * Resolution = CreatedDate → ClosedDate (closed tickets), grouped by the month
+ * the ticket was created. iiQ measures in business hours against the site's
+ * work hours and holiday calendar, which the sheet doesn't have, so these are
+ * calendar time and run higher than the in-product numbers.
+ *
+ * "Closed Month to Date" credits the assigned technician (AO), which is how
+ * iiQ's own agent stats attribute closures.
+ */
+function buildOverviewGroup_(rows) {
+  const tz = Session.getScriptTimeZone();
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const closedByTech = {};
+  const byMonth = {};   // 'yyyy-MM' → { resp: [hrs], res: [days] }
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const created = asDate_(r[DASH_COL.CREATED]);
+    const started = asDate_(r[DASH_COL.STARTED]);
+    const closed = r[DASH_COL.IS_CLOSED] === 'Closed' ? asDate_(r[DASH_COL.CLOSED_DATE]) : null;
+
+    if (closed && closed >= monthStart && closed <= now) {
+      const tech = String(r[DASH_COL.TECHNICIAN] || '').trim() || '(Unassigned)';
+      closedByTech[tech] = (closedByTech[tech] || 0) + 1;
+    }
+
+    if (!created) continue;
+    const key = Utilities.formatDate(created, tz, 'yyyy-MM');
+    if (!byMonth[key]) byMonth[key] = { resp: [], res: [] };
+    if (started && started >= created) {
+      byMonth[key].resp.push((started - created) / 3600000);
+    }
+    if (closed && closed >= created) {
+      byMonth[key].res.push((closed - created) / 86400000);
+    }
+  }
+
+  const charts = [];
+
+  // Unassigned goes last so the named technicians lead the chart.
+  const techs = Object.keys(closedByTech).sort((a, b) => {
+    if (a === '(Unassigned)') return 1;
+    if (b === '(Unassigned)') return -1;
+    return closedByTech[b] - closedByTech[a] || a.localeCompare(b);
+  });
+  if (techs.length) {
+    charts.push({
+      sheetName: 'TicketData',
+      title: 'Technicians — Closed Month to Date (' +
+        Utilities.formatDate(monthStart, tz, 'MMM d') + ' – ' + Utilities.formatDate(now, tz, 'MMM d') + ')',
+      type: 'horizontalBar',
+      labels: techs,
+      datasets: [{ label: 'Closed', color: 'teal', data: techs.map(t => closedByTech[t]), percent: false, axis: 'left' }]
+    });
+  }
+
+  const months = Object.keys(byMonth).sort();
+  const monthLabels = months.map(m => {
+    const parts = m.split('-');
+    return Utilities.formatDate(new Date(Number(parts[0]), Number(parts[1]) - 1, 1), tz, 'MMM yyyy');
+  });
+  if (months.some(m => byMonth[m].resp.length)) {
+    charts.push(timeTrendChart_('Response Time — Created to Started (calendar hours)', months, monthLabels,
+      m => byMonth[m].resp, 'darkBlue'));
+  }
+  if (months.some(m => byMonth[m].res.length)) {
+    charts.push(timeTrendChart_('Resolution Time — Created to Closed (calendar days)', months, monthLabels,
+      m => byMonth[m].res, 'orange'));
+  }
+
+  if (!charts.length) return null;
+  return { category: 'Overview', tabLabel: 'Overview', charts: charts };
+}
+
+/** Monthly Average + Median line chart; months without values become gaps. */
+function timeTrendChart_(title, months, monthLabels, valuesFor, color) {
+  const avg = [];
+  const med = [];
+  months.forEach(m => {
+    const v = valuesFor(m);
+    if (!v.length) { avg.push(null); med.push(null); return; }
+    avg.push(round1_(v.reduce((s, x) => s + x, 0) / v.length));
+    med.push(round1_(median_(v)));
+  });
+  return {
+    sheetName: 'TicketData',
+    title: title,
+    type: 'line',
+    labels: monthLabels,
+    datasets: [
+      { label: 'Average', color: color, data: avg, percent: false, axis: 'left' },
+      { label: 'Median',  color: 'teal', data: med, percent: false, axis: 'left' }
+    ]
+  };
+}
+
+/** TicketData dates normally read back as Date; a cell left as ISO text still parses. */
+function asDate_(v) {
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  if (v === '' || v === null || v === undefined) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function median_(values) {
+  const s = values.slice().sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+function round1_(v) { return Math.round(v * 10) / 10; }
 
 /** Count non-empty label cells past rowStart, skipping section markers. */
 function countBadgeRows_(sheet, rowStart) {
